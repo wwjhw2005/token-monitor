@@ -100,6 +100,15 @@ function watchPathsForClients(clientsCsv) {
   if (enabled.has('hermes')) {
     candidates.push(process.env.HERMES_HOME || path.join(home, '.hermes'));
   }
+  if (enabled.has('opencode')) {
+    candidates.push(path.join(home, '.local', 'share', 'opencode'));
+  }
+  if (enabled.has('openclaw')) {
+    candidates.push(path.join(home, '.openclaw', 'agents'));
+  }
+  if (enabled.has('cursor')) {
+    candidates.push(path.join(home, '.config', 'tokscale', 'cursor-cache'));
+  }
   return candidates.filter((candidate) => { try { return fs.statSync(candidate).isDirectory(); } catch (_) { return false; } });
 }
 

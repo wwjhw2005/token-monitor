@@ -1,14 +1,22 @@
 ﻿'use strict';
 
-const clientLabels = { claude: 'Claude Code', codex: 'Codex', hermes: 'Hermes', gemini: 'Gemini', cursor: 'Cursor' };
-const clientColors = { claude: '#cc7c5e', codex: '#49a3b0', hermes: '#a57df0', gemini: '#6ab4f0', deepseek: '#6ab4f0', cursor: '#f0d66a', default: '#6ab4f0' };
+const clientLabels = { claude: 'Claude Code', codex: 'Codex', hermes: 'Hermes', gemini: 'Gemini', cursor: 'Cursor', opencode: 'OpenCode', openclaw: 'OpenClaw' };
+const clientColors = { claude: '#cc7c5e', codex: '#49a3b0', hermes: '#a57df0', gemini: '#6ab4f0', deepseek: '#6ab4f0', cursor: '#f0d66a', opencode: '#7fb069', openclaw: '#d4845c', default: '#6ab4f0' };
+const KNOWN_CLIENTS = [
+  { id: 'claude', label: 'Claude Code' },
+  { id: 'codex', label: 'Codex' },
+  { id: 'hermes', label: 'Hermes' },
+  { id: 'opencode', label: 'OpenCode' },
+  { id: 'openclaw', label: 'OpenClaw' },
+  { id: 'cursor', label: 'Cursor' }
+];
 const deviceColors = ['#49a3b0', '#6ab4f0', '#cc7c5e', '#a57df0', '#f0d66a', '#f06a7b'];
 const fallbackModelColors = ['#6ab4f0', '#cc7c5e', '#a57df0', '#49a3b0', '#f0d66a', '#f06a7b'];
 const breakdownOrder = ['tool', 'device', 'model'];
 const state = { period: 'today', breakdown: 'tool', settings: null, stats: null, refreshTimer: null, currentTotal: 0, rowSignature: '', streamConnected: false, mode: 'idle' };
 const defaultAppearance = { glassOpacity: 68, glassBlur: 32, systemGlass: true, showLiveDot: true };
 const els = {
-  shell: document.querySelector('.shell'), status: document.getElementById('status'), liveDot: document.getElementById('liveDot'), totalTokens: document.getElementById('totalTokens'), cost: document.getElementById('cost'), breakdown: document.getElementById('breakdown'), breakdownToggle: document.getElementById('breakdownToggle'), pinButton: document.getElementById('pinButton'), settingsButton: document.getElementById('settingsButton'), settingsPanel: document.getElementById('settingsPanel'), hubUrlInput: document.getElementById('hubUrlInput'), secretInput: document.getElementById('secretInput'), deviceIdInput: document.getElementById('deviceIdInput'), systemGlassInput: document.getElementById('systemGlassInput'), liveDotInput: document.getElementById('liveDotInput'), glassInput: document.getElementById('glassInput'), blurInput: document.getElementById('blurInput'), saveSettingsButton: document.getElementById('saveSettingsButton'), resetAppearanceButton: document.getElementById('resetAppearanceButton'), openConfigButton: document.getElementById('openConfigButton'), refreshButton: document.getElementById('refreshButton'), minButton: document.getElementById('minButton'), closeButton: document.getElementById('closeButton')
+  shell: document.querySelector('.shell'), status: document.getElementById('status'), liveDot: document.getElementById('liveDot'), totalTokens: document.getElementById('totalTokens'), cost: document.getElementById('cost'), breakdown: document.getElementById('breakdown'), breakdownToggle: document.getElementById('breakdownToggle'), pinButton: document.getElementById('pinButton'), settingsButton: document.getElementById('settingsButton'), settingsPanel: document.getElementById('settingsPanel'), hubUrlInput: document.getElementById('hubUrlInput'), secretInput: document.getElementById('secretInput'), deviceIdInput: document.getElementById('deviceIdInput'), systemGlassInput: document.getElementById('systemGlassInput'), liveDotInput: document.getElementById('liveDotInput'), glassInput: document.getElementById('glassInput'), blurInput: document.getElementById('blurInput'), saveSettingsButton: document.getElementById('saveSettingsButton'), clientCheckboxes: document.getElementById('clientCheckboxes'), resetAppearanceButton: document.getElementById('resetAppearanceButton'), openConfigButton: document.getElementById('openConfigButton'), refreshButton: document.getElementById('refreshButton'), minButton: document.getElementById('minButton'), closeButton: document.getElementById('closeButton')
 };
 
 function formatNumber(value) { return Math.round(Number(value || 0)).toLocaleString('en-US'); }
@@ -88,6 +96,8 @@ function modelColor(model) {
   if (/(deepseek)/.test(name)) return clientColors.deepseek;
   if (/(gemini|google)/.test(name)) return clientColors.gemini;
   if (/(cursor)/.test(name)) return clientColors.cursor;
+  if (/(opencode)/.test(name)) return clientColors.opencode;
+  if (/(openclaw|clawd|moltbot|moldbot)/.test(name)) return clientColors.openclaw;
   if (/(gpt|openai|codex|^o[134](?:-|$)|o[134]-(mini|pro|preview)|chatgpt)/.test(name)) return clientColors.codex;
   return stableColor(name, fallbackModelColors);
 }
@@ -240,7 +250,46 @@ function syncSettingsForm() {
   els.glassInput.value = String(state.settings.glassOpacity ?? 68);
   els.blurInput.value = String(state.settings.glassBlur ?? 32);
   els.pinButton.classList.toggle('active', Boolean(state.settings.alwaysOnTop));
+  renderClientCheckboxes();
   applyAppearanceSettings(state.settings);
+}
+
+function enabledClientSet() {
+  return new Set(String(state.settings.clients || '').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean));
+}
+
+function renderClientCheckboxes() {
+  if (!els.clientCheckboxes) return;
+  if (els.clientCheckboxes.childElementCount === KNOWN_CLIENTS.length) {
+    const enabled = enabledClientSet();
+    for (const cb of els.clientCheckboxes.querySelectorAll('input[type=checkbox]')) {
+      cb.checked = enabled.has(cb.dataset.client);
+    }
+    return;
+  }
+  const enabled = enabledClientSet();
+  els.clientCheckboxes.replaceChildren();
+  for (const { id, label } of KNOWN_CLIENTS) {
+    const wrap = document.createElement('label');
+    wrap.className = 'client-checkbox';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.dataset.client = id;
+    cb.checked = enabled.has(id);
+    cb.addEventListener('change', onClientToggle);
+    const text = document.createElement('span');
+    text.textContent = label;
+    wrap.append(cb, text);
+    els.clientCheckboxes.appendChild(wrap);
+  }
+}
+
+async function onClientToggle() {
+  const checked = Array.from(els.clientCheckboxes.querySelectorAll('input[type=checkbox]'))
+    .filter((cb) => cb.checked)
+    .map((cb) => cb.dataset.client);
+  await saveSettings({ clients: checked.join(',') });
+  await refreshStats();
 }
 
 async function saveSettings(patch) {

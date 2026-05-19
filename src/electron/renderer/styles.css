@@ -205,6 +205,38 @@ input, textarea, [contenteditable="true"] {
 .settings-group-header { display: flex; align-items: center; justify-content: space-between; color: var(--muted); font-size: 11px; }
 .settings-note { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.45; }
 .settings-note code { padding: 1px 5px; border-radius: 3px; background: rgba(255, 255, 255, 0.06); font-size: 10px; }
+.settings-panel .client-checkboxes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 12px;
+  padding: 2px;
+}
+.settings-panel .client-checkboxes label.client-checkbox {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  margin: 0;
+  color: var(--fg);
+  font-size: 11px;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+.settings-panel .client-checkboxes label.client-checkbox input[type="checkbox"] {
+  flex: 0 0 auto;
+  width: auto;
+  margin: 0;
+  accent-color: var(--green);
+}
+.settings-panel .client-checkboxes label.client-checkbox span {
+  flex: 1 1 auto;
+  min-width: 0;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .reset-appearance-button {
   width: 24px;
   height: 24px;

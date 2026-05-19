@@ -8,7 +8,7 @@
     "glassBlur": 32,
     "showLiveDot": true,
     "deviceId": "",
-    "clients": "claude,codex,hermes",
+    "clients": "claude,codex,hermes,opencode,openclaw,cursor",
     "allTimeSince": "2024-01-01"
   },
   "hub": {
@@ -21,7 +21,7 @@
     "secret": "change-me",
     "deviceId": "my-device",
     "intervalMs": 300000,
-    "clients": "claude,codex,hermes",
+    "clients": "claude,codex,hermes,opencode,openclaw,cursor",
     "allTimeSince": "2024-01-01"
   }
 }

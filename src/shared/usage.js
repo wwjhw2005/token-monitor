@@ -61,6 +61,8 @@ function normalizeClientName(value) {
   if (raw.includes('hermes')) return 'hermes';
   if (raw.includes('gemini')) return 'gemini';
   if (raw.includes('cursor')) return 'cursor';
+  if (raw.includes('opencode')) return 'opencode';
+  if (raw.includes('openclaw') || raw.includes('clawd') || raw.includes('moltbot') || raw.includes('moldbot')) return 'openclaw';
   return raw.replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') || null;
 }
 

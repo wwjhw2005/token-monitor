@@ -19,7 +19,7 @@
 
 ## What is Token Monitor?
 
-A desktop widget that shows live token usage across your AI coding tools — Claude Code, Codex, and Hermes — with cost breakdowns per client and per model.
+A desktop widget that shows live token usage across your AI coding tools — Claude Code, Codex, Hermes, OpenCode, OpenClaw, Cursor, and more — with cost breakdowns per client and per model.
 
 It runs entirely on your own machine by default. An optional hub aggregates usage across multiple devices, including iPhones via a Cloudflare Worker.
 
@@ -27,7 +27,7 @@ Only summary numbers ever leave your machine. Raw prompts, source files, and con
 
 ## Features
 
-- Live token tracking for Claude Code, Codex, and Hermes — UI updates within seconds of each turn
+- Live token tracking for Claude Code, Codex, Hermes, OpenCode, OpenClaw, and Cursor — UI updates within seconds of each turn
 - Switch breakdown views — group totals by tool, device, or model
 - Cost breakdown alongside token counts
 - Appearance controls — adjust glass opacity/blur and window look (including transparent glass)
@@ -44,11 +44,14 @@ Only summary numbers ever leave your machine. Raw prompts, source files, and con
 
 Token Monitor reads usage from these AI coding tools out of the box:
 
-| Tool | Data path |
-|------|-----------|
-| Claude Code | `~/.claude/projects/`, `~/.claude/transcripts/` |
-| Codex | `~/.codex/sessions/` |
-| Hermes | `$HERMES_HOME` or `~/.hermes/` |
+| | Tool | Data path |
+|:---:|------|-----------|
+| <img src=".github/assets/tools-icon/claude.png" width="28" alt="Claude Code" /> | Claude Code | `~/.claude/projects/`, `~/.claude/transcripts/` |
+| <img src=".github/assets/tools-icon/codex.png" width="28" alt="Codex" /> | Codex | `~/.codex/sessions/` |
+| <img src=".github/assets/tools-icon/opencode.png" width="28" alt="OpenCode" /> | OpenCode | `~/.local/share/opencode/` |
+| <img src=".github/assets/tools-icon/hermes-agent.png" width="28" alt="Hermes" /> | Hermes | `$HERMES_HOME` or `~/.hermes/` |
+| <img src=".github/assets/tools-icon/openclaw.png" width="28" alt="OpenClaw" /> | OpenClaw | `~/.openclaw/agents/` |
+| <img src=".github/assets/tools-icon/cursor.png" width="28" alt="Cursor" /> | Cursor | `~/.config/tokscale/cursor-cache/` (populated by `tokscale cursor pull`) |
 
 Detection and parsing are handled by [tokscale](https://github.com/junhoyeo/tokscale).
 
@@ -63,7 +66,7 @@ npm install
 npm start
 ```
 
-Usage is read live from your local AI client directories — `~/.claude/`, `~/.codex/`, and `$HERMES_HOME` (or `~/.hermes`). The widget updates the moment those files change, with a 5-minute fallback poll.
+Usage is read live from your local AI client directories — see the [Supported Tools](#supported-tools) table for the full list of paths. The widget updates the moment those files change, with a 5-minute fallback poll.
 
 ### 2. Multiple devices on your network — Self-hosted hub
 
@@ -123,13 +126,51 @@ The widget switches modes automatically based on whether a Hub URL is set in set
 
 ## Settings
 
+### Widget (GUI)
+
 Click the `⚙` button in the widget header to open the Settings panel.
 
 - **Multi-device Sync** — Hub URL and secret. Leave Hub URL empty to run in local mode (this device only).
+- **Tracked Tools** — checkboxes for each supported AI tool. Toggles take effect immediately and restart the collector with the new client list.
 - **Appearance** — system glass, live dot, glass opacity, and glass blur.
-- **Advanced** — opens `settings.json` for less-common options like which clients to track and the `allTimeSince` start date.
+- **Advanced** — opens the underlying `settings.json` for less-common options like `allTimeSince`.
 
 The pin button in the widget header toggles "always on top".
+
+### Headless agent (`npm run agent`)
+
+The agent has no UI. Configure it via `config.local.json` at the project root:
+
+```json
+{
+  "agent": {
+    "hubUrl": "https://your-hub.example.com",
+    "secret": "your-secret",
+    "deviceId": "my-server",
+    "clients": "claude,codex,hermes,opencode,openclaw,cursor",
+    "intervalMs": 300000,
+    "allTimeSince": "2024-01-01"
+  }
+}
+```
+
+Every field can be overridden by an environment variable or CLI flag — useful for systemd / launchd / Docker. Precedence (highest first): CLI flag → env var → `config.local.json` → built-in default.
+
+| Field        | CLI flag                | Environment variable               |
+|--------------|-------------------------|------------------------------------|
+| `hubUrl`     | `--hub=<url>`           | `TOKEN_MONITOR_HUB_URL`            |
+| `secret`     | `--secret=<value>`      | `TOKEN_MONITOR_SECRET`             |
+| `deviceId`   | `--device=<id>`         | `TOKEN_MONITOR_DEVICE_ID`          |
+| `clients`    | `--clients=<csv>`       | `TOKEN_MONITOR_CLIENTS`            |
+| `intervalMs` | `--interval=<ms>`       | `TOKEN_MONITOR_INTERVAL_MS`        |
+
+Example one-off run with a custom client set:
+
+```bash
+npm run agent -- --clients=claude,codex,opencode --once
+```
+
+> The widget (GUI) stores its settings in Electron's userData directory (`settings.json`) and only falls back to `config.local.json` for fields it has not been told about through the UI. Changes made in the headless agent's `config.local.json` are therefore visible to a fresh widget install but won't override existing widget settings.
 
 ## Privacy
 

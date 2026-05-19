@@ -32,7 +32,7 @@ function defaultSettings() {
     showLiveDot: widgetConfig.showLiveDot !== false,
     deviceId: widgetConfig.deviceId || agentConfig.deviceId || defaultDeviceId(),
     lastPostedDeviceId: '',
-    clients: widgetConfig.clients || agentConfig.clients || 'claude,codex,hermes',
+    clients: widgetConfig.clients || agentConfig.clients || 'claude,codex,hermes,opencode,openclaw,cursor',
     allTimeSince: widgetConfig.allTimeSince || agentConfig.allTimeSince || '2024-01-01'
   };
 }
@@ -141,7 +141,7 @@ function startSyncCollector() {
   stopSyncCollector();
   if (!isHubConfigured()) return;
   syncCollectorHandle = startCollector({
-    clients: settings.clients || 'claude,codex,hermes',
+    clients: settings.clients || 'claude,codex,hermes,opencode,openclaw,cursor',
     allTimeSince: settings.allTimeSince || '2024-01-01',
     commandTimeoutMs: 120 * 1000,
     deviceId: settings.deviceId || defaultDeviceId(),
@@ -185,7 +185,7 @@ function startLocalCollector() {
   mode = 'local';
   sendStatus(false, { reason: 'collecting' });
   localCollectorHandle = startCollector({
-    clients: settings.clients || 'claude,codex,hermes',
+    clients: settings.clients || 'claude,codex,hermes,opencode,openclaw,cursor',
     allTimeSince: settings.allTimeSince || '2024-01-01',
     commandTimeoutMs: 120 * 1000,
     deviceId: settings.deviceId || defaultDeviceId(),
@@ -357,6 +357,7 @@ app.whenReady().then(() => {
     const previousHubUrl = settings.hubUrl;
     const previousSecret = settings.secret;
     const previousDeviceId = settings.deviceId;
+    const previousClients = settings.clients;
     settings = {
       ...settings,
       ...patch,
@@ -374,7 +375,7 @@ app.whenReady().then(() => {
     } else {
       applyNativeMaterial();
     }
-    if (settings.hubUrl !== previousHubUrl || settings.secret !== previousSecret || settings.deviceId !== previousDeviceId) {
+    if (settings.hubUrl !== previousHubUrl || settings.secret !== previousSecret || settings.deviceId !== previousDeviceId || settings.clients !== previousClients) {
       startMode();
     }
     return settings;
