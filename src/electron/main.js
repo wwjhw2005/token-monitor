@@ -5,6 +5,7 @@ const path = require('node:path');
 const { app, BrowserWindow, ipcMain, shell } = require('electron');
 const { defaultDeviceId, loadDotEnv, pidFilePath } = require('../shared/config');
 const { startCollector } = require('../shared/collector');
+const { normalizeLimitsRefreshMs, parseBoolean, parseLimitProviders } = require('../shared/limitCollector');
 const { aggregateDevices } = require('../shared/usage');
 
 loadDotEnv();
@@ -32,7 +33,11 @@ function defaultSettings() {
     deviceId: process.env.TOKEN_MONITOR_DEVICE_ID || defaultDeviceId(),
     lastPostedDeviceId: '',
     clients: process.env.TOKEN_MONITOR_CLIENTS || 'claude,codex,hermes,opencode,openclaw,cursor',
-    allTimeSince: process.env.TOKEN_MONITOR_ALL_TIME_SINCE || '2024-01-01'
+    allTimeSince: process.env.TOKEN_MONITOR_ALL_TIME_SINCE || '2024-01-01',
+    limitsEnabled: parseBoolean(process.env.TOKEN_MONITOR_LIMITS_ENABLED, true),
+    limitProviders: parseLimitProviders(process.env.TOKEN_MONITOR_LIMIT_PROVIDERS).join(','),
+    limitsRefreshMs: normalizeLimitsRefreshMs(process.env.TOKEN_MONITOR_LIMITS_REFRESH_MS),
+    showLimitSource: parseBoolean(process.env.TOKEN_MONITOR_SHOW_LIMIT_SOURCE, false)
   };
 }
 
@@ -148,6 +153,9 @@ function startSyncCollector() {
     intervalMs: 5 * 60 * 1000,
     watchEnabled: true,
     watchDebounceMs: 1500,
+    limitsEnabled: settings.limitsEnabled !== false,
+    limitProviders: settings.limitProviders ?? 'claude,codex',
+    limitsRefreshMs: normalizeLimitsRefreshMs(settings.limitsRefreshMs),
     onUpdate: (summary) => {
       if (isExternalAgentActive()) return;
       postToHub(summary).catch((error) => console.log(`[sync-collector] post failed: ${error.message}`));
@@ -192,6 +200,9 @@ function startLocalCollector() {
     intervalMs: 5 * 60 * 1000,
     watchEnabled: true,
     watchDebounceMs: 1500,
+    limitsEnabled: settings.limitsEnabled !== false,
+    limitProviders: settings.limitProviders ?? 'claude,codex',
+    limitsRefreshMs: normalizeLimitsRefreshMs(settings.limitsRefreshMs),
     onUpdate: (summary, reason) => {
       localDevice = { ...summary, receivedAt: new Date().toISOString() };
       localStats = aggregateDevices([localDevice], 0);
@@ -357,6 +368,9 @@ app.whenReady().then(() => {
     const previousSecret = settings.secret;
     const previousDeviceId = settings.deviceId;
     const previousClients = settings.clients;
+    const previousLimitsEnabled = settings.limitsEnabled;
+    const previousLimitProviders = settings.limitProviders;
+    const previousLimitsRefreshMs = settings.limitsRefreshMs;
     settings = {
       ...settings,
       ...patch,
@@ -365,7 +379,11 @@ app.whenReady().then(() => {
       glassOpacity: Math.max(0, Math.min(100, Number(patch.glassOpacity ?? settings.glassOpacity ?? 68))),
       glassBlur: Math.max(0, Math.min(100, Number(patch.glassBlur ?? settings.glassBlur ?? 32))),
       systemGlass: patch.systemGlass ?? settings.systemGlass ?? true,
-      showLiveDot: patch.showLiveDot ?? settings.showLiveDot ?? true
+      showLiveDot: patch.showLiveDot ?? settings.showLiveDot ?? true,
+      limitsEnabled: parseBoolean(patch.limitsEnabled ?? settings.limitsEnabled, true),
+      limitProviders: patch.limitProviders !== undefined ? parseLimitProviders(patch.limitProviders).join(',') : settings.limitProviders,
+      limitsRefreshMs: normalizeLimitsRefreshMs(patch.limitsRefreshMs ?? settings.limitsRefreshMs),
+      showLimitSource: parseBoolean(patch.showLimitSource ?? settings.showLimitSource, false)
     };
     saveSettings();
     applyWindowSettings();
@@ -374,7 +392,15 @@ app.whenReady().then(() => {
     } else {
       applyNativeMaterial();
     }
-    if (settings.hubUrl !== previousHubUrl || settings.secret !== previousSecret || settings.deviceId !== previousDeviceId || settings.clients !== previousClients) {
+    if (
+      settings.hubUrl !== previousHubUrl ||
+      settings.secret !== previousSecret ||
+      settings.deviceId !== previousDeviceId ||
+      settings.clients !== previousClients ||
+      settings.limitsEnabled !== previousLimitsEnabled ||
+      settings.limitProviders !== previousLimitProviders ||
+      settings.limitsRefreshMs !== previousLimitsRefreshMs
+    ) {
       startMode();
     }
     return settings;

@@ -69,11 +69,39 @@ Example payload:
     "costUsd": 0.08,
     "clients": {},
     "clientCosts": {}
+  },
+  "limits": {
+    "updatedAt": "2026-05-18T00:00:00.000Z",
+    "refreshMs": 300000,
+    "providers": [
+      {
+        "provider": "claude",
+        "accountKey": "sha256:...",
+        "status": "ok",
+        "updatedAt": "2026-05-18T00:00:00.000Z",
+        "windows": [
+          {
+            "kind": "session",
+            "usedPercent": 42,
+            "remainingPercent": 58,
+            "resetsAt": "2026-05-18T05:00:00.000Z"
+          },
+          {
+            "kind": "weekly",
+            "usedPercent": 20,
+            "remainingPercent": 80,
+            "resetsAt": "2026-05-25T00:00:00.000Z"
+          }
+        ]
+      }
+    ]
   }
 }
 ```
 
 The hub normalizes records before storing them.
+
+`limits` is optional. Agents and widgets include it when AI Tool Limits detection is enabled. Raw OAuth credentials, access tokens, refresh tokens, emails, and provider response bodies must never be sent.
 
 ## `GET /api/stats`
 
@@ -84,8 +112,11 @@ Response includes:
 - `periods.today`
 - `periods.month`
 - `periods.allTime`
+- `limits.providers` aggregated by provider account
 - `devices`
 - stale status for devices that have not reported recently
+
+If multiple devices report the same provider account, the hub keeps the freshest valid limits status for that account. Public Worker stats omit account identifiers.
 
 ## `GET /api/devices`
 

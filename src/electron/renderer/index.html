@@ -46,6 +46,20 @@
           <div id="clientCheckboxes" class="client-checkboxes"></div>
         </div>
         <div class="settings-group">
+          <div class="settings-group-header"><span>AI Tool Limits</span></div>
+          <div id="limitProviderCheckboxes" class="client-checkboxes"></div>
+          <label>Refresh
+            <select id="limitsRefreshInput">
+              <option value="60000">1 min</option>
+              <option value="120000">2 min</option>
+              <option value="300000">5 min</option>
+              <option value="900000">15 min</option>
+              <option value="1800000">30 min</option>
+            </select>
+          </label>
+          <label class="checkbox-label"><input id="showLimitSourceInput" type="checkbox" />Show Source</label>
+        </div>
+        <div class="settings-group">
           <div class="settings-group-header">
             <span>Appearance</span>
             <button id="resetAppearanceButton" class="reset-appearance-button" title="Reset appearance">↺</button>
@@ -71,6 +85,7 @@
       </section>
 
       <section id="breakdown" class="breakdown"></section>
+      <section id="limitsPanel" class="limits-panel hidden"></section>
       <footer class="footer">
         <button id="breakdownToggle" class="mode-button">0 devices</button>
         <button id="refreshButton" class="refresh-button" title="Refresh">↻</button>

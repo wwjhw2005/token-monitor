@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { defaultDeviceId, loadDotEnv, parseArgs, pidFilePath } = require('../shared/config');
 const { collectUsageOnce, startCollector } = require('../shared/collector');
+const { normalizeLimitsRefreshMs, parseBoolean, parseLimitProviders } = require('../shared/limitCollector');
 
 loadDotEnv();
 const args = parseArgs(process.argv.slice(2));
@@ -16,10 +17,13 @@ const watchDebounceMs = Number(args.watchDebounceMs || process.env.TOKEN_MONITOR
 const clients = String(args.clients || process.env.TOKEN_MONITOR_CLIENTS || 'claude,codex,hermes,opencode,openclaw,cursor');
 const allTimeSince = String(args.since || args.allTimeSince || process.env.TOKEN_MONITOR_ALL_TIME_SINCE || '2024-01-01');
 const commandTimeoutMs = Number(args.timeoutMs || process.env.TOKEN_MONITOR_TOKSCALE_TIMEOUT_MS || 120 * 1000);
+const limitsEnabled = parseBoolean(args.limits ?? args.limitsEnabled ?? process.env.TOKEN_MONITOR_LIMITS_ENABLED, true);
+const limitProviders = parseLimitProviders(args.limitProviders ?? process.env.TOKEN_MONITOR_LIMIT_PROVIDERS).join(',');
+const limitsRefreshMs = normalizeLimitsRefreshMs(args.limitsRefreshMs || process.env.TOKEN_MONITOR_LIMITS_REFRESH_MS);
 const once = Boolean(args.once);
 const dryRun = Boolean(args['dry-run'] || args.dryRun);
 
-const collectorOptions = { clients, allTimeSince, commandTimeoutMs, deviceId, agentVersion: '0.1.0' };
+const collectorOptions = { clients, allTimeSince, commandTimeoutMs, deviceId, agentVersion: '0.1.0', limitsEnabled, limitProviders, limitsRefreshMs };
 
 async function postUsage(summary) {
   const response = await fetch(`${hubUrl}/api/ingest`, {
@@ -49,7 +53,7 @@ function registerPidFile() {
 }
 
 async function main() {
-  console.log(`Token Monitor agent device=${deviceId} hub=${hubUrl} intervalMs=${intervalMs} watch=${watchEnabled}`);
+  console.log(`Token Monitor agent device=${deviceId} hub=${hubUrl} intervalMs=${intervalMs} watch=${watchEnabled} limits=${limitsEnabled ? `${limitProviders || 'none'}:${limitsRefreshMs}ms` : 'off'}`);
   if (!secret) console.warn('Warning: TOKEN_MONITOR_SECRET is not set. Posting without authorization header.');
   if (once) {
     const summary = await collectUsageOnce(collectorOptions);

@@ -10,18 +10,61 @@ const KNOWN_CLIENTS = [
   { id: 'openclaw', label: 'OpenClaw' },
   { id: 'cursor', label: 'Cursor' }
 ];
+const LIMIT_PROVIDERS = [
+  { id: 'claude', label: 'Claude Code' },
+  { id: 'codex', label: 'Codex' }
+];
+const LIMIT_REFRESH_OPTIONS = [60000, 120000, 300000, 900000, 1800000];
+const LIMIT_SOURCE_LABELS = { oauth: 'OAuth', cli: 'CLI', web: 'Web', rpc: 'CLI' };
 const deviceColors = ['#49a3b0', '#6ab4f0', '#cc7c5e', '#a57df0', '#f0d66a', '#f06a7b'];
 const fallbackModelColors = ['#6ab4f0', '#cc7c5e', '#a57df0', '#49a3b0', '#f0d66a', '#f06a7b'];
-const breakdownOrder = ['tool', 'device', 'model'];
+const baseBreakdownOrder = ['tool', 'device', 'model'];
 const state = { period: 'today', breakdown: 'tool', settings: null, stats: null, refreshTimer: null, currentTotal: 0, rowSignature: '', streamConnected: false, mode: 'idle' };
 const defaultAppearance = { glassOpacity: 68, glassBlur: 32, systemGlass: true, showLiveDot: true };
 const els = {
-  shell: document.querySelector('.shell'), status: document.getElementById('status'), liveDot: document.getElementById('liveDot'), totalTokens: document.getElementById('totalTokens'), cost: document.getElementById('cost'), breakdown: document.getElementById('breakdown'), breakdownToggle: document.getElementById('breakdownToggle'), pinButton: document.getElementById('pinButton'), settingsButton: document.getElementById('settingsButton'), settingsPanel: document.getElementById('settingsPanel'), hubUrlInput: document.getElementById('hubUrlInput'), secretInput: document.getElementById('secretInput'), deviceIdInput: document.getElementById('deviceIdInput'), systemGlassInput: document.getElementById('systemGlassInput'), liveDotInput: document.getElementById('liveDotInput'), glassInput: document.getElementById('glassInput'), blurInput: document.getElementById('blurInput'), saveSettingsButton: document.getElementById('saveSettingsButton'), clientCheckboxes: document.getElementById('clientCheckboxes'), resetAppearanceButton: document.getElementById('resetAppearanceButton'), openConfigButton: document.getElementById('openConfigButton'), refreshButton: document.getElementById('refreshButton'), minButton: document.getElementById('minButton'), closeButton: document.getElementById('closeButton')
+  shell: document.querySelector('.shell'), status: document.getElementById('status'), liveDot: document.getElementById('liveDot'), totalTokens: document.getElementById('totalTokens'), cost: document.getElementById('cost'), breakdown: document.getElementById('breakdown'), limitsPanel: document.getElementById('limitsPanel'), breakdownToggle: document.getElementById('breakdownToggle'), pinButton: document.getElementById('pinButton'), settingsButton: document.getElementById('settingsButton'), settingsPanel: document.getElementById('settingsPanel'), hubUrlInput: document.getElementById('hubUrlInput'), secretInput: document.getElementById('secretInput'), deviceIdInput: document.getElementById('deviceIdInput'), limitProviderCheckboxes: document.getElementById('limitProviderCheckboxes'), limitsRefreshInput: document.getElementById('limitsRefreshInput'), showLimitSourceInput: document.getElementById('showLimitSourceInput'), systemGlassInput: document.getElementById('systemGlassInput'), liveDotInput: document.getElementById('liveDotInput'), glassInput: document.getElementById('glassInput'), blurInput: document.getElementById('blurInput'), saveSettingsButton: document.getElementById('saveSettingsButton'), clientCheckboxes: document.getElementById('clientCheckboxes'), resetAppearanceButton: document.getElementById('resetAppearanceButton'), openConfigButton: document.getElementById('openConfigButton'), refreshButton: document.getElementById('refreshButton'), minButton: document.getElementById('minButton'), closeButton: document.getElementById('closeButton')
 };
 
 function formatNumber(value) { return Math.round(Number(value || 0)).toLocaleString('en-US'); }
 function formatCost(value) { const amount = Number(value || 0); return `$${amount.toFixed(amount >= 10 ? 2 : 4)}`; }
 function formatTime(value) { const date = value ? new Date(value) : new Date(); return Number.isNaN(date.getTime()) ? '--:--:--' : date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }); }
+function formatPercent(value) { return Number.isFinite(Number(value)) ? `${Math.round(Number(value))}%` : '--'; }
+function formatReset(value) {
+  const date = value ? new Date(value) : null;
+  if (!date || Number.isNaN(date.getTime())) return '';
+  const diffMs = date.getTime() - Date.now();
+  if (diffMs <= 0) return 'Reset now';
+  return `Reset ${formatDuration(diffMs)}`;
+}
+function formatDuration(ms) {
+  const totalMinutes = Math.max(0, Math.round(ms / 60000));
+  const days = Math.floor(totalMinutes / 1440);
+  const hours = Math.floor((totalMinutes % 1440) / 60);
+  const minutes = totalMinutes % 60;
+  if (days > 0) return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  if (minutes > 0) return `${minutes}m`;
+  return '<1m';
+}
+function formatUpdatedAge(value) {
+  const date = value ? new Date(value) : null;
+  if (!date || Number.isNaN(date.getTime())) return 'Update unknown';
+  const diffMs = Math.max(0, Date.now() - date.getTime());
+  if (diffMs < 45_000) return 'Updated just now';
+  const minutes = Math.round(diffMs / 60000);
+  if (minutes < 60) return `Updated ${minutes}m ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `Updated ${hours}h ago`;
+  return `Updated ${Math.round(hours / 24)}d ago`;
+}
+function colorWithAlpha(hex, alpha) {
+  const raw = String(hex || '').replace('#', '');
+  if (!/^[0-9a-f]{6}$/i.test(raw)) return `rgba(183, 234, 212, ${alpha})`;
+  const r = parseInt(raw.slice(0, 2), 16);
+  const g = parseInt(raw.slice(2, 4), 16);
+  const b = parseInt(raw.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
 function easeOutQuart(t) { return 1 - Math.pow(1 - t, 4); }
 
 function animateNumber(el, from, to, duration = 2200) {
@@ -138,19 +181,137 @@ function rowsForPeriod(period) {
   return toolRowsForPeriod(period);
 }
 
+function limitViewAvailable() {
+  return enabledLimitProviderSet().size > 0;
+}
+
+function limitStatusLabel(status, stale) {
+  if (status === 'ok') return 'Live';
+  if (status === 'disabled') return 'Disabled';
+  if (status === 'notConfigured') return 'Not signed in';
+  if (status === 'unauthorized') return 'Sign in again';
+  if (status === 'rateLimited') return 'Limited';
+  if (status === 'sourceRateLimited') return 'Usage API limited';
+  if (status === 'unavailable') return 'Unavailable';
+  return 'Error';
+}
+function limitProviderMeta(provider) {
+  if (provider.stale) return `Stale · ${formatUpdatedAge(provider.updatedAt).replace('Updated ', '')}`;
+  if (provider.status === 'ok') {
+    const source = state.settings?.showLimitSource && LIMIT_SOURCE_LABELS[provider.source] ? ` · ${LIMIT_SOURCE_LABELS[provider.source]}` : '';
+    return `${formatUpdatedAge(provider.updatedAt)}${source}`;
+  }
+  return limitStatusLabel(provider.status, false);
+}
+
+function enabledLimitProviderSet() {
+  if (state.settings?.limitsEnabled === false) return new Set();
+  const raw = state.settings?.limitProviders;
+  const source = raw === undefined || raw === null ? 'claude,codex' : raw;
+  return new Set(String(source).split(',').map((s) => s.trim().toLowerCase()).filter(Boolean));
+}
+
+function windowForKind(provider, kind) {
+  return (provider?.windows || []).find((window) => window.kind === kind) || null;
+}
+
+function limitWindowNode(label, window, color, tone = 1) {
+  const remaining = Number(window?.remainingPercent);
+  const used = Number(window?.usedPercent);
+  const hasPercent = Number.isFinite(remaining) || Number.isFinite(used);
+  const fillPercent = Number.isFinite(remaining)
+    ? remaining
+    : Number.isFinite(used)
+      ? 100 - used
+      : 0;
+  const safePercent = Math.max(0, Math.min(100, fillPercent));
+  const item = document.createElement('div');
+  item.className = 'limit-window';
+  const text = document.createElement('div');
+  text.className = 'limit-window-text';
+  const name = document.createElement('span');
+  name.textContent = label;
+  const value = document.createElement('span');
+  value.textContent = hasPercent ? `${formatPercent(fillPercent)} left` : '--';
+  text.append(name, value);
+  const meter = document.createElement('div');
+  meter.className = 'limit-meter';
+  meter.style.background = colorWithAlpha(color, 0.16);
+  const fill = document.createElement('div');
+  fill.className = 'limit-meter-fill';
+  fill.style.width = `${safePercent}%`;
+  fill.style.background = color;
+  fill.style.opacity = tone;
+  meter.append(fill);
+  const reset = document.createElement('div');
+  reset.className = 'limit-reset';
+  reset.textContent = formatReset(window?.resetsAt);
+  item.append(text, meter, reset);
+  return item;
+}
+
+function renderLimits() {
+  if (!els.limitsPanel) return;
+  const limitsEnabled = state.settings?.limitsEnabled !== false;
+  const enabled = enabledLimitProviderSet();
+  const providers = new Map((state.stats?.limits?.providers || []).map((provider) => [provider.provider, provider]));
+  const nodes = [];
+  const rows = LIMIT_PROVIDERS.filter(({ id }) => limitsEnabled && enabled.has(id));
+  if (rows.length === 0) {
+    els.limitsPanel.replaceChildren();
+    return;
+  }
+  for (const { id, label } of rows) {
+    const providerEnabled = limitsEnabled && enabled.has(id);
+    const provider = providerEnabled
+      ? (providers.get(id) || { provider: id, status: state.stats ? 'notConfigured' : 'unavailable', windows: [] })
+      : { provider: id, status: 'disabled', windows: [] };
+    const color = clientColors[id] || clientColors.default;
+    const row = document.createElement('div');
+    row.className = `limit-row${provider.stale ? ' stale' : ''}`;
+    const head = document.createElement('div');
+    head.className = 'limit-head';
+    const name = document.createElement('div');
+    name.className = 'limit-name';
+    const dot = document.createElement('span');
+    dot.className = 'dot';
+    dot.style.background = color;
+    const title = document.createElement('span');
+    title.textContent = label;
+    name.append(dot, title);
+    const status = document.createElement('div');
+    status.className = 'limit-status';
+    status.textContent = limitProviderMeta(provider);
+    head.append(name, status);
+    const windows = document.createElement('div');
+    windows.className = 'limit-windows';
+    windows.append(limitWindowNode('Session', windowForKind(provider, 'session'), color, 0.95));
+    windows.append(limitWindowNode('Weekly', windowForKind(provider, 'weekly'), color, 0.68));
+    row.append(head, windows);
+    nodes.push(row);
+  }
+  els.limitsPanel.replaceChildren(...nodes);
+}
+
 function nextBreakdown(value) {
-  const index = breakdownOrder.indexOf(value);
-  return breakdownOrder[(index + 1) % breakdownOrder.length];
+  const order = limitViewAvailable() ? [...baseBreakdownOrder, 'limits'] : baseBreakdownOrder;
+  const index = order.indexOf(value);
+  return order[(index + 1) % order.length];
 }
 
 function breakdownLabel(deviceText) {
   if (state.breakdown === 'device') return deviceText;
   if (state.breakdown === 'model') return 'Model';
+  if (state.breakdown === 'limits') return 'Limits';
   return 'Tools';
 }
 
 function render() {
   if (!state.stats) return;
+  if (state.breakdown === 'limits' && !limitViewAvailable()) {
+    state.breakdown = 'tool';
+    state.rowSignature = '';
+  }
   const period = state.stats.periods?.[state.period] || { totalTokens: 0, costUsd: 0, clients: {} };
   const nextTotal = Number(period.totalTokens || 0);
   animateNumber(els.totalTokens, state.currentTotal, nextTotal);
@@ -162,8 +323,16 @@ function render() {
   const deviceText = `${devices.length} device${devices.length === 1 ? '' : 's'}`;
   els.breakdownToggle.textContent = breakdownLabel(deviceText);
   els.breakdownToggle.removeAttribute('title');
-  const rows = rowsForPeriod(period);
-  renderRows(rows);
+  if (state.breakdown === 'limits') {
+    els.breakdown.classList.add('hidden');
+    els.limitsPanel.classList.remove('hidden');
+    renderLimits();
+  } else {
+    els.limitsPanel.classList.add('hidden');
+    els.breakdown.classList.remove('hidden');
+    const rows = rowsForPeriod(period);
+    renderRows(rows);
+  }
 }
 
 function setStatus(text, isError = false) {
@@ -245,13 +414,17 @@ function syncSettingsForm() {
   els.hubUrlInput.value = state.settings.hubUrl || '';
   els.secretInput.value = state.settings.secret || '';
   els.deviceIdInput.value = state.settings.deviceId || '';
+  els.limitsRefreshInput.value = String(LIMIT_REFRESH_OPTIONS.includes(Number(state.settings.limitsRefreshMs)) ? state.settings.limitsRefreshMs : 300000);
+  els.showLimitSourceInput.checked = Boolean(state.settings.showLimitSource);
   els.systemGlassInput.checked = state.settings.systemGlass !== false;
   els.liveDotInput.checked = state.settings.showLiveDot !== false;
   els.glassInput.value = String(state.settings.glassOpacity ?? 68);
   els.blurInput.value = String(state.settings.glassBlur ?? 32);
   els.pinButton.classList.toggle('active', Boolean(state.settings.alwaysOnTop));
   renderClientCheckboxes();
+  renderLimitProviderCheckboxes();
   applyAppearanceSettings(state.settings);
+  if (state.breakdown === 'limits') renderLimits();
 }
 
 function enabledClientSet() {
@@ -284,11 +457,49 @@ function renderClientCheckboxes() {
   }
 }
 
+function renderLimitProviderCheckboxes() {
+  if (!els.limitProviderCheckboxes) return;
+  if (els.limitProviderCheckboxes.childElementCount === LIMIT_PROVIDERS.length) {
+    const enabled = enabledLimitProviderSet();
+    for (const cb of els.limitProviderCheckboxes.querySelectorAll('input[type=checkbox]')) {
+      cb.checked = enabled.has(cb.dataset.provider);
+    }
+    return;
+  }
+  const enabled = enabledLimitProviderSet();
+  els.limitProviderCheckboxes.replaceChildren();
+  for (const { id, label } of LIMIT_PROVIDERS) {
+    const wrap = document.createElement('label');
+    wrap.className = 'client-checkbox';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.dataset.provider = id;
+    cb.checked = enabled.has(id);
+    cb.addEventListener('change', onLimitProviderToggle);
+    const text = document.createElement('span');
+    text.textContent = label;
+    wrap.append(cb, text);
+    els.limitProviderCheckboxes.appendChild(wrap);
+  }
+}
+
 async function onClientToggle() {
   const checked = Array.from(els.clientCheckboxes.querySelectorAll('input[type=checkbox]'))
     .filter((cb) => cb.checked)
     .map((cb) => cb.dataset.client);
   await saveSettings({ clients: checked.join(',') });
+  await refreshStats();
+}
+
+async function onLimitProviderToggle() {
+  const checked = Array.from(els.limitProviderCheckboxes.querySelectorAll('input[type=checkbox]'))
+    .filter((cb) => cb.checked)
+    .map((cb) => cb.dataset.provider);
+  if (checked.length === 0 && state.breakdown === 'limits') {
+    state.breakdown = 'tool';
+    state.rowSignature = '';
+  }
+  await saveSettings({ limitProviders: checked.join(','), limitsEnabled: checked.length > 0 });
   await refreshStats();
 }
 
@@ -340,6 +551,13 @@ els.settingsButton.addEventListener('click', () => {
 els.saveSettingsButton.addEventListener('click', async () => {
   await saveSettings({ hubUrl: els.hubUrlInput.value.trim(), secret: els.secretInput.value, deviceId: els.deviceIdInput.value.trim() });
   await refreshStats();
+});
+els.limitsRefreshInput.addEventListener('change', async () => {
+  await saveSettings({ limitsRefreshMs: Number(els.limitsRefreshInput.value) });
+  await refreshStats();
+});
+els.showLimitSourceInput.addEventListener('change', async () => {
+  await saveSettings({ showLimitSource: els.showLimitSourceInput.checked });
 });
 els.resetAppearanceButton.addEventListener('click', async () => {
   await saveSettings(defaultAppearance);

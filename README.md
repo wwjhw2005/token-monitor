@@ -29,30 +29,31 @@ Only summary numbers ever leave your machine. Raw prompts, source files, and con
 ## Features
 
 - Live token tracking for Claude Code, Codex, Hermes, OpenCode, OpenClaw, and Cursor — UI updates within seconds of each turn
-- Switch breakdown views — group totals by tool, device, or model
+- Switch breakdown views — group totals by tool, device, model, or account limits
 - Cost breakdown alongside token counts
+- Claude Code and Codex limit detection — shows session and weekly windows when local tool credentials are available
 - Appearance controls — adjust glass opacity/blur and window look (including transparent glass)
 - Local-first — no servers needed for single-device use
 - Real-time multi-device sync over Server-Sent Events (self-hosted hub or Cloudflare Worker)
 - iOS widget support (Widgy, Scriptable) through the Worker hub
 - Privacy-first — only summary numbers ever leave your machine
 
-| Daily View | Devices View | Models View |
+| Limits View | Devices View | Models View |
 |:---:|:---:|:---:|
-| ![Daily View](.github/assets/daily-view.png) | ![Devices View](.github/assets/devices-view.png) | ![Models View](.github/assets/models-view.png) | 
+| ![Limits View](.github/assets/limits-view.png) | ![Devices View](.github/assets/devices-view.png) | ![Models View](.github/assets/models-view.png) | 
 
 ## Supported Tools
 
-Token Monitor reads usage from these AI coding tools out of the box:
+Token Monitor supports token usage and account-limit checks separately:
 
-| Logo | Tool | Data path |
-|:---:|------|-----------|
-| <img src=".github/assets/tools-icon/claude.png" width="28" alt="Claude Code" /> | Claude Code | `~/.claude/projects/`, `~/.claude/transcripts/` |
-| <img src=".github/assets/tools-icon/codex.png" width="28" alt="Codex" /> | Codex | `~/.codex/sessions/` |
-| <img src=".github/assets/tools-icon/opencode.png" width="28" alt="OpenCode" /> | OpenCode | `~/.local/share/opencode/` |
-| <img src=".github/assets/tools-icon/hermes-agent.png" width="28" alt="Hermes" /> | Hermes | `$HERMES_HOME` or `~/.hermes/` |
-| <img src=".github/assets/tools-icon/openclaw.png" width="28" alt="OpenClaw" /> | OpenClaw | `~/.openclaw/agents/` |
-| <img src=".github/assets/tools-icon/cursor.png" width="28" alt="Cursor" /> | Cursor | `~/.config/tokscale/cursor-cache/` (populated by `tokscale cursor pull`) |
+| Logo | Tool | Data path | Token Usage | AI Tool Limits |
+|:---:|------|-----------|:---:|:---:|
+| <img src=".github/assets/tools-icon/claude.png" width="28" alt="Claude Code" /> | Claude Code | `~/.claude/projects/`, `~/.claude/transcripts/` | ✅ | ✅ |
+| <img src=".github/assets/tools-icon/codex.png" width="28" alt="Codex" /> | Codex | `~/.codex/sessions/` | ✅ | ✅ |
+| <img src=".github/assets/tools-icon/opencode.png" width="28" alt="OpenCode" /> | OpenCode | `~/.local/share/opencode/` | ✅ | — |
+| <img src=".github/assets/tools-icon/hermes-agent.png" width="28" alt="Hermes" /> | Hermes | `$HERMES_HOME` or `~/.hermes/` | ✅ | — |
+| <img src=".github/assets/tools-icon/openclaw.png" width="28" alt="OpenClaw" /> | OpenClaw | `~/.openclaw/agents/` | ✅ | — |
+| <img src=".github/assets/tools-icon/cursor.png" width="28" alt="Cursor" /> | Cursor | `~/.config/tokscale/cursor-cache/` (populated by `tokscale cursor pull`) | ✅ | — |
 
 ## Installation
 
@@ -126,6 +127,7 @@ Click the `⚙` button in the widget header to open the Settings panel.
 
 - **Multi-device Sync** — Hub URL and secret. Leave Hub URL empty to run in local mode (this device only).
 - **Tracked Tools** — checkboxes for each supported AI tool. Toggles take effect immediately and restart the collector with the new client list.
+- **AI Tool Limits** — choose Claude Code and Codex limit detection and refresh frequency.
 - **Appearance** — system glass, live dot, glass opacity, and glass blur.
 - **Advanced** — opens the underlying `settings.json` for less-common options like `allTimeSince`.
 
@@ -146,6 +148,14 @@ The widget reads the same env vars as first-run defaults, then takes over with i
 
 Every value can also be passed as a CLI flag (`--hub=`, `--secret=`, `--device=`, `--clients=`) — flags win over env. Less-common knobs (`TOKEN_MONITOR_INTERVAL_MS`, `TOKEN_MONITOR_PORT`, `TOKEN_MONITOR_STALE_AFTER_MS`, …) are also accepted via env / flag but kept out of `.env.example` to reduce noise.
 
+AI Tool Limits knobs for headless agents:
+
+- `TOKEN_MONITOR_LIMITS_ENABLED=0` disables limit detection
+- `TOKEN_MONITOR_LIMIT_PROVIDERS=claude,codex` selects providers
+- `TOKEN_MONITOR_LIMITS_REFRESH_MS=300000` selects refresh frequency
+
+Equivalent CLI flags are `--limits=false`, `--limitProviders=claude,codex`, and `--limitsRefreshMs=300000`.
+
 Example one-off run:
 
 ```bash
@@ -160,9 +170,12 @@ The hub and agent only transmit summary fields:
 - total tokens per period (today / month / all-time)
 - cost totals (when `tokscale` returns cost data)
 - per-client and per-model breakdowns
+- normalized Claude Code/Codex limit status when AI Tool Limits is enabled
 
 They do not transmit raw AI logs, prompts, source code, or conversation
-content. `.env`, `data/`, and `node_modules/` are gitignored.
+content. They also do not transmit OAuth credentials, access tokens, refresh
+tokens, emails, or raw provider responses. `.env`, `data/`, and `node_modules/`
+are gitignored.
 
 ## Requirements
 

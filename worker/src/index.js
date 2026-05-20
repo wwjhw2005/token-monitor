@@ -1,3 +1,4 @@
+import { publicLimits } from '../../src/shared/limits.js';
 import { aggregateDevices, normalizeDeviceRecord } from '../../src/shared/usage.js';
 
 const CORS_HEADERS = {
@@ -63,6 +64,10 @@ export class HubDO {
     return Number(this.env.STALE_AFTER_MS || 10 * 60 * 1000);
   }
 
+  get publicStatsEnabled() {
+    return ['1', 'true', 'yes', 'on'].includes(String(this.env.PUBLIC_STATS_ENABLED || '').trim().toLowerCase());
+  }
+
   async listDevices() {
     const entries = await this.state.storage.list({ prefix: 'dev:' });
     return Array.from(entries.values());
@@ -120,6 +125,19 @@ export class HubDO {
         secretRequired: Boolean(this.secret),
         now: new Date().toISOString()
       });
+    }
+
+    if ((request.method === 'GET' || request.method === 'HEAD') && url.pathname === '/api/public/stats') {
+      if (!this.publicStatsEnabled) return jsonResponse(404, { error: 'not_found' });
+      const stats = await this.getStats();
+      const { devices, limits, ...rest } = stats;
+      return jsonResponse(200, {
+        ok: true,
+        source: 'cloudflare-worker',
+        deviceCount: devices.length,
+        limits: publicLimits(limits),
+        ...rest
+      }, { 'cache-control': 'public, max-age=15, s-maxage=15' });
     }
 
     if (!isAuthorized(request, this.secret)) return jsonResponse(401, { error: 'unauthorized' });

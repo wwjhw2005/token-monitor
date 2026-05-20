@@ -75,7 +75,17 @@ npm run agent
 ## iPhone via Widgy or Scriptable
 
 The Worker exposes `GET /api/stats` as plain JSON with CORS open, so iOS
-widget runtimes can call it directly.
+widget runtimes can call it directly. It can also expose `GET /api/public/stats`
+without auth for public dashboards when `PUBLIC_STATS_ENABLED=1`; that response
+omits per-device records and account identifiers.
+
+To enable the public endpoint:
+
+```bash
+npx wrangler secret put PUBLIC_STATS_ENABLED   # enter 1
+```
+
+Leave it unset to keep `/api/public/stats` disabled.
 
 ### Widgy
 
@@ -169,6 +179,22 @@ need for your widget:
     "month":   { /* ... */ },
     "allTime": { /* ... */ }
   },
+  "limits": {
+    "updatedAt": "2026-05-18T18:02:19.459Z",
+    "providers": [
+      {
+        "provider": "claude",
+        "accountKey": "sha256:...",
+        "sourceDeviceId": "macbook",
+        "stale": false,
+        "status": "ok",
+        "windows": [
+          { "kind": "session", "usedPercent": 42, "remainingPercent": 58, "resetsAt": "2026-05-18T21:00:00.000Z" },
+          { "kind": "weekly", "usedPercent": 20, "remainingPercent": 80, "resetsAt": "2026-05-25T00:00:00.000Z" }
+        ]
+      }
+    ]
+  },
   "devices": [
     {
       "deviceId":   "macbook",
@@ -202,11 +228,17 @@ Each device also carries its own per-period numbers under
 marked `stale: true` once its `receivedAt` is older than `STALE_AFTER_MS`
 (default 10 min) — handy if you want to show an "offline" state.
 
+`limits.providers` is aggregated by provider account. The authenticated stats
+endpoint includes account hashes for de-duplication. When enabled,
+`/api/public/stats` strips those hashes, labels, source device ids, and the full
+`devices` list.
+
 ## Endpoints
 
 | Method | Path                       | Auth   | Description                                |
 |--------|----------------------------|--------|--------------------------------------------|
 | GET    | `/api/health`              | none   | Liveness probe + device count              |
+| GET    | `/api/public/stats`        | none   | Public aggregate stats without devices/account ids when `PUBLIC_STATS_ENABLED=1` |
 | GET    | `/api/stats`               | secret | Aggregated stats (today / month / allTime) |
 | GET    | `/api/stats/stream`        | secret | SSE stream, push on every ingest           |
 | GET    | `/api/devices`             | secret | Raw per-device records                     |

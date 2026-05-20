@@ -1,6 +1,7 @@
 ﻿'use strict';
 
 const PERIODS = ['today', 'month', 'allTime'];
+const { aggregateLimits, normalizeLimitsSummary } = require('./limits');
 const TOKEN_KEYS = ['totalTokens', 'total_tokens', 'totalTokenCount', 'total_token_count', 'tokens', 'tokenCount', 'token_count'];
 const TOKEN_COMPONENT_KEYS = [
   'input', 'inputTokens', 'input_tokens', 'promptTokens', 'prompt_tokens',
@@ -173,16 +174,17 @@ function normalizeDeviceRecord(record) {
     updatedAt: record.updatedAt || nowIso,
     receivedAt: record.receivedAt || nowIso,
     agentVersion: record.agentVersion || '',
-    periods: {}
+    periods: {},
+    limits: normalizeLimitsSummary(record.limits)
   };
   for (const periodName of PERIODS) normalized.periods[periodName] = normalizePeriod(record[periodName] || record.periods?.[periodName]);
   return normalized;
 }
 
-function aggregateDevices(devices, staleAfterMs) {
+function aggregateDevices(devices, staleAfterMs, nowMs = Date.now()) {
   const aggregate = { updatedAt: new Date().toISOString(), periods: {}, devices: [] };
   for (const periodName of PERIODS) aggregate.periods[periodName] = emptyPeriod();
-  const now = Date.now();
+  const now = nowMs;
   for (const record of devices) {
     const normalized = normalizeDeviceRecord(record);
     const ageMs = now - Date.parse(normalized.receivedAt || normalized.updatedAt || 0);
@@ -195,7 +197,8 @@ function aggregateDevices(devices, staleAfterMs) {
       receivedAt: normalized.receivedAt,
       ageMs: Number.isFinite(ageMs) ? ageMs : null,
       stale,
-      periods: normalized.periods
+      periods: normalized.periods,
+      limits: normalized.limits
     });
     for (const periodName of PERIODS) {
       const source = normalized.periods[periodName];
@@ -208,6 +211,7 @@ function aggregateDevices(devices, staleAfterMs) {
       for (const [model, cost] of Object.entries(source.modelCosts)) target.modelCosts[model] = (target.modelCosts[model] || 0) + cost;
     }
   }
+  aggregate.limits = aggregateLimits(aggregate.devices, staleAfterMs, now);
   aggregate.devices.sort((a, b) => a.deviceId.localeCompare(b.deviceId));
   for (const periodName of PERIODS) {
     aggregate.periods[periodName].totalTokens = Math.round(aggregate.periods[periodName].totalTokens);

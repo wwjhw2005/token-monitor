@@ -6,6 +6,7 @@ const os = require('node:os');
 const path = require('node:path');
 const chokidar = require('chokidar');
 const { extractUsageFromTokscale } = require('./usage');
+const { collectLimitsOnce, createLimitsCollector } = require('./limitCollector');
 
 const TOKSCALE_BIN_JS = require.resolve('tokscale/bin.js');
 
@@ -74,7 +75,7 @@ async function collectUsageOnce(options) {
   const todayJson = await runTokscale({ clients, flags: ['--today'], commandTimeoutMs });
   const monthJson = await runTokscale({ clients, flags: ['--month'], commandTimeoutMs });
   const allTimeJson = await runTokscale({ clients, flags: ['--since', allTimeSince], commandTimeoutMs });
-  return {
+  const summary = {
     deviceId,
     hostname: os.hostname(),
     platform: `${process.platform}-${process.arch}`,
@@ -84,6 +85,12 @@ async function collectUsageOnce(options) {
     month: extractUsageFromTokscale(monthJson),
     allTime: extractUsageFromTokscale(allTimeJson)
   };
+  if (options.limitsEnabled !== false) {
+    summary.limits = options.limitsCollector
+      ? await options.limitsCollector.snapshot()
+      : await collectLimitsOnce(options);
+  }
+  return summary;
 }
 
 function watchPathsForClients(clientsCsv) {
@@ -115,10 +122,11 @@ function watchPathsForClients(clientsCsv) {
 function startCollector(options) {
   const {
     clients, allTimeSince, commandTimeoutMs, deviceId, agentVersion,
-    intervalMs, watchEnabled, watchDebounceMs,
+    intervalMs, watchEnabled, watchDebounceMs, limitsEnabled,
     onUpdate, onError, logger
   } = options;
   const log = logger || (() => {});
+  const limitsCollector = limitsEnabled !== false ? createLimitsCollector(options) : null;
   let tickInFlight = false;
   let tickPending = false;
   let debounceTimer = null;
@@ -128,7 +136,15 @@ function startCollector(options) {
 
   async function performTick(reason) {
     try {
-      const summary = await collectUsageOnce({ clients, allTimeSince, commandTimeoutMs, deviceId, agentVersion });
+      const summary = await collectUsageOnce({
+        ...options,
+        clients,
+        allTimeSince,
+        commandTimeoutMs,
+        deviceId,
+        agentVersion,
+        limitsCollector
+      });
       if (stopped) return;
       onUpdate?.(summary, reason);
     } catch (error) {

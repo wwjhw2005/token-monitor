@@ -2,6 +2,7 @@ node_modules/
 data/
 .claude/
 CLAUDE.md
+AGENTS.md
 .env
 .env.*
 !.env.example
