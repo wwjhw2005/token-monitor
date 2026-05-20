@@ -143,8 +143,8 @@ The pin button in the widget header toggles "always on top".
 The agent and hub have no UI. Configure them with a `.env` file at the project root (copy from `.env.example`):
 
 ```env
-TOKEN_MONITOR_HUB_URL=http://127.0.0.1:17321
-TOKEN_MONITOR_SECRET=change-me
+TOKEN_MONITOR_HUB_URL=               # required for sync mode — Worker URL or http://<lan-ip>:17321
+TOKEN_MONITOR_SECRET=                # shared secret, must match the hub
 TOKEN_MONITOR_DEVICE_ID=             # optional — defaults to hostname
 TOKEN_MONITOR_CLIENTS=               # optional — defaults to all supported tools
 ```
