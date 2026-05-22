@@ -7,8 +7,13 @@
 </div>
 
 <p align="center">
-    <img src="https://img.shields.io/badge/macOS-14%2B-0A84FF?style=flat-square&logo=apple&logoColor=white" alt="macOS 14 or later" />
+    <em>One live dashboard for every AI coding tool, synced across every machine.</em>
+</p>
+
+<p align="center">
     <img src="https://img.shields.io/badge/Windows-10%2B-0078D4?style=flat-square" alt="Windows 10 or later" />
+    <img src="https://img.shields.io/badge/macOS-14%2B-0A84FF?style=flat-square&logo=apple&logoColor=white" alt="macOS 14 or later" />
+    <img src="https://img.shields.io/badge/iOS-16%2B-0A84FF?style=flat-square&logo=apple&logoColor=white" alt="iOS 16 or later" />
     <a href="docs/API.md"><img src="https://img.shields.io/badge/API-Docs-0B7285?style=flat-square" alt="API Docs" /></a>
     <a href="worker/README.md"><img src="https://img.shields.io/badge/Worker-Cloudflare-F38020?style=flat-square&logo=cloudflare&logoColor=white" alt="Cloudflare Worker" /></a>
     <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-A855F7?style=flat-square" alt="License: MIT" /></a>
