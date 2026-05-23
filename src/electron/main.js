@@ -451,6 +451,11 @@ function enterTrayMode() {
   if (process.platform === 'darwin' && app.dock) app.dock.hide();
   if (mainWindow && !mainWindow.isDestroyed()) {
     if (typeof mainWindow.setSkipTaskbar === 'function') mainWindow.setSkipTaskbar(true);
+    // Without this, .show() yanks the user back to the Space the window was last
+    // shown on instead of popping over the current Space / fullscreen app.
+    if (typeof mainWindow.setVisibleOnAllWorkspaces === 'function') {
+      mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+    }
     mainWindow.hide();
   }
 }
@@ -461,6 +466,9 @@ function exitTrayMode() {
   if (process.platform === 'darwin' && app.dock) app.dock.show();
   if (mainWindow && !mainWindow.isDestroyed()) {
     if (typeof mainWindow.setSkipTaskbar === 'function') mainWindow.setSkipTaskbar(false);
+    if (typeof mainWindow.setVisibleOnAllWorkspaces === 'function') {
+      mainWindow.setVisibleOnAllWorkspaces(false);
+    }
     const restore = restoredBounds() || DEFAULT_WINDOW;
     mainWindow.setBounds({
       width: restore.width,
