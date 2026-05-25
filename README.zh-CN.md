@@ -38,18 +38,18 @@
 
 ## 功能特性
 
-- Claude Code、Codex、Hermes、OpenCode、OpenClaw、Cursor 的实时 Token 追踪——每轮对话后 UI 在数秒内刷新
-- 实时多设备 Token 同步——任一设备的变化会在数秒内出现在所有小部件上
-- 切换分项视图——按工具、设备、模型或账户用量上限分组统计
+- Claude Code、Codex、Hermes、OpenCode、OpenClaw、Cursor 的实时 Token 追踪（每轮对话后 UI 在数秒内刷新）
+- 通过 Server-Sent Events 实时同步多设备 Token
+- 按工具、设备、模型或账户用量上限分组的统计视图
 - Token 数量旁附带成本分项
-- Claude Code 与 Codex 的用量上限检测——本机具备工具凭据时会显示 session 与每周窗口
-- 外观控制——可调节玻璃透明度／模糊度与窗口外观（含完全透明玻璃）
-- 菜单栏／系统托盘模式——可改为由 macOS 菜单栏或 Windows 系统托盘唤出的弹出窗口，图标旁实时显示成本、token 数，或 Claude／Codex 最接近用完的用量上限百分比
-- 本地优先——单设备使用完全无需服务器
-- 自托管同步后端——支持 Node hub 或 Cloudflare Worker，通过 Server-Sent Events 推送
+- Claude Code 与 Codex 的用量上限检测，涵盖 session 与每周窗口
+- 外观控制：玻璃透明度、模糊度、完全透明窗口
+- 菜单栏（macOS）与系统托盘（Windows）弹出窗口，图标旁可显示成本、token 数，或 Claude／Codex 最接近用完的用量上限百分比
+- 本地优先：单设备使用完全无需服务器
+- 自托管同步后端（Node hub 或 Cloudflare Worker）
 - 通过 Worker hub 支持 iOS 小部件（Widgy、Scriptable）
-- Discord Rich Presence——将今日 Token、花费与主要工具广播到你的 Discord 个人资料（需手动开启）
-- 隐私优先——只有汇总数字会离开你的机器
+- Discord Rich Presence：将今日 Token、花费与主要工具广播到你的 Discord 个人资料（需手动开启）
+- 隐私优先：只有汇总数字会离开你的机器
 
 | 用量上限视图 | 设备视图 | 模型视图 |
 |:---:|:---:|:---:|
@@ -83,17 +83,11 @@ npm install
 npm start
 ```
 
-用量会实时从你的本地 AI 客户端目录读取——完整路径清单见 [支持的工具](#支持的工具) 表格。文件一变动小部件就立刻刷新，另有 5 分钟的兜底轮询。
-
 ### 多设备同步
 
 挑一个所有设备（与任何无头代理）都能连上的 hub 后端。在每台设备上打开小部件，填入 设置 → 多设备同步 → Hub URL + Secret。小部件会自动上报本机用量；只在没有小部件的机器上跑 `npm run agent`。
 
-hub HTTP API 参考见 [docs/API.md](docs/API.md)。
-
 #### 方案 A——自托管 Node hub（同一局域网）
-
-在一台会长期开机的机器上跑一次 hub，然后让每台设备指向它。
 
 ```bash
 # 在长期开机的机器上
@@ -103,10 +97,6 @@ npm run hub
 ```
 
 #### 方案 B——Cloudflare Worker hub（跨网络，包含 iPhone）
-
-基于 Worker 部署的 hub，协议与 Node hub 完全相同。
-公网 HTTPS、无需常时开机、免费额度足够小团队使用、
-iOS 上的 Widgy / Scriptable 都能连上。
 
 [![部署到 Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/Javis603/token-monitor/tree/main/worker)
 
@@ -120,7 +110,7 @@ npx wrangler secret put TOKEN_MONITOR_SECRET
 npx wrangler deploy
 ```
 
-Wrangler 会打印部署的 URL——把它贴到每台设备的小部件 设置 → 多设备同步。完整部署说明、iOS 小部件配方与端点参考见 [worker/README.md](worker/README.md)。
+把部署 URL 贴到每台设备的小部件 设置 → 多设备同步。iOS 小部件配方与端点参考见 [worker/README.md](worker/README.md)，hub HTTP API 见 [docs/API.md](docs/API.md)。
 
 ## 桌面安装包
 

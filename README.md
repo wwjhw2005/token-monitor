@@ -38,18 +38,18 @@ Most usage monitors are useful on the machine they run on. Token Monitor is buil
 
 ## Features
 
-- Live token tracking for Claude Code, Codex, Hermes, OpenCode, OpenClaw, and Cursor — UI updates within seconds of each turn
-- Real-time multi-device token sync — changes on any connected device appear on every widget within seconds
-- Switch breakdown views — group totals by tool, device, model, or account limits
+- Live token tracking for Claude Code, Codex, Hermes, OpenCode, OpenClaw, and Cursor (UI updates within seconds of each turn)
+- Real-time multi-device token sync over Server-Sent Events
+- Breakdown views grouped by tool, device, model, or account limits
 - Cost breakdown alongside token counts
-- Claude Code and Codex limit detection — shows session and weekly windows when local tool credentials are available
-- Appearance controls — adjust glass opacity/blur and window look (including transparent glass)
-- Menu bar / system tray mode — optional popover from the macOS menu bar or Windows system tray, with live cost, tokens, or the closest Claude/Codex limit % next to the icon
-- Local-first — no servers needed for single-device use
-- Self-hosted sync backend — use a Node hub or Cloudflare Worker over Server-Sent Events
-- iOS widget support (Widgy, Scriptable) through the Worker hub
-- Discord Rich Presence — broadcast today's tokens, cost, and top client to your Discord profile (opt-in)
-- Privacy-first — only summary numbers ever leave your machine
+- Claude Code and Codex limit detection with session and weekly windows
+- Appearance controls for glass opacity, blur, and transparent window mode
+- Menu bar (macOS) and system tray (Windows) popover with live cost, tokens, or closest Claude/Codex limit % next to the icon
+- Local-first: no servers needed for single-device use
+- Self-hosted sync backend (Node hub or Cloudflare Worker)
+- iOS widget support via Widgy and Scriptable through the Worker hub
+- Discord Rich Presence to broadcast today's tokens, cost, and top client (opt-in)
+- Privacy-first: only summary numbers ever leave your machine
 
 | Limits View | Devices View | Models View |
 |:---:|:---:|:---:|
@@ -83,17 +83,11 @@ npm install
 npm start
 ```
 
-Usage is read live from your local AI client directories — see the [Supported Tools](#supported-tools) table for the full list of paths. The widget updates the moment those files change, with a 5-minute fallback poll.
-
 ### Multi-device sync
 
 Pick ONE hub backend that all your devices (and any headless agents) connect to. On each device, open the widget and fill in Settings → Multi-device Sync → Hub URL + Secret. The widget contributes this device's usage automatically; run `npm run agent` only on machines without a widget.
 
-See [docs/API.md](docs/API.md) for the hub HTTP API reference.
-
 #### Option A — Self-hosted Node hub (same LAN)
-
-Run the hub once on a machine that stays on, then point each device at it.
 
 ```bash
 # on the always-on machine
@@ -103,10 +97,6 @@ npm run hub
 ```
 
 #### Option B — Cloudflare Worker hub (across networks, including iPhone)
-
-A Worker-based deployment that speaks the same protocol as the Node hub.
-Public HTTPS, no always-on machine, free tier covers small-team usage,
-reachable from Widgy / Scriptable on iOS.
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/Javis603/token-monitor/tree/main/worker)
 
@@ -120,7 +110,7 @@ npx wrangler secret put TOKEN_MONITOR_SECRET
 npx wrangler deploy
 ```
 
-Wrangler prints the deployed URL — paste it into each device's widget at Settings → Multi-device Sync. See [worker/README.md](worker/README.md) for full deploy notes, the iOS widget recipe, and endpoint reference.
+Paste the deployed URL into each device's widget at Settings → Multi-device Sync. See [worker/README.md](worker/README.md) for the iOS widget recipe and endpoint reference, or [docs/API.md](docs/API.md) for the hub HTTP API.
 
 ## Desktop installer
 
