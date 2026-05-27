@@ -42,7 +42,7 @@ const CSP_HEADER = [
   "form-action 'none'",
   "frame-ancestors 'none'"
 ].join('; ');
-const TRAY_CONTENT_VALUES = new Set(['tokens', 'cost', 'both', 'tokensAll', 'costAll', 'bothAll', 'bars', 'barsSession', 'barsAllSessions', 'icon']);
+const TRAY_CONTENT_VALUES = new Set(['tokens', 'cost', 'both', 'tokensAll', 'costAll', 'bothAll', 'bars', 'barsSession', 'barsWeekly', 'barsAllSessions', 'icon']);
 const HUB_MODE_VALUES = new Set(['local', 'client', 'host']);
 const HUB_DEFAULT_PORT = 17321;
 
@@ -498,7 +498,7 @@ function updateTrayDisplay() {
   tray.setToolTip(`Token Monitor — ${tip}`);
   // Icon: rendered bars image in bar modes, otherwise the app icon.
   let icon = null;
-  if ((mode === 'bars' || mode === 'barsSession' || mode === 'barsAllSessions') && providerTrayIcons[mode]) {
+  if ((mode === 'bars' || mode === 'barsSession' || mode === 'barsWeekly' || mode === 'barsAllSessions') && providerTrayIcons[mode]) {
     icon = providerTrayIcons[mode];
   }
   tray.setImage(icon || getDefaultTrayIcon());

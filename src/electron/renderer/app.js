@@ -901,7 +901,7 @@ function syncSettingsForm() {
   els.toolIconsInput.checked = state.settings.showToolIcons !== false;
   els.discordRpcInput.checked = Boolean(state.settings.discordRpcEnabled);
   els.trayModeInput.checked = Boolean(state.settings.trayMode);
-  els.trayContentInput.value = ['tokens', 'cost', 'both', 'tokensAll', 'costAll', 'bothAll', 'bars', 'barsSession', 'barsAllSessions', 'icon'].includes(state.settings.trayContent) ? state.settings.trayContent : 'tokens';
+  els.trayContentInput.value = ['tokens', 'cost', 'both', 'tokensAll', 'costAll', 'bothAll', 'bars', 'barsSession', 'barsWeekly', 'barsAllSessions', 'icon'].includes(state.settings.trayContent) ? state.settings.trayContent : 'tokens';
   els.startupGroup?.classList.toggle('hidden', !state.appInfo?.loginItemSupported);
   if (els.startAtLoginInput) els.startAtLoginInput.checked = Boolean(state.settings.startAtLogin && state.appInfo?.loginItemSupported);
   if (els.startupNote) {
@@ -1270,6 +1270,10 @@ function pickWorstSessionProvider(stats) {
   return pickWorstProvider(stats, (window) => window.kind === 'session');
 }
 
+function pickWorstWeeklyProvider(stats) {
+  return pickWorstProvider(stats, (window) => window.kind === 'weekly');
+}
+
 function roundedRectPath(ctx, x, y, w, h, r) {
   const rr = Math.min(r, w / 2, h / 2);
   ctx.beginPath();
@@ -1375,14 +1379,14 @@ function renderAllSessionsIcon(stats, height = 44, configOrder) {
 
 async function maybeUpdateBarsIcon() {
   const mode = state.settings?.trayContent;
-  if (mode !== 'bars' && mode !== 'barsSession' && mode !== 'barsAllSessions') return;
+  if (mode !== 'bars' && mode !== 'barsSession' && mode !== 'barsWeekly' && mode !== 'barsAllSessions') return;
   if (!window.tokenMonitor.setTrayIcons) return;
   let dataUrl;
   if (mode === 'barsAllSessions') {
     dataUrl = renderAllSessionsIcon(state.stats, 44, configuredLimitProviderOrder());
   } else {
-    const picker = mode === 'barsSession' ? pickWorstSessionProvider : pickWorstProvider;
-    dataUrl = renderBarsIcon(state.stats, 44, picker);
+    const pickers = { barsSession: pickWorstSessionProvider, barsWeekly: pickWorstWeeklyProvider };
+    dataUrl = renderBarsIcon(state.stats, 44, pickers[mode] || pickWorstProvider);
   }
   if (!dataUrl) return;
   try { await window.tokenMonitor.setTrayIcons({ [mode]: dataUrl }); } catch (_) {}

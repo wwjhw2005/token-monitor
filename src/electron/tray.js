@@ -42,7 +42,7 @@ function pickWorstLimit(stats) {
 
 function formatTrayText(stats, contentMode = 'tokens') {
   if (contentMode === 'icon') return '';
-  if (contentMode === 'bars' || contentMode === 'barsSession' || contentMode === 'barsAllSessions') {
+  if (contentMode === 'bars' || contentMode === 'barsSession' || contentMode === 'barsWeekly' || contentMode === 'barsAllSessions') {
     // Icon carries all the info; only show text if we have no limit data at all.
     if (pickWorstLimit(stats)) return '';
   }
