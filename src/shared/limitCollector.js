@@ -1281,7 +1281,7 @@ function formatCursorMembership(type) {
   const raw = type.trim().toLowerCase();
   if (!raw) return '';
   if (raw === 'pro+' || raw === 'pro_plus') return 'Pro+';
-  return raw.charAt(0).toUpperCase() + raw.slice(1);
+  return displayPlanText(cleanPlanText(raw, []), Infinity);
 }
 
 function finiteNumber(value) {

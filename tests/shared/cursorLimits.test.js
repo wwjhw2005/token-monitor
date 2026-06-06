@@ -53,6 +53,19 @@ test('fetchCursorLimits returns ok with Cursor billing dimensions when probe suc
   assert.equal(result.windows[3].resetDescription, '');
 });
 
+test('fetchCursorLimits humanizes underscored membership types for the account label', async () => {
+  const result = await fetchCursorLimits({}, {
+    readActiveAccount: () => ({ id: 'acct-1', sessionToken: 't', userId: 'u1' }),
+    probe: async () => ({
+      ok: true,
+      usage: { planPercent: 10, membershipType: 'pro_student' },
+      user: { email: 'a@b.com', name: 'Alice', sub: 'u1' }
+    })
+  });
+  assert.equal(result.status, 'ok');
+  assert.equal(result.accountLabel, 'Pro Student');
+});
+
 test('fetchCursorLimits includes team pool when Cursor reports pooled usage', async () => {
   const result = await fetchCursorLimits({}, {
     readActiveAccount: () => ({ id: 'acct-1', sessionToken: 't', userId: 'u1' }),
