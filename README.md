@@ -59,6 +59,7 @@ Most usage monitors are useful on the machine they run on. Token Monitor is buil
 - **Per-session detail** — open a Claude Code, Codex, or OpenCode session to see tokens per prompt, expandable to each reply's exact token split and tools used (read on-demand from local transcripts or databases, never synced)
 - **Cost breakdown** alongside token counts
 - **AI Tool Limits detection** for Claude Code, Codex, Cursor, Antigravity, and OpenCode with session, weekly, billing, and credits windows, plus DeepSeek prepaid balance and today/month spend
+- **Optional Status view** for Claude, OpenAI, Cursor, and DeepSeek status pages, with manual or interval re-checks
 - **Customizable tool list** to hide, pin, and reorder tools in the main dashboard without changing what gets tracked
 - **Appearance controls** for glass opacity, blur, and transparent window mode
 - **Menu bar (macOS) and system tray (Windows) popover** with live cost, tokens, or closest Claude/Codex/Cursor/Antigravity/OpenCode limit % next to the icon
