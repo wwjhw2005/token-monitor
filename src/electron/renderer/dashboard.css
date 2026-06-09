@@ -65,7 +65,8 @@ body.flat { background: #16181b; }
 .candle-up { stroke: #4ec77f; fill: #4ec77f; }
 .candle-down { stroke: #f06a7b; fill: #f06a7b; }
 
-.dash-legend { flex: none; display: flex; flex-direction: column; gap: 1px; max-height: 136px; overflow-y: auto; }
+.dash-legend { flex: none; display: flex; flex-direction: column; gap: 1px; max-height: 136px; overflow-y: auto; scrollbar-width: none; }
+.dash-legend::-webkit-scrollbar { display: none; }
 .dash-legend-row { display: grid; grid-template-columns: 1fr auto auto; gap: 12px; align-items: center; padding: 4px 6px; border-radius: 6px; font-size: 12px; }
 .dash-legend-row:hover { background: rgba(255, 255, 255, 0.04); }
 .dash-legend-name { display: inline-flex; align-items: center; gap: 8px; opacity: 0.9; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
