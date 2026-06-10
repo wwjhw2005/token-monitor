@@ -57,6 +57,7 @@ const LIMIT_PROVIDERS = [
 const DEFAULT_LIMIT_PROVIDER_ORDER = LIMIT_PROVIDERS.map((provider) => provider.id).join(',');
 const limitProviderOrderApi = window.TokenMonitorLimitProviderOrder;
 const limitProviderPresentationApi = window.TokenMonitorLimitProviderPresentation;
+const clientStatusPresentationApi = window.TokenMonitorClientStatusPresentation;
 const serviceStatusPresentationApi = window.TokenMonitorServiceStatusPresentation;
 const clientDisplayPreferencesApi = window.TokenMonitorClientDisplayPreferences;
 const viewDisplayPreferencesApi = window.TokenMonitorViewDisplayPreferences;
@@ -1551,6 +1552,7 @@ async function refreshStats(options = {}) {
     setStatus(statusTextFor(state.mode, state.streamConnected));
     render();
     renderLimitProviderCheckboxes();
+    renderToolPreferences();
     renderDeepseekStatus();
     maybeUpdateBarsIcon();
   } catch (error) {
@@ -2722,11 +2724,20 @@ function renderServiceProviderList() {
   return wrap;
 }
 
+function localClientStatus() {
+  const devices = state.stats?.devices || [];
+  const localId = state.settings?.deviceId || '';
+  const local = (localId && devices.find((device) => device.deviceId === localId))
+    || (devices.length === 1 ? devices[0] : null);
+  return local?.clientStatus || {};
+}
+
 function renderToolPreferences() {
   if (!els.clientDisplayList) return;
   const enabled = enabledClientSet();
   const hidden = hiddenClientSet();
   const pinned = pinnedClientSet();
+  const clientStatus = localClientStatus();
   const clients = clientDisplayPreferencesApi.orderedClients(KNOWN_CLIENTS, state.settings?.clientDisplayOrder, state.settings?.pinnedClients);
   const hasCustomOrder = clientDisplayPreferencesApi.hasCustomDisplayOrder(state.settings?.clientDisplayOrder);
   const hasPinnedClients = pinned.size > 0;
@@ -2742,9 +2753,23 @@ function renderToolPreferences() {
     const isPinned = pinned.has(id);
     row.classList.toggle('is-hidden', isHidden);
     row.classList.toggle('is-pinned', isPinned);
+    const labelGroup = document.createElement('div');
+    labelGroup.className = 'tool-preference-label';
     const name = document.createElement('div');
     name.className = 'tool-preference-name';
     name.textContent = label;
+    labelGroup.append(name);
+    if (enabled.has(id)) {
+      // A tracked client with no reported status yet (first collect still running)
+      // reads as "waiting for data" rather than a bare blank.
+      const tagInfo = clientStatusPresentationApi.clientStatusTag(id, clientStatus[id] || 'waiting');
+      if (tagInfo) {
+        const tag = document.createElement('span');
+        tag.className = `tool-status-tag tool-status-tag-${tagInfo.tone}`;
+        tag.textContent = t(tagInfo.key);
+        labelGroup.append(tag);
+      }
+    }
     const track = document.createElement('label');
     track.className = 'tool-preference-toggle';
     const trackInput = document.createElement('input');
@@ -2777,7 +2802,7 @@ function renderToolPreferences() {
     const actions = document.createElement('div');
     actions.className = 'tool-preference-actions';
     actions.append(track, visibility, pin, handle);
-    row.append(name, actions);
+    row.append(labelGroup, actions);
     els.clientDisplayList.appendChild(row);
   }
 }
@@ -3357,6 +3382,7 @@ window.tokenMonitor.onStatsPush?.((payload) => {
   if (payload.data?.stats) {
     render();
     renderLimitProviderCheckboxes();
+    renderToolPreferences();
     renderDeepseekStatus();
     maybeUpdateBarsIcon();
   }

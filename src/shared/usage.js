@@ -150,6 +150,18 @@ function normalizeTrackedClients(value) {
   return Array.from(new Set(values.map(normalizeClientName).filter(Boolean)));
 }
 
+const CLIENT_STATUS_VALUES = new Set(['active', 'waiting', 'missing']);
+
+function normalizeClientStatus(value) {
+  const status = {};
+  if (!value || typeof value !== 'object') return status;
+  for (const [client, state] of Object.entries(value)) {
+    const name = normalizeClientName(client);
+    if (name && CLIENT_STATUS_VALUES.has(state)) status[name] = state;
+  }
+  return status;
+}
+
 function validDate(value) {
   const date = new Date(value || '');
   return Number.isNaN(date.getTime()) ? null : date;
@@ -472,6 +484,7 @@ function normalizeDeviceRecord(record) {
     limits: normalizeLimitsSummary(record.limits)
   };
   if (hasOwn(record, 'trackedClients')) normalized.trackedClients = normalizeTrackedClients(record.trackedClients);
+  if (hasOwn(record, 'clientStatus')) normalized.clientStatus = normalizeClientStatus(record.clientStatus);
   if (hasOwn(record, 'history')) normalized.history = coerceHistory(record.history);
   for (const periodName of PERIODS) normalized.periods[periodName] = normalizePeriod(record[periodName] || record.periods?.[periodName]);
   return normalized;
@@ -591,6 +604,7 @@ function aggregateDevices(devices, staleAfterMs, nowMs = Date.now()) {
       ageMs: Number.isFinite(ageMs) ? ageMs : null,
       stale,
       ...(hasOwn(normalized, 'trackedClients') ? { trackedClients: normalized.trackedClients } : {}),
+      ...(hasOwn(normalized, 'clientStatus') ? { clientStatus: normalized.clientStatus } : {}),
       periods: normalized.periods,
       limits: normalized.limits
     });

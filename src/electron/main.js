@@ -918,8 +918,21 @@ function isHubConfigured() {
   return Boolean(effectiveHubConfig().url);
 }
 
+// Detection status is about this machine's local files, so stamp the freshly
+// collected local clientStatus onto the local device in whatever stats we hand the
+// renderer. This keeps the采集 tags correct in sync mode without depending on the
+// hub (or a remote Worker) being redeployed to preserve the field.
+function injectLocalClientStatus(stats) {
+  const status = lastCollectedDevice?.clientStatus;
+  if (!stats || !status || !Array.isArray(stats.devices)) return stats;
+  const device = stats.devices.find((entry) => entry.deviceId === lastCollectedDevice.deviceId);
+  if (device) device.clientStatus = status;
+  return stats;
+}
+
 function sendPush(payload) {
   if (payload?.data?.stats) {
+    injectLocalClientStatus(payload.data.stats);
     latestStats = payload.data.stats;
     updateTrayDisplay();
   }
@@ -1302,7 +1315,7 @@ async function fetchStats(options = {}) {
   const url = `${hubUrl.replace(/\/$/, '')}/api/stats`;
   const response = await fetch(url, { headers: secret ? { authorization: `Bearer ${secret}` } : {} });
   if (!response.ok) throw new Error(`Hub ${response.status}: ${(await response.text()).slice(0, 200)}`);
-  return response.json();
+  return injectLocalClientStatus(await response.json());
 }
 
 function stripTokscaleMetadata(result) {

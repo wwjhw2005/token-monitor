@@ -1,0 +1,80 @@
+'use strict';
+
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const test = require('node:test');
+
+const { statusFromSignals, deriveClientStatus, clientDataDirPresence } = require('../../src/shared/collector');
+const { normalizeDeviceRecord, aggregateDevices } = require('../../src/shared/usage');
+
+test('statusFromSignals maps the three states from existing signals', () => {
+  const status = statusFromSignals(
+    ['claude', 'codex', 'cursor'],
+    { claude: true, codex: true, cursor: false },
+    { claude: 1200, cursor: 0 }
+  );
+  assert.deepEqual(status, { claude: 'active', codex: 'waiting', cursor: 'missing' });
+});
+
+test('statusFromSignals prefers active even when the directory is gone', () => {
+  // tokscale read usage from an archive even though the live dir vanished.
+  const status = statusFromSignals(['claude'], { claude: false }, { claude: 50 });
+  assert.deepEqual(status, { claude: 'active' });
+});
+
+test('clientDataDirPresence reflects whether a data directory exists', () => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'client-status-'));
+  const present = path.join(base, 'hermes-home');
+  fs.mkdirSync(present);
+  const prevHome = process.env.HERMES_HOME;
+  try {
+    process.env.HERMES_HOME = present;
+    assert.equal(clientDataDirPresence('hermes').hermes, true);
+    process.env.HERMES_HOME = path.join(base, 'does-not-exist');
+    assert.equal(clientDataDirPresence('hermes').hermes, false);
+  } finally {
+    if (prevHome === undefined) delete process.env.HERMES_HOME;
+    else process.env.HERMES_HOME = prevHome;
+    fs.rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test('deriveClientStatus reads dir presence and usage together', () => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'client-status-'));
+  const present = path.join(base, 'hermes-home');
+  fs.mkdirSync(present);
+  const prevHome = process.env.HERMES_HOME;
+  try {
+    process.env.HERMES_HOME = present;
+    assert.deepEqual(deriveClientStatus('hermes', { clients: { hermes: 999 } }), { hermes: 'active' });
+    assert.deepEqual(deriveClientStatus('hermes', { clients: {} }), { hermes: 'waiting' });
+    process.env.HERMES_HOME = path.join(base, 'gone');
+    assert.deepEqual(deriveClientStatus('hermes', { clients: {} }), { hermes: 'missing' });
+  } finally {
+    if (prevHome === undefined) delete process.env.HERMES_HOME;
+    else process.env.HERMES_HOME = prevHome;
+    fs.rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test('normalizeDeviceRecord keeps valid clientStatus and drops junk', () => {
+  const normalized = normalizeDeviceRecord({
+    deviceId: 'mac',
+    clientStatus: { Claude: 'active', codex: 'waiting', cursor: 'bogus', '': 'missing' }
+  });
+  assert.deepEqual(normalized.clientStatus, { claude: 'active', codex: 'waiting' });
+});
+
+test('aggregateDevices exposes clientStatus on each device entry', () => {
+  const stats = aggregateDevices([
+    { deviceId: 'mac', clientStatus: { claude: 'active' } }
+  ], 0);
+  assert.deepEqual(stats.devices[0].clientStatus, { claude: 'active' });
+});
+
+test('aggregateDevices omits clientStatus when the record has none', () => {
+  const stats = aggregateDevices([{ deviceId: 'mac' }], 0);
+  assert.equal(Object.prototype.hasOwnProperty.call(stats.devices[0], 'clientStatus'), false);
+});

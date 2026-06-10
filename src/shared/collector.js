@@ -350,6 +350,7 @@ async function collectUsageOnce(options) {
     agentVersion,
     ...(agentRuntime ? { agentRuntime } : {}),
     trackedClients: normalizedClients ? normalizedClients.split(',') : [],
+    clientStatus: deriveClientStatus(normalizedClients, allTime),
     today,
     month,
     allTime
@@ -376,33 +377,59 @@ async function collectUsageOnce(options) {
   return summary;
 }
 
-function watchPathsForClients(clientsCsv) {
+function dirExists(dir) {
+  try { return fs.statSync(dir).isDirectory(); } catch (_) { return false; }
+}
+
+// Per-client watch-dir candidates, keyed by client. The same map drives both the
+// chokidar watch list and the detection-status derivation, so the two never drift.
+function clientWatchCandidates(clientsCsv) {
   const home = os.homedir();
   const enabled = new Set(String(clientsCsv || '').split(',').map((value) => value.trim().toLowerCase()).filter(Boolean));
+  const byClient = {};
+  const add = (client, ...dirs) => { if (enabled.has(client)) byClient[client] = dirs; };
+  add('claude', path.join(home, '.claude', 'projects'), path.join(home, '.claude', 'transcripts'));
+  add('codex', path.join(home, '.codex', 'sessions'));
+  add('hermes', process.env.HERMES_HOME || path.join(home, '.hermes'));
+  add('opencode', path.join(home, '.local', 'share', 'opencode'));
+  add('openclaw', path.join(home, '.openclaw', 'agents'));
+  add('cursor', path.join(home, '.config', 'tokscale', 'cursor-cache'));
+  add('antigravity', path.join(home, '.config', 'tokscale', 'antigravity-cache'));
+  return byClient;
+}
+
+function watchPathsForClients(clientsCsv) {
   const candidates = [];
-  if (enabled.has('claude')) {
-    candidates.push(path.join(home, '.claude', 'projects'));
-    candidates.push(path.join(home, '.claude', 'transcripts'));
+  for (const dirs of Object.values(clientWatchCandidates(clientsCsv))) candidates.push(...dirs);
+  return candidates.filter(dirExists);
+}
+
+// Whether each tracked client has at least one data directory on disk.
+function clientDataDirPresence(clientsCsv) {
+  const presence = {};
+  for (const [client, dirs] of Object.entries(clientWatchCandidates(clientsCsv))) {
+    presence[client] = dirs.some(dirExists);
   }
-  if (enabled.has('codex')) {
-    candidates.push(path.join(home, '.codex', 'sessions'));
+  return presence;
+}
+
+// Pure detection-status derivation, given the two existing signals per client:
+// `active`  — tokscale read all-time usage for it,
+// `waiting` — its data directory exists but no usage was found,
+// `missing` — no data directory on disk.
+function statusFromSignals(clients, presence, usageClients) {
+  const status = {};
+  for (const client of clients) {
+    if (Number(usageClients?.[client] || 0) > 0) status[client] = 'active';
+    else if (presence?.[client]) status[client] = 'waiting';
+    else status[client] = 'missing';
   }
-  if (enabled.has('hermes')) {
-    candidates.push(process.env.HERMES_HOME || path.join(home, '.hermes'));
-  }
-  if (enabled.has('opencode')) {
-    candidates.push(path.join(home, '.local', 'share', 'opencode'));
-  }
-  if (enabled.has('openclaw')) {
-    candidates.push(path.join(home, '.openclaw', 'agents'));
-  }
-  if (enabled.has('cursor')) {
-    candidates.push(path.join(home, '.config', 'tokscale', 'cursor-cache'));
-  }
-  if (enabled.has('antigravity')) {
-    candidates.push(path.join(home, '.config', 'tokscale', 'antigravity-cache'));
-  }
-  return candidates.filter((candidate) => { try { return fs.statSync(candidate).isDirectory(); } catch (_) { return false; } });
+  return status;
+}
+
+function deriveClientStatus(clientsCsv, allTimePeriod) {
+  const clients = String(clientsCsv || '').split(',').map((value) => value.trim().toLowerCase()).filter(Boolean);
+  return statusFromSignals(clients, clientDataDirPresence(clientsCsv), allTimePeriod?.clients || {});
 }
 
 function startCollector(options) {
@@ -538,6 +565,9 @@ module.exports = {
   applySessionTimestamps,
   collectHistoryOnce,
   collectUsageOnce,
+  clientDataDirPresence,
+  deriveClientStatus,
+  statusFromSignals,
   decideResolver,
   localTodayKey,
   sessionTimestampMap,

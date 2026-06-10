@@ -916,6 +916,45 @@ body.floating-bubble-collapsed-right .floating-bubble-tab {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.tool-preference-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.tool-preference-label .tool-preference-name {
+  flex: 0 1 auto;
+}
+.tool-status-tag {
+  flex: 0 0 auto;
+  max-width: 100%;
+  overflow: hidden;
+  padding: 1px 5px;
+  border: 1px solid rgba(var(--line-rgb), 0.13);
+  border-radius: 5px;
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tool-status-tag-ok {
+  border-color: rgba(var(--accent-rgb), 0.28);
+  color: var(--green);
+}
+.tool-status-tag-neutral {
+  border-color: rgba(var(--line-rgb), 0.2);
+  color: var(--muted);
+}
+.tool-status-tag-muted {
+  border-color: rgba(var(--line-rgb), 0.13);
+  color: var(--muted);
+  opacity: 0.72;
+}
+.tool-status-tag-setup {
+  border-color: rgba(244, 160, 115, 0.32);
+  color: var(--orange);
+}
 .tool-preference-row.is-hidden .tool-preference-name,
 .view-preference-row.is-hidden .tool-preference-name {
   opacity: 0.58;
