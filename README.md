@@ -12,10 +12,10 @@
 
 <p align="center">
     <a href="https://github.com/Javis603/token-monitor/releases"><img src="https://img.shields.io/github/v/release/Javis603/token-monitor?include_prereleases&style=flat-square&label=release&color=22c55e" alt="Latest release" /></a>
+    <a href="https://github.com/Javis603/token-monitor/releases"><img src="https://img.shields.io/github/downloads/Javis603/token-monitor/total?style=flat-square&color=22c55e" alt="Total downloads" /></a>
     <img src="https://img.shields.io/badge/Windows-10%2B-0078D4?style=flat-square" alt="Windows 10 or later" />
     <img src="https://img.shields.io/badge/macOS-14%2B-0A84FF?style=flat-square&logo=apple&logoColor=white" alt="macOS 14 or later" />
     <img src="https://img.shields.io/badge/iOS-16%2B-0A84FF?style=flat-square&logo=apple&logoColor=white" alt="iOS 16 or later" />
-    <a href="worker/README.md"><img src="https://img.shields.io/badge/Worker-Cloudflare-F38020?style=flat-square&logo=cloudflare&logoColor=white" alt="Cloudflare Worker" /></a>
     <a href="https://discord.gg/HmdNVVvw5P"><img src="https://img.shields.io/discord/1344259784219689031?color=5865F2&label=Discord&logo=discord&logoColor=white&style=flat-square" alt="Discord"></a>
     <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-A855F7?style=flat-square" alt="License: MIT" /></a>
 </p>
@@ -26,11 +26,7 @@
 
 ## What is Token Monitor?
 
-A desktop widget that shows live token usage and AI Tool Limits across your AI coding tools — Claude Code, Codex, Hermes Agent, OpenCode, OpenClaw, Cursor, Antigravity, and more — with breakdowns by tool, device, and model.
-
-It runs entirely on your own machine by default. Add an optional hub to sync token changes from multiple Macs, Windows PCs, headless agents, and iPhone widgets in seconds.
-
-Only summary numbers ever leave your machine. Raw prompts, source files, and conversation transcripts stay local.
+A desktop widget that shows live token usage and AI Tool Limits across various AI coding tools (Claude Code, Codex, Hermes Agent, OpenCode, OpenClaw, Cursor, Antigravity, and more) with real-time multi-device sync, historical usage trends, and breakdowns by tool, device, model, or session.
 
 ## Supported Tools
 
@@ -63,7 +59,7 @@ Most usage monitors are useful on the machine they run on. Token Monitor is buil
 - **AI Tool Limits detection** for Claude Code, Codex, Cursor, Antigravity, and OpenCode with session, weekly, billing, and credits windows, plus DeepSeek prepaid balance and today/month spend
 - **Optional Status view** for Claude, OpenAI, Cursor, and DeepSeek status pages, with manual or interval re-checks
 - **Customizable tool list** to hide, pin, and reorder tools in the main dashboard without changing what gets tracked
-- **Appearance controls** for glass opacity, blur, and transparent window mode
+- **Appearance controls** — interface theme switching (incl. a light mode), per-tool vendor colours, glass opacity, blur, and transparent window mode
 - **Menu bar (macOS) and system tray (Windows) popover** with live cost, tokens, or closest Claude/Codex/Cursor/Antigravity/OpenCode limit % next to the icon
 - **Floating Bubble mode** that collapses the widget into a draggable mini-window with click or hover preview and tray-style content
 - **Recordable global shortcut** to show or hide the window from anywhere
@@ -183,7 +179,7 @@ Click the `⚙` button in the widget header to open the Settings panel.
 - **Tray Mode** — switch to a menu bar (macOS) or system tray (Windows) popover and choose what shows next to the icon: cost, today's tokens, total tokens, cost + tokens, the closest Claude/Codex/Cursor/Antigravity/OpenCode limit % left, or icon-only.
 - **Floating Bubble** — collapse the widget into a draggable mini-window, reopen it by click or hover preview, and choose bubble content from icon, tokens, cost, or AI Tool Limit bars.
 - **Shortcut** — record a global shortcut to show or hide the window.
-- **Appearance** — system glass, live dot, tool icons, Discord Rich Presence, glass opacity, and glass blur.
+- **Appearance** — switch the interface theme between presets (Default, Obsidian, and a Porcelain light mode) or your own custom colours (accent, background, text, muted), set per-tool vendor colours, system glass, live dot, tool icons, Discord Rich Presence, glass opacity, and glass blur.
 - **Advanced** — opens the underlying `settings.json` for less-common options like `allTimeSince`.
 
 The pin button in the widget header toggles "always on top".
