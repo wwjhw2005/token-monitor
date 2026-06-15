@@ -76,6 +76,16 @@ contextBridge.exposeInMainWorld('tokenMonitor', {
     logout: () => ipcRenderer.invoke('opencode:logout'),
     status: () => ipcRenderer.invoke('opencode:status')
   },
+  codex: {
+    accounts: () => ipcRenderer.invoke('codex:accounts'),
+    addAccount: () => ipcRenderer.invoke('codex:addAccount'),
+    removeAccount: (id) => ipcRenderer.invoke('codex:removeAccount', id),
+    onLoginOutput: (callback) => {
+      const handler = (_event, text) => callback(text);
+      ipcRenderer.on('codex:loginOutput', handler);
+      return () => ipcRenderer.removeListener('codex:loginOutput', handler);
+    }
+  },
   minimize: () => ipcRenderer.send('window:minimize'),
   close: () => ipcRenderer.send('window:close')
 });

@@ -6,12 +6,31 @@ const path = require('node:path');
 const test = require('node:test');
 
 const {
+  isCodexLiveAccount,
   limitProviderCapabilityTags,
   limitProviderMainDeviceLabel,
   limitProviderProvenance,
   limitProviderSourceLabel,
   limitProviderSettingsTags
 } = require('../../src/electron/renderer/limitProviderPresentation');
+
+test('isCodexLiveAccount marks the live system login but not managed-added accounts', () => {
+  assert.equal(isCodexLiveAccount({ provider: 'codex', status: 'ok', sourceDetail: 'app' }), true);
+  assert.equal(isCodexLiveAccount({ provider: 'codex', status: 'ok', sourceDetail: 'cli' }), true);
+  assert.equal(isCodexLiveAccount({ provider: 'codex', status: 'ok', sourceDetail: 'managed' }), false);
+});
+
+test('isCodexLiveAccount is false for other providers and unconfigured codex rows', () => {
+  assert.equal(isCodexLiveAccount({ provider: 'claude', status: 'ok', sourceDetail: 'cli' }), false);
+  assert.equal(isCodexLiveAccount({ provider: 'codex', status: 'notConfigured', sourceDetail: 'app' }), false);
+  assert.equal(isCodexLiveAccount(null), false);
+});
+
+test('isCodexLiveAccount only marks the local live login, not a synced remote device\'s', () => {
+  const liveProvider = { provider: 'codex', status: 'ok', sourceDetail: 'app' };
+  assert.equal(isCodexLiveAccount(liveProvider, { selectedIsRemote: false }), true);
+  assert.equal(isCodexLiveAccount(liveProvider, { selectedIsRemote: true }), false);
+});
 
 const rendererDir = path.join(__dirname, '..', '..', 'src', 'electron', 'renderer');
 
@@ -74,6 +93,11 @@ test('detected settings tags show only current source after status', () => {
     ['Live', 'CLI']
   );
   assert.deepEqual(
+    limitProviderSettingsTags({ provider: 'codex', status: 'ok', source: 'rpc', sourceDetail: 'managed' })
+      .map((tag) => tag.label),
+    ['Live', 'Managed']
+  );
+  assert.deepEqual(
     limitProviderSettingsTags({ provider: 'opencode', status: 'ok', source: 'web' })
       .map((tag) => tag.label),
     ['Linked', 'Web']
@@ -133,6 +157,38 @@ test('local provider tags show when synced devices also have provider data', () 
   assert.equal(limitProviderMainDeviceLabel(provenance), '');
 });
 
+test('multi-account Codex provenance matches synced candidates by account key', () => {
+  const provider = {
+    provider: 'codex',
+    status: 'ok',
+    source: 'rpc',
+    sourceDetail: 'managed',
+    accountKey: 'sha256:remote-account',
+    sourceDeviceId: 'work-mac'
+  };
+  const provenance = limitProviderProvenance(provider, {
+    localDeviceId: 'local-mac',
+    syncActive: true,
+    devices: [
+      {
+        deviceId: 'local-mac',
+        limits: { providers: [{ provider: 'codex', status: 'ok', source: 'rpc', sourceDetail: 'managed', accountKey: 'sha256:local-account' }] }
+      },
+      {
+        deviceId: 'work-mac',
+        limits: { providers: [{ provider: 'codex', status: 'ok', source: 'rpc', sourceDetail: 'managed', accountKey: 'sha256:remote-account' }] }
+      }
+    ]
+  });
+
+  assert.equal(provenance.hasLocalCandidate, false);
+  assert.equal(provenance.remoteCount, 1);
+  assert.deepEqual(
+    limitProviderSettingsTags(provider, provenance).map((tag) => tag.key || tag.label),
+    ['Live', 'Managed', 'settings.limits.device.from']
+  );
+});
+
 test('single local synced provider tags identify local provenance without main panel noise', () => {
   const provider = { provider: 'opencode', status: 'ok', source: 'web', sourceDeviceId: 'local-mac' };
   const provenance = limitProviderProvenance(provider, {
@@ -157,30 +213,51 @@ test('capability tags are settings-only and do not alter the main Limits panel',
   const app = readRendererFile('app.js');
   const styles = readRendererFile('styles.css');
   const renderLimits = functionBody(app, 'renderLimits', 'nextBreakdown');
+  const renderHead = functionBody(app, 'renderLimitProviderHead', 'renderProviderWindows');
   const renderMeta = functionBody(app, 'limitProviderMeta', 'limitProviderPlan');
   const renderSettings = functionBody(app, 'renderLimitProviderCheckboxes', 'onToolTrackingToggle');
 
   assert.doesNotMatch(renderLimits, /limitProviderCapabilityTags|limit-status|limitProviderStatus/);
-  assert.match(renderLimits, /const provenance = limitProviderProvenance\(provider\);/);
-  assert.match(renderLimits, /limitProviderMeta\(provider, provenance\)/);
+  assert.match(renderHead, /const provenance = limitProviderProvenance\(provider\);/);
+  assert.match(renderHead, /limitProviderMeta\(provider, provenance\)/);
   assert.match(renderMeta, /limitProviderMainDeviceLabel\(provenance, \{ showSource: Boolean\(state\.settings\?\.showLimitSource\) \}\)/);
   assert.doesNotMatch(renderLimits, /limitProviderSettingsTags/);
-  assert.match(renderLimits, /head\.append\(titleBlock, plan\);/);
+  assert.match(renderHead, /head\.append\(titleBlock, plan\);/);
   assert.match(renderSettings, /limitProviderSettingsTags\(provider, provenance/);
   assert.doesNotMatch(styles, /\.limit-status\b/);
 });
 
+test('Codex limits render as one provider group with account subrows', () => {
+  const app = readRendererFile('app.js');
+  const styles = readRendererFile('styles.css');
+  const renderLimits = functionBody(app, 'renderLimits', 'nextBreakdown');
+
+  assert.match(renderLimits, /providersByLimitProviderId\(state\.stats\?\.limits\?\.providers \|\| \[\]\)/);
+  assert.match(renderLimits, /renderCodexAccountGroup\(/);
+  assert.doesNotMatch(renderLimits, /new Map\(\(state\.stats\?\.limits\?\.providers \|\| \[\]\)\.map\(\(provider\) => \[provider\.provider, provider\]\)\)/);
+  assert.match(styles, /\.limit-account-list\s*\{/);
+  assert.match(styles, /\.limit-account-row\s*\{/);
+});
+
+test('tray all-sessions mode can consider multiple providers for one configured id', () => {
+  const app = readRendererFile('app.js');
+  const pickConfigured = functionBody(app, 'pickConfiguredSessionProviders', 'renderAllSessionsIcon');
+
+  assert.match(pickConfigured, /providersByLimitProviderId\(providers\)/);
+  assert.doesNotMatch(pickConfigured, /new Map\(providers\.map\(\(p\) => \[String\(p\.provider\)\.toLowerCase\(\), p\]\)\)/);
+});
+
 test('DeepSeek main Limits row uses a balance meter without since-tracking copy', () => {
   const app = readRendererFile('app.js');
-  const renderLimits = functionBody(app, 'renderLimits', 'nextBreakdown');
+  const renderProviderWindows = functionBody(app, 'renderProviderWindows', 'renderLimitProviderRow');
   const balanceWindow = functionBody(app, 'balanceRemainingWindow', 'limitWindowNode');
   const styles = readRendererFile('styles.css');
 
-  assert.match(renderLimits, /const balanceNode = limitWindowNode\('Balance', balanceRemainingWindow\(balance\), color, 0\.95,/);
-  assert.match(renderLimits, /balanceNode\.classList\.add\('limit-window-wide', 'limit-window-no-reset'\);/);
-  assert.match(renderLimits, /const spendNode = limitWindowNode\('Spend', \{ showMeter: false \}, color, 0\.6,/);
-  assert.doesNotMatch(renderLimits, /Month \(since tracking\)/);
-  assert.doesNotMatch(renderLimits, /monthSinceTracking \? 'Month \(since tracking\)' : 'Month'/);
+  assert.match(renderProviderWindows, /const balanceNode = limitWindowNode\('Balance', balanceRemainingWindow\(balance\), color, 0\.95,/);
+  assert.match(renderProviderWindows, /balanceNode\.classList\.add\('limit-window-wide', 'limit-window-no-reset'\);/);
+  assert.match(renderProviderWindows, /const spendNode = limitWindowNode\('Spend', \{ showMeter: false \}, color, 0\.6,/);
+  assert.doesNotMatch(renderProviderWindows, /Month \(since tracking\)/);
+  assert.doesNotMatch(renderProviderWindows, /monthSinceTracking \? 'Month \(since tracking\)' : 'Month'/);
   assert.match(balanceWindow, /remainingPercent/);
   assert.match(balanceWindow, /amount \+ spend/);
   assert.match(styles, /\.limit-window-no-reset \.limit-reset\s*\{/);

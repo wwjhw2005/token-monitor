@@ -4,7 +4,7 @@ const DEFAULT_LIMITS_REFRESH_MS = 5 * 60 * 1000;
 const VALID_PROVIDERS = new Set(['claude', 'codex', 'cursor', 'antigravity', 'opencode', 'deepseek']);
 const VALID_STATUSES = new Set(['ok', 'disabled', 'notConfigured', 'unauthorized', 'rateLimited', 'sourceRateLimited', 'unavailable', 'error']);
 const VALID_SOURCES = new Set(['oauth', 'cli', 'web', 'rpc', 'local', 'api']);
-const VALID_SOURCE_DETAILS = new Set(['app', 'cli', 'unknown']);
+const VALID_SOURCE_DETAILS = new Set(['app', 'cli', 'managed', 'unknown']);
 const WINDOW_ORDER = ['session', 'weekly', 'billing'];
 
 function asNumber(value) {
@@ -46,6 +46,12 @@ function normalizeAccountLabel(value) {
   if (!raw || raw.length > 32 || raw.includes('@') || /^https?:\/\//i.test(raw)) return '';
   const clean = raw.replace(/[^a-z0-9 +._-]/gi, '').replace(/\s+/g, ' ').trim();
   return clean.length <= 32 ? clean : '';
+}
+
+function normalizeAccountEmail(value) {
+  const raw = String(value || '').trim().toLowerCase();
+  if (!raw || raw.length > 254 || !raw.includes('@')) return '';
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw) ? raw : '';
 }
 
 function normalizeWindowKind(value) {
@@ -135,6 +141,7 @@ function normalizeLimitProvider(input) {
     provider,
     accountKey: input.accountKey ? String(input.accountKey) : '',
     accountLabel: normalizeAccountLabel(input.accountLabel),
+    accountEmail: normalizeAccountEmail(input.accountEmail ?? input.email),
     status: normalizeStatus(input.status),
     source: normalizeSource(input.source),
     sourceDetail: normalizeSourceDetail(input.sourceDetail ?? input.source_detail),
@@ -190,6 +197,13 @@ function isConfiguredProvider(provider) {
   return Boolean(provider.accountKey && provider.status !== 'notConfigured' && provider.status !== 'disabled');
 }
 
+function providerCollapseKey(provider) {
+  if (provider.provider === 'codex' && isConfiguredProvider(provider)) {
+    return providerAggregateKey(provider);
+  }
+  return provider.provider;
+}
+
 function pickBetterProvider(current, candidate) {
   if (!current) return candidate;
   if (current.stale !== candidate.stale) return current.stale ? candidate : current;
@@ -224,10 +238,17 @@ function aggregateLimits(devices, staleAfterMs = 0, nowMs = Date.now()) {
   const byProvider = new Map();
   for (const candidate of byKey.values()) {
     if (!isConfiguredProvider(candidate) && providersWithConfiguredAccounts.has(candidate.provider)) continue;
-    byProvider.set(candidate.provider, pickBetterProvider(byProvider.get(candidate.provider), candidate));
+    const collapseKey = providerCollapseKey(candidate);
+    byProvider.set(collapseKey, pickBetterProvider(byProvider.get(collapseKey), candidate));
   }
   aggregate.providers = Array.from(byProvider.values())
-    .sort((a, b) => a.provider.localeCompare(b.provider));
+    .sort((a, b) => {
+      const providerSort = a.provider.localeCompare(b.provider);
+      if (providerSort !== 0) return providerSort;
+      const aLabel = a.accountEmail || a.accountLabel || a.accountKey;
+      const bLabel = b.accountEmail || b.accountLabel || b.accountKey;
+      return aLabel.localeCompare(bLabel);
+    });
   return aggregate;
 }
 
@@ -236,7 +257,20 @@ function publicLimits(limits) {
   return {
     updatedAt: normalized.updatedAt,
     refreshMs: normalized.refreshMs,
-    providers: normalized.providers.map(({ accountKey, accountLabel, ...provider }) => provider)
+    providers: normalized.providers.map(({ accountKey, accountEmail, accountLabel, ...provider }) => provider)
+  };
+}
+
+// Sync to the authenticated hub carries the full account identity (key, email,
+// plan label) so other devices can show which Codex account each limit belongs
+// to. Hub ingest is Secret-protected; the PUBLIC surface is still scrubbed by
+// publicLimits() above, which drops every account identifier including email.
+function syncLimits(limits) {
+  const normalized = normalizeLimitsSummary(limits);
+  return {
+    updatedAt: normalized.updatedAt,
+    refreshMs: normalized.refreshMs,
+    providers: normalized.providers
   };
 }
 
@@ -246,5 +280,6 @@ module.exports = {
   normalizeLimitProvider,
   normalizeLimitsSummary,
   normalizeLimitWindow,
-  publicLimits
+  publicLimits,
+  syncLimits
 };

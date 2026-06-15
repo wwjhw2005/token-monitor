@@ -136,7 +136,7 @@ function normalizeInitialViewValue(value, allowed, fallback) {
   return allowed.has(raw) ? raw : fallback;
 }
 
-const state = { period: normalizeInitialViewValue(initialViewState.period, viewPeriodValues, 'today'), appUpdate: null, breakdown: normalizeInitialViewValue(initialViewState.breakdown, viewBreakdownValues, 'tool'), settings: null, stats: null, serviceStatus: null, serviceStatusBusy: false, serviceProvidersExpanded: false, trendSettingsExpanded: false, serviceStatusTicker: null, refreshTimer: null, currentTotal: 0, rowSignature: '', streamConnected: false, mode: 'idle', appInfo: null, tokscaleStatus: null, tokscaleCheck: null, tokscaleBusy: false, hubInfo: null, cursorAccount: { status: null, error: '' }, cursorAccountExpanded: false, opencodeAccount: { status: null, error: '' }, opencodeCookieExpanded: false, deepseekAccountExpanded: false, deepseekPendingCheckSince: 0, floatingBubble: initialFloatingBubble, suppressInitialNumberAnimation: window.__TOKEN_MONITOR_SUPPRESS_INITIAL_NUMBER_ANIMATION__ === true, openSession: null, detailSort: 'time', recordingWindowShortcut: false, windowShortcutInvalid: false };
+const state = { period: normalizeInitialViewValue(initialViewState.period, viewPeriodValues, 'today'), appUpdate: null, breakdown: normalizeInitialViewValue(initialViewState.breakdown, viewBreakdownValues, 'tool'), settings: null, stats: null, serviceStatus: null, serviceStatusBusy: false, serviceProvidersExpanded: false, trendSettingsExpanded: false, serviceStatusTicker: null, refreshTimer: null, currentTotal: 0, rowSignature: '', streamConnected: false, mode: 'idle', appInfo: null, tokscaleStatus: null, tokscaleCheck: null, tokscaleBusy: false, hubInfo: null, cursorAccount: { status: null, error: '' }, cursorAccountExpanded: false, codexAccountExpanded: false, codexAccountError: '', opencodeAccount: { status: null, error: '' }, opencodeCookieExpanded: false, deepseekAccountExpanded: false, deepseekPendingCheckSince: 0, floatingBubble: initialFloatingBubble, suppressInitialNumberAnimation: window.__TOKEN_MONITOR_SUPPRESS_INITIAL_NUMBER_ANIMATION__ === true, openSession: null, detailSort: 'time', recordingWindowShortcut: false, windowShortcutInvalid: false };
 state.settingsSections = Object.fromEntries(SETTINGS_SECTION_IDS.map((id) => [id, false]));
 const defaultAppearance = { glassOpacity: 68, glassBlur: 32, zoomFactor: 1, systemGlass: true, showLiveDot: true, showToolIcons: true, titleIconOnly: false, settingsInTitlebar: false };
 let preferenceDrag = null;
@@ -306,9 +306,10 @@ function settingsSectionSummary(section) {
     const cursorLinked = Boolean(state.cursorAccount.status?.loggedIn) && !state.cursorAccount.status?.expired;
     const opencodeLinked = Boolean(state.opencodeAccount.status?.linked) && !state.opencodeAccount.status?.expired;
     const deepseekLinked = deepseekAccountLinked();
+    const codexLinked = (state.settings?.codexManagedAccounts || []).length > 0;
     return t('settings.summary.accounts', {
-      linked: (cursorLinked ? 1 : 0) + (opencodeLinked ? 1 : 0) + (deepseekLinked ? 1 : 0),
-      total: 3
+      linked: (codexLinked ? 1 : 0) + (cursorLinked ? 1 : 0) + (opencodeLinked ? 1 : 0) + (deepseekLinked ? 1 : 0),
+      total: 4
     });
   }
   if (section === 'limits') {
@@ -981,11 +982,200 @@ function limitWindowNode(label, window, color, tone = 1, valueOverride = null) {
   return item;
 }
 
+function providersByLimitProviderId(providers) {
+  const byId = new Map();
+  for (const provider of providers || []) {
+    const id = String(provider?.provider || '').trim().toLowerCase();
+    if (!id) continue;
+    if (!byId.has(id)) byId.set(id, []);
+    byId.get(id).push(provider);
+  }
+  return byId;
+}
+
+function renderLimitProviderMark(id, color) {
+  const mark = document.createElement('span');
+  if (clientsWithIcon.has(id)) {
+    mark.className = `limit-icon limit-icon-${id}`;
+  } else {
+    mark.className = 'dot';
+    mark.style.background = color;
+  }
+  return mark;
+}
+
+function renderLimitProviderHead(id, label, provider, color, options = {}) {
+  const head = document.createElement('div');
+  head.className = 'limit-head';
+  const titleBlock = document.createElement('div');
+  titleBlock.className = 'limit-title';
+  const name = document.createElement('div');
+  name.className = 'limit-name';
+  if (options.showIcon !== false) name.append(renderLimitProviderMark(id, color));
+  const title = document.createElement('span');
+  title.textContent = options.title || label;
+  name.append(title);
+  titleBlock.append(name);
+  // The multi-account group header has no quota of its own, and its accounts can
+  // update at different times (different devices too), so it omits the meta line
+  // entirely — each account row below shows its own "Updated" time.
+  if (!options.hideMeta) {
+    const meta = document.createElement('div');
+    meta.className = 'limit-meta';
+    const provenance = limitProviderProvenance(provider);
+    const metaParts = [];
+    // A single Codex account stays clean like every other provider (just the
+    // "Updated" line). The email only matters when several accounts share the
+    // group, where it's each subrow's title (options.accountTitle) — not here.
+    if (provider.status === 'ok' || provider.stale) metaParts.push(limitProviderMeta(provider, provenance));
+    const metaText = metaParts.filter(Boolean).join(' · ');
+    if (metaText) meta.append(document.createTextNode(metaText));
+    // Trailing active-account marker — the local Codex login this device's app
+    // is signed into (only shown among several accounts). It follows "Updated …"
+    // so the title row keeps the uniform "name … plan" rhythm, and stays English
+    // like the panel's other labels (Session/Weekly/Updated).
+    if (options.accountTitle && limitProviderPresentationApi.isCodexLiveAccount(provider, provenance)) {
+      if (meta.childNodes.length) meta.append(document.createTextNode(' · '));
+      const badge = document.createElement('span');
+      badge.className = 'limit-live-badge';
+      badge.textContent = 'Active';
+      badge.title = 'Signed in to Codex on this device';
+      badge.setAttribute('aria-label', 'Signed in to Codex on this device');
+      meta.append(badge);
+    }
+    titleBlock.append(meta);
+  }
+  const plan = document.createElement('div');
+  plan.className = 'limit-plan';
+  plan.textContent = options.planText ?? limitProviderPlan(provider);
+  head.append(titleBlock, plan);
+  return head;
+}
+
+function renderProviderWindows(provider, color) {
+  const windows = document.createElement('div');
+  windows.className = 'limit-windows';
+  if (provider.provider === 'cursor') {
+    windows.classList.add('limit-windows-cursor');
+    const billingWindows = windowsForKind(provider, 'billing');
+    const visibleWindows = billingWindows.length > 0 ? billingWindows : [null];
+    for (const billing of visibleWindows) {
+      const node = limitWindowNode('Billing cycle', billing, color, 0.68);
+      node.classList.add('limit-window-wide');
+      windows.append(node);
+    }
+  } else if (provider.provider === 'antigravity') {
+    windows.classList.add('limit-windows-antigravity');
+    const weeklyWindows = windowsForKind(provider, 'weekly');
+    const visibleWindows = weeklyWindows.length > 0 ? weeklyWindows : [null];
+    for (const weekly of visibleWindows) {
+      const node = limitWindowNode(weekly?.label || 'Weekly', weekly, color, 0.78);
+      node.classList.add('limit-window-wide');
+      windows.append(node);
+    }
+  } else if (provider.provider === 'opencode') {
+    // Go reports session/weekly/monthly windows ($12/$30/$60); Zen reports a prepaid balance (and,
+    // when the account is active, rolling/weekly). The monthly window normalizes to kind 'billing'
+    // (see normalizeWindowKind). Show only the windows that exist — no empty `--` placeholders — and
+    // surface the Zen balance as a full-width, no-meter note when present.
+    const session = windowForKind(provider, 'session');
+    const weekly = windowForKind(provider, 'weekly');
+    const monthly = windowForKind(provider, 'billing');
+    if (session) windows.append(limitWindowNode('Session', session, color, 0.95));
+    if (weekly) windows.append(limitWindowNode('Weekly', weekly, color, 0.68));
+    // Monthly spans the full row (like Balance) so it never leaves a half-empty grid cell.
+    if (monthly) {
+      const node = limitWindowNode('Monthly', monthly, color, 0.5);
+      node.classList.add('limit-window-wide');
+      windows.append(node);
+    }
+    // Balance is a Zen-only concept. Show it only when a real balance number came
+    // back (incl. $0.00). It can't key off `source === 'web'` anymore — Go usage is
+    // now fetched over the web too, so a pure-Go account (no Zen, balanceUsd null)
+    // must not get a phantom `Balance —` line.
+    const hasBalance = typeof provider.balanceUsd === 'number' && Number.isFinite(provider.balanceUsd);
+    if (hasBalance) {
+      const node = limitWindowNode('Balance', { showMeter: false }, color, 0.68, formatLimitAmount(provider.balanceUsd));
+      node.classList.add('limit-window-wide');
+      windows.append(node);
+    }
+  } else if (provider.provider === 'deepseek') {
+    // DeepSeek is pay-as-you-go: render the prepaid balance as a meter so the
+    // provider uses the same visual language as fixed quota windows.
+    windows.classList.add('limit-windows-deepseek');
+    const balance = provider.balance || null;
+    if (balance) {
+      const currency = balance.currency;
+      const balanceNode = limitWindowNode('Balance', balanceRemainingWindow(balance), color, 0.95,
+        `${formatMoney(balance.amount, currency)} left`);
+      balanceNode.classList.add('limit-window-wide', 'limit-window-no-reset');
+      windows.append(balanceNode);
+
+      const parts = [];
+      if (Number.isFinite(Number(balance.todaySpend))) parts.push(`Today ${formatMoney(balance.todaySpend, currency)}`);
+      if (Number.isFinite(Number(balance.monthSpend))) {
+        parts.push(`Month ${formatMoney(balance.monthSpend, currency)}`);
+      }
+      if (parts.length) {
+        const spendNode = limitWindowNode('Spend', { showMeter: false }, color, 0.6, parts.join(' · '));
+        spendNode.classList.add('limit-window-wide', 'limit-window-note');
+        windows.append(spendNode);
+      }
+    }
+  } else {
+    windows.append(limitWindowNode('Session', windowForKind(provider, 'session'), color, 0.95));
+    windows.append(limitWindowNode('Weekly', windowForKind(provider, 'weekly'), color, 0.68));
+  }
+  return windows;
+}
+
+function renderLimitProviderRow(id, label, provider, color, options = {}) {
+  const row = document.createElement('div');
+  const classes = ['limit-row'];
+  if (options.accountRow) classes.push('limit-account-row');
+  if (provider.stale) classes.push('stale');
+  row.className = classes.join(' ');
+  row.append(
+    renderLimitProviderHead(id, label, provider, color, options),
+    renderProviderWindows(provider, color)
+  );
+  return row;
+}
+
+function codexAccountTitle(provider, index) {
+  const email = String(provider?.accountEmail || '').trim();
+  if (email) return email;
+  // Never fall back to the plan label here — "Plus" as a title reads like an
+  // account name. The plan still shows on the right via limitProviderPlan().
+  return `Account ${index + 1}`;
+}
+
+function renderCodexAccountGroup(label, providers, color) {
+  const row = document.createElement('div');
+  row.className = `limit-row limit-row-group${providers.some((provider) => provider.stale) ? ' stale' : ''}`;
+  const groupProvider = { provider: 'codex', status: 'ok', windows: [] };
+  const head = renderLimitProviderHead('codex', label, groupProvider, color, {
+    planText: `${providers.length} accounts`,
+    hideMeta: true
+  });
+  const accountList = document.createElement('div');
+  accountList.className = 'limit-account-list';
+  providers.forEach((provider, index) => {
+    accountList.append(renderLimitProviderRow('codex', codexAccountTitle(provider, index), provider, color, {
+      accountRow: true,
+      accountTitle: true,
+      showIcon: false
+    }));
+  });
+  row.append(head, accountList);
+  return row;
+}
+
 function renderLimits() {
   if (!els.limitsPanel) return;
   const limitsEnabled = state.settings?.limitsEnabled !== false;
   const enabled = enabledLimitProviderSet();
-  const providers = new Map((state.stats?.limits?.providers || []).map((provider) => [provider.provider, provider]));
+  const providers = providersByLimitProviderId(state.stats?.limits?.providers || []);
   const nodes = [];
   const rows = limitProviderOrderApi
     .orderedLimitProviders(LIMIT_PROVIDERS, state.settings?.limitProviderOrder)
@@ -996,112 +1186,19 @@ function renderLimits() {
   }
   for (const { id, label } of rows) {
     const providerEnabled = limitsEnabled && enabled.has(id);
-    const provider = providerEnabled
-      ? (providers.get(id) || { provider: id, status: state.stats ? missingLimitProviderStatus() : 'unavailable', windows: [] })
+    const providerEntries = providerEnabled
+      ? (providers.get(id) || [{ provider: id, status: state.stats ? missingLimitProviderStatus() : 'unavailable', windows: [] }])
+      : [{ provider: id, status: 'disabled', windows: [] }];
+    const visibleProviders = providerEntries.length > 0
+      ? providerEntries
       : { provider: id, status: 'disabled', windows: [] };
     const color = clientColors[id] || clientColors.default;
-    const row = document.createElement('div');
-    row.className = `limit-row${provider.stale ? ' stale' : ''}`;
-    const head = document.createElement('div');
-    head.className = 'limit-head';
-    const titleBlock = document.createElement('div');
-    titleBlock.className = 'limit-title';
-    const name = document.createElement('div');
-    name.className = 'limit-name';
-    const mark = document.createElement('span');
-    if (clientsWithIcon.has(id)) {
-      mark.className = `limit-icon limit-icon-${id}`;
-    } else {
-      mark.className = 'dot';
-      mark.style.background = color;
+    if (id === 'codex' && Array.isArray(visibleProviders) && visibleProviders.length > 1) {
+      nodes.push(renderCodexAccountGroup(label, visibleProviders, color));
+      continue;
     }
-    const title = document.createElement('span');
-    title.textContent = label;
-    name.append(mark, title);
-    const meta = document.createElement('div');
-    meta.className = 'limit-meta';
-    const provenance = limitProviderProvenance(provider);
-    meta.textContent = provider.status === 'ok' || provider.stale ? limitProviderMeta(provider, provenance) : '';
-    titleBlock.append(name, meta);
-    const plan = document.createElement('div');
-    plan.className = 'limit-plan';
-    plan.textContent = limitProviderPlan(provider);
-    head.append(titleBlock, plan);
-    const windows = document.createElement('div');
-    windows.className = 'limit-windows';
-    if (provider.provider === 'cursor') {
-      windows.classList.add('limit-windows-cursor');
-      const billingWindows = windowsForKind(provider, 'billing');
-      const visibleWindows = billingWindows.length > 0 ? billingWindows : [null];
-      for (const billing of visibleWindows) {
-        const node = limitWindowNode('Billing cycle', billing, color, 0.68);
-        node.classList.add('limit-window-wide');
-        windows.append(node);
-      }
-    } else if (provider.provider === 'antigravity') {
-      windows.classList.add('limit-windows-antigravity');
-      const weeklyWindows = windowsForKind(provider, 'weekly');
-      const visibleWindows = weeklyWindows.length > 0 ? weeklyWindows : [null];
-      for (const weekly of visibleWindows) {
-        const node = limitWindowNode(weekly?.label || 'Weekly', weekly, color, 0.78);
-        node.classList.add('limit-window-wide');
-        windows.append(node);
-      }
-    } else if (provider.provider === 'opencode') {
-      // Go reports session/weekly/monthly windows ($12/$30/$60); Zen reports a prepaid balance (and,
-      // when the account is active, rolling/weekly). The monthly window normalizes to kind 'billing'
-      // (see normalizeWindowKind). Show only the windows that exist — no empty `--` placeholders — and
-      // surface the Zen balance as a full-width, no-meter note when present.
-      const session = windowForKind(provider, 'session');
-      const weekly = windowForKind(provider, 'weekly');
-      const monthly = windowForKind(provider, 'billing');
-      if (session) windows.append(limitWindowNode('Session', session, color, 0.95));
-      if (weekly) windows.append(limitWindowNode('Weekly', weekly, color, 0.68));
-      // Monthly spans the full row (like Balance) so it never leaves a half-empty grid cell.
-      if (monthly) {
-        const node = limitWindowNode('Monthly', monthly, color, 0.5);
-        node.classList.add('limit-window-wide');
-        windows.append(node);
-      }
-      // Balance is a Zen-only concept. Show it only when a real balance number came
-      // back (incl. $0.00). It can't key off `source === 'web'` anymore — Go usage is
-      // now fetched over the web too, so a pure-Go account (no Zen, balanceUsd null)
-      // must not get a phantom `Balance —` line.
-      const hasBalance = typeof provider.balanceUsd === 'number' && Number.isFinite(provider.balanceUsd);
-      if (hasBalance) {
-        const node = limitWindowNode('Balance', { showMeter: false }, color, 0.68, formatLimitAmount(provider.balanceUsd));
-        node.classList.add('limit-window-wide');
-        windows.append(node);
-      }
-    } else if (provider.provider === 'deepseek') {
-      // DeepSeek is pay-as-you-go: render the prepaid balance as a meter so the
-      // provider uses the same visual language as fixed quota windows.
-      windows.classList.add('limit-windows-deepseek');
-      const balance = provider.balance || null;
-      if (balance) {
-        const currency = balance.currency;
-        const balanceNode = limitWindowNode('Balance', balanceRemainingWindow(balance), color, 0.95,
-          `${formatMoney(balance.amount, currency)} left`);
-        balanceNode.classList.add('limit-window-wide', 'limit-window-no-reset');
-        windows.append(balanceNode);
-
-        const parts = [];
-        if (Number.isFinite(Number(balance.todaySpend))) parts.push(`Today ${formatMoney(balance.todaySpend, currency)}`);
-        if (Number.isFinite(Number(balance.monthSpend))) {
-          parts.push(`Month ${formatMoney(balance.monthSpend, currency)}`);
-        }
-        if (parts.length) {
-          const spendNode = limitWindowNode('Spend', { showMeter: false }, color, 0.6, parts.join(' · '));
-          spendNode.classList.add('limit-window-wide', 'limit-window-note');
-          windows.append(spendNode);
-        }
-      }
-    } else {
-      windows.append(limitWindowNode('Session', windowForKind(provider, 'session'), color, 0.95));
-      windows.append(limitWindowNode('Weekly', windowForKind(provider, 'weekly'), color, 0.68));
-    }
-    row.append(head, windows);
-    nodes.push(row);
+    const provider = Array.isArray(visibleProviders) ? visibleProviders[0] : visibleProviders;
+    nodes.push(renderLimitProviderRow(id, label, provider, color));
   }
   els.limitsPanel.replaceChildren(...nodes);
 }
@@ -2370,6 +2467,7 @@ function syncSettingsForm() {
   buildAppearanceColorControls();
   renderTokscaleStatus();
   renderSettingsAppUpdateRow();
+  renderCodexAccounts();
   renderCursorStatus();
   applyFloatingBubbleState(state.floatingBubble);
   if (state.breakdown === 'limits') renderLimits();
@@ -3537,14 +3635,19 @@ function renderBarsIcon(stats, height = 44, picker = pickWorstProvider, colors =
 
 function pickConfiguredSessionProviders(stats, configOrder) {
   const providers = stats?.limits?.providers || [];
-  const byId = new Map(providers.map((p) => [String(p.provider).toLowerCase(), p]));
+  const byId = providersByLimitProviderId(providers);
   const result = [];
   for (const id of configOrder) {
-    const p = byId.get(id);
-    if (!p || p.status !== 'ok' || p.stale) continue;
-    const session = (p.windows || []).find((w) => w.kind === 'session');
-    if (!session || !Number.isFinite(Number(session.remainingPercent))) continue;
-    result.push({ provider: p, session });
+    let pick = null;
+    for (const p of byId.get(id) || []) {
+      if (!p || p.status !== 'ok' || p.stale) continue;
+      const session = (p.windows || []).find((w) => w.kind === 'session');
+      const remaining = Number(session?.remainingPercent);
+      if (!session || !Number.isFinite(remaining)) continue;
+      if (!pick || remaining < Number(pick.session.remainingPercent)) pick = { provider: p, session };
+    }
+    if (!pick) continue;
+    result.push(pick);
     if (result.length === 2) break;
   }
   return result;
@@ -3637,45 +3740,113 @@ async function deliverTrayProviderIcons() {
   maybeUpdateBarsIcon();
 }
 
-function setCursorAccountExpanded(expanded) {
-  const toggle = document.getElementById('cursorSettingsToggle');
-  const details = document.getElementById('cursorSettingsDetails');
-  const group = document.getElementById('cursorAccountGroup');
+function setAccountGroupExpanded(prefix, expanded, stateKey) {
+  const toggle = document.getElementById(`${prefix}SettingsToggle`);
+  const details = document.getElementById(`${prefix}SettingsDetails`);
+  const group = document.getElementById(`${prefix}AccountGroup`) || document.getElementById(`${prefix}CookieGroup`);
   if (!toggle || !details) return;
   const next = Boolean(expanded);
-  state.cursorAccountExpanded = next;
+  if (stateKey) state[stateKey] = next;
   toggle.setAttribute('aria-expanded', next ? 'true' : 'false');
   details.classList.toggle('hidden', !next);
   if (group) group.classList.toggle('expanded', next);
+}
+
+function setCodexAccountExpanded(expanded) {
+  setAccountGroupExpanded('codex', expanded, 'codexAccountExpanded');
+}
+
+function setCursorAccountExpanded(expanded) {
+  setAccountGroupExpanded('cursor', expanded, 'cursorAccountExpanded');
 }
 
 function setOpencodeCookieExpanded(expanded) {
-  const toggle = document.getElementById('opencodeSettingsToggle');
-  const details = document.getElementById('opencodeSettingsDetails');
-  const group = document.getElementById('opencodeCookieGroup');
-  if (!toggle || !details) return;
-  const next = Boolean(expanded);
-  state.opencodeCookieExpanded = next;
-  toggle.setAttribute('aria-expanded', next ? 'true' : 'false');
-  details.classList.toggle('hidden', !next);
-  if (group) group.classList.toggle('expanded', next);
+  setAccountGroupExpanded('opencode', expanded, 'opencodeCookieExpanded');
 }
 
 function setDeepseekAccountExpanded(expanded) {
-  const toggle = document.getElementById('deepseekSettingsToggle');
-  const details = document.getElementById('deepseekSettingsDetails');
-  const group = document.getElementById('deepseekAccountGroup');
-  if (!toggle || !details) return;
-  const next = Boolean(expanded);
-  state.deepseekAccountExpanded = next;
-  toggle.setAttribute('aria-expanded', next ? 'true' : 'false');
-  details.classList.toggle('hidden', !next);
-  if (group) group.classList.toggle('expanded', next);
+  setAccountGroupExpanded('deepseek', expanded, 'deepseekAccountExpanded');
 }
 
 function setCursorStatusText(el, text) {
   el.textContent = text;
   el.title = text;
+}
+
+function setCodexAccountButtonsDisabled(disabled) {
+  for (const id of ['codexAddAccountButton', 'codexRefreshAccountsButton']) {
+    const el = document.getElementById(id);
+    if (el) el.disabled = disabled;
+  }
+}
+
+function renderCodexAccounts() {
+  const statusEl = document.getElementById('codexAccountStatus');
+  const listEl = document.getElementById('codexAccountList');
+  const errorEl = document.getElementById('codexAccountErrorMessage');
+  if (!statusEl || !listEl || !errorEl) return;
+
+  const accounts = state.settings?.codexManagedAccounts || [];
+  const statusText = accounts.length === 0
+    ? t('settings.codex.notConfigured')
+    : accounts.length === 1
+      ? t('settings.codex.accountOne')
+      : t('settings.codex.accountMany', { count: accounts.length });
+  setCursorStatusText(statusEl, statusText);
+  errorEl.textContent = state.codexAccountError || '';
+  errorEl.classList.toggle('hidden', !state.codexAccountError);
+  listEl.replaceChildren();
+  if (accounts.length === 0) {
+    const empty = document.createElement('p');
+    empty.className = 'settings-note';
+    empty.textContent = t('settings.codex.empty');
+    listEl.append(empty);
+  } else {
+    for (const account of accounts) {
+      const row = document.createElement('div');
+      row.className = 'managed-account-row';
+      const main = document.createElement('div');
+      main.className = 'managed-account-main';
+      const email = document.createElement('div');
+      email.className = 'managed-account-email';
+      email.textContent = account.email || t('settings.codex.unnamedAccount');
+      const meta = document.createElement('div');
+      meta.className = 'managed-account-meta';
+      meta.textContent = [account.accountLabel, account.updatedAt ? formatTime(account.updatedAt) : '']
+        .filter(Boolean)
+        .join(' · ');
+      main.append(email, meta);
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'managed-account-remove';
+      remove.textContent = t('settings.codex.remove');
+      remove.addEventListener('click', async () => {
+        const result = await window.tokenMonitor.codex.removeAccount(account.id);
+        if (!result?.ok) {
+          state.codexAccountError = result?.error || t('settings.codex.removeFailed');
+        } else {
+          state.codexAccountError = '';
+          state.settings.codexManagedAccounts = result.accounts || [];
+          await refreshStats({ force: true });
+        }
+        renderCodexAccounts();
+        renderSettingsSummaries();
+      });
+      row.append(main, remove);
+      listEl.append(row);
+    }
+  }
+  renderSettingsSummaries();
+}
+
+async function refreshCodexAccounts() {
+  try {
+    state.settings.codexManagedAccounts = await window.tokenMonitor.codex.accounts();
+    state.codexAccountError = '';
+  } catch (err) {
+    state.codexAccountError = err.message;
+  }
+  renderCodexAccounts();
 }
 
 function deepseekAccountLinked() {
@@ -3941,6 +4112,66 @@ function setCursorCheckboxesEnabled(enabled) {
 }
 
 function setupCursorAccountUI() {
+  const codexToggle = document.getElementById('codexSettingsToggle');
+  if (codexToggle) {
+    codexToggle.addEventListener('click', () => setCodexAccountExpanded(!state.codexAccountExpanded));
+    setCodexAccountExpanded(false);
+    renderCodexAccounts();
+
+    let codexLoginBusy = false;
+    let codexLoginUnsubscribe = null;
+    const codexLoginOutput = document.getElementById('codexLoginOutput');
+    const codexAddButton = document.getElementById('codexAddAccountButton');
+    const showLoginStatus = (statusKey, streamed = '') => {
+      if (!codexLoginOutput) return;
+      codexLoginOutput.textContent = streamed ? `${t(statusKey)}\n\n${streamed}` : t(statusKey);
+      codexLoginOutput.classList.remove('hidden');
+      codexLoginOutput.scrollTop = codexLoginOutput.scrollHeight;
+    };
+    codexAddButton.addEventListener('click', async () => {
+      if (codexLoginBusy) return;
+      codexLoginBusy = true;
+      state.codexAccountError = '';
+      let streamed = '';
+      showLoginStatus('settings.codex.loginStarting');
+      setCodexAccountButtonsDisabled(true);
+      codexAddButton.textContent = t('settings.codex.signingIn');
+      renderCodexAccounts();
+      codexLoginUnsubscribe?.();
+      codexLoginUnsubscribe = window.tokenMonitor.codex.onLoginOutput((text) => {
+        streamed = (streamed + text).slice(-3000);
+        showLoginStatus('settings.codex.loginStarting', streamed);
+      });
+      try {
+        const result = await window.tokenMonitor.codex.addAccount();
+        if (!result?.ok) {
+          state.codexAccountError = result?.error || t('settings.codex.loginFailed');
+          showLoginStatus('settings.codex.loginFailed', streamed);
+          setCodexAccountExpanded(true);
+        } else {
+          state.codexAccountError = '';
+          showLoginStatus('settings.codex.loginSuccess');
+          state.settings.codexManagedAccounts = await window.tokenMonitor.codex.accounts();
+          if (codexLoginOutput) codexLoginOutput.classList.add('hidden');
+          await refreshStats({ force: true });
+        }
+      } catch (err) {
+        state.codexAccountError = err.message;
+      } finally {
+        codexLoginUnsubscribe?.();
+        codexLoginUnsubscribe = null;
+        codexLoginBusy = false;
+        setCodexAccountButtonsDisabled(false);
+        codexAddButton.textContent = t('settings.codex.addAccount');
+        renderCodexAccounts();
+      }
+    });
+
+    document.getElementById('codexRefreshAccountsButton').addEventListener('click', () => {
+      refreshCodexAccounts();
+    });
+  }
+
   document.getElementById('cursorSettingsToggle').addEventListener('click', () => {
     setCursorAccountExpanded(!state.cursorAccountExpanded);
   });

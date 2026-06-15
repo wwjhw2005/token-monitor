@@ -26,6 +26,7 @@
   const CODEX_RPC_DETAIL_LABELS = {
     app: 'App',
     cli: 'CLI',
+    managed: 'Managed',
     unknown: 'RPC'
   };
 
@@ -90,6 +91,18 @@
     return (CAPABILITY_TAGS[providerId(providerOrId)] || []).slice();
   }
 
+  // The "live" Codex account is the one THIS device's Codex app/CLI is currently
+  // signed into (sourceDetail app/cli/unknown). Managed accounts added inside
+  // Token Monitor report sourceDetail 'managed' and are NOT live. A remote
+  // device's live login (selectedIsRemote) is also not "live" from here — across
+  // synced devices, "Live" only ever points at the local account.
+  function isCodexLiveAccount(provider, provenance) {
+    if (providerId(provider) !== 'codex') return false;
+    if (statusId(provider) !== 'ok') return false;
+    if (provenance && provenance.selectedIsRemote) return false;
+    return sourceDetailId(provider) !== 'managed';
+  }
+
   function isLinkedStatus(provider) {
     const providerName = providerId(provider);
     const source = sourceId(provider);
@@ -126,9 +139,20 @@
     return status !== 'disabled' && status !== 'notConfigured';
   }
 
-  function deviceProviderCandidate(device, providerName) {
+  function accountKey(value) {
+    return String(value || '').trim();
+  }
+
+  function providerMatchesTarget(candidate, target) {
+    if (providerId(candidate) !== providerId(target)) return false;
+    const targetAccountKey = accountKey(target?.accountKey);
+    if (!targetAccountKey) return true;
+    return accountKey(candidate?.accountKey) === targetAccountKey;
+  }
+
+  function deviceProviderCandidate(device, target) {
     const providers = Array.isArray(device?.limits?.providers) ? device.limits.providers : [];
-    return providers.find((provider) => providerId(provider) === providerName && usableProviderCandidate(provider)) || null;
+    return providers.find((provider) => providerMatchesTarget(provider, target) && usableProviderCandidate(provider)) || null;
   }
 
   function limitProviderProvenance(providerOrId, options = {}) {
@@ -138,7 +162,7 @@
     const selectedKey = deviceKey(provider?.sourceDeviceId);
     const devices = Array.isArray(options.devices) ? options.devices : [];
     const selectedDevice = devices.find((device) => deviceKey(device?.deviceId) === selectedKey) || null;
-    const candidates = devices.filter((device) => deviceProviderCandidate(device, providerName));
+    const candidates = devices.filter((device) => deviceProviderCandidate(device, providerName ? provider : providerName));
     const localCandidate = candidates.find((device) => localKey && deviceKey(device?.deviceId) === localKey) || null;
     const remoteCandidates = candidates.filter((device) => !localKey || deviceKey(device?.deviceId) !== localKey);
     const selectedIsLocal = Boolean(selectedKey && localKey && selectedKey === localKey);
@@ -214,6 +238,7 @@
   }
 
   return {
+    isCodexLiveAccount,
     limitProviderCapabilityTags,
     limitProviderMainDeviceLabel,
     limitProviderProvenance,

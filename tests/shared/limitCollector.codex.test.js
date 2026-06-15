@@ -4,7 +4,8 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 const test = require('node:test');
 
-const { codexCommandCandidates, codexCommandSourceDetail, mapCodexRateLimitsToProvider } = require('../../src/shared/limitCollector');
+const { codexCommandCandidates, codexCommandSourceDetail, fetchCodexLimits, mapCodexRateLimitsToProvider } = require('../../src/shared/limitCollector');
+const { hashAccountKey } = require('../../src/shared/codexAuth');
 
 function dirent(name, directory = true) {
   return {
@@ -105,7 +106,7 @@ test('Codex command source detail separates app-managed binaries from CLI comman
 
 test('Codex provider preserves source detail for renderer labels', () => {
   const provider = mapCodexRateLimitsToProvider({
-    account: { planType: 'plus' },
+    account: { email: 'user@example.com', planType: 'plus' },
     rateLimits: {
       primary: {
         usedPercent: 12,
@@ -121,6 +122,165 @@ test('Codex provider preserves source detail for renderer labels', () => {
 
   assert.equal(provider.source, 'rpc');
   assert.equal(provider.sourceDetail, 'app');
+  assert.equal(provider.accountEmail, 'user@example.com');
+});
+
+test('Codex provider supports managed-account source detail', () => {
+  const provider = mapCodexRateLimitsToProvider({
+    account: { email: 'managed@example.com', planType: 'plus' },
+    rateLimits: {
+      primary: {
+        usedPercent: 8,
+        resetsAt: '2026-06-01T00:00:00Z',
+        windowDurationMins: 300
+      }
+    }
+  }, {
+    source: 'rpc',
+    sourceDetail: 'managed',
+    accountKey: 'sha256:managed',
+    updatedAt: '2026-06-01T00:00:00Z'
+  });
+
+  assert.equal(provider.sourceDetail, 'managed');
+  assert.equal(provider.accountKey, 'sha256:managed');
+  assert.equal(provider.accountEmail, 'managed@example.com');
+});
+
+function codexPayload(email, sourceDetail) {
+  return {
+    account: { email, planType: 'plus' },
+    rateLimits: { primary: { usedPercent: 12, resetsAt: '2026-06-01T05:00:00Z', windowDurationMins: 300 } },
+    sourceDetail
+  };
+}
+
+function makeIdToken(payload) {
+  const seg = (obj) => Buffer.from(JSON.stringify(obj)).toString('base64url');
+  return `${seg({ alg: 'none' })}.${seg(payload)}.`;
+}
+
+// The live account's auth.json is never read in tests unless a test opts in.
+const noLiveAuth = { readFileSync: () => { throw new Error('no auth.json'); } };
+
+test('fetchCodexLimits returns one provider per managed Codex account', async () => {
+  const seenHomes = [];
+  const providers = await fetchCodexLimits({
+    codexManagedAccounts: [
+      { id: 'one', email: 'one@example.com', homePath: '/tmp/token-monitor-codex/one' },
+      { id: 'two', email: 'two@example.com', homePath: '/tmp/token-monitor-codex/two' }
+    ]
+  }, {
+    now: () => Date.parse('2026-06-01T00:00:00Z'),
+    env: { PATH: '/usr/bin' },
+    readCodexRpc: async (deps) => {
+      // No live login configured in this scenario; only the managed homes resolve.
+      if (!deps.env.CODEX_HOME) throw Object.assign(new Error('Codex account not configured'), { status: 'notConfigured' });
+      seenHomes.push(deps.env.CODEX_HOME);
+      const email = deps.env.CODEX_HOME.endsWith('/one') ? 'one@example.com' : 'two@example.com';
+      return codexPayload(email);
+    }
+  });
+
+  assert.deepEqual(seenHomes, ['/tmp/token-monitor-codex/one', '/tmp/token-monitor-codex/two']);
+  assert.equal(providers.length, 2);
+  assert.deepEqual(providers.map((provider) => provider.accountEmail), ['one@example.com', 'two@example.com']);
+  assert.deepEqual(providers.map((provider) => provider.sourceDetail), ['managed', 'managed']);
+});
+
+test('fetchCodexLimits keeps the live system account visible alongside managed accounts', async () => {
+  const seenHomes = [];
+  const providers = await fetchCodexLimits({
+    codexManagedAccounts: [
+      { id: 'two', email: 'two@example.com', homePath: '/tmp/token-monitor-codex/two' }
+    ]
+  }, {
+    now: () => Date.parse('2026-06-01T00:00:00Z'),
+    env: { PATH: '/usr/bin' },
+    ...noLiveAuth,
+    readCodexRpc: async (deps) => {
+      const home = deps.env.CODEX_HOME || '<live>';
+      seenHomes.push(home);
+      return home === '<live>'
+        ? codexPayload('live@example.com', 'app')
+        : codexPayload('two@example.com');
+    }
+  });
+
+  // The live login (the account the Codex app uses) is probed first and stays visible.
+  assert.deepEqual(seenHomes, ['<live>', '/tmp/token-monitor-codex/two']);
+  assert.deepEqual(providers.map((provider) => provider.accountEmail), ['live@example.com', 'two@example.com']);
+  assert.deepEqual(providers.map((provider) => provider.sourceDetail), ['app', 'managed']);
+});
+
+test('fetchCodexLimits does not show the live account twice when it is also managed', async () => {
+  const providers = await fetchCodexLimits({
+    codexManagedAccounts: [
+      { id: 'a', email: 'a@example.com', homePath: '/tmp/token-monitor-codex/a' }
+    ]
+  }, {
+    now: () => Date.parse('2026-06-01T00:00:00Z'),
+    env: { PATH: '/usr/bin' },
+    ...noLiveAuth,
+    readCodexRpc: async (deps) => codexPayload('a@example.com', deps.env.CODEX_HOME ? undefined : 'app')
+  });
+
+  assert.equal(providers.length, 1);
+  assert.equal(providers[0].accountEmail, 'a@example.com');
+  assert.equal(providers[0].sourceDetail, 'app');
+});
+
+test('fetchCodexLimits dedups the live account against the same managed account by account id (no email needed)', async () => {
+  const sharedKey = hashAccountKey('acct_shared');
+  const idToken = makeIdToken({ chatgpt_account_id: 'acct_shared' }); // no email claim
+  const providers = await fetchCodexLimits({
+    codexManagedAccounts: [
+      { id: 'm', email: '', accountKey: sharedKey, homePath: '/tmp/token-monitor-codex/m' }
+    ]
+  }, {
+    now: () => Date.parse('2026-06-01T00:00:00Z'),
+    env: { PATH: '/usr/bin' },
+    codexAuthPath: '/fake/.codex/auth.json',
+    readFileSync: () => JSON.stringify({ tokens: { id_token: idToken } }),
+    readCodexRpc: async (deps) => ({
+      account: { planType: 'plus' },
+      rateLimits: { primary: { usedPercent: 3, resetsAt: '2026-06-01T05:00:00Z', windowDurationMins: 300 } },
+      sourceDetail: deps.env.CODEX_HOME ? undefined : 'app'
+    })
+  });
+
+  assert.equal(providers.length, 1);
+  assert.equal(providers[0].accountKey, sharedKey);
+  assert.equal(providers[0].sourceDetail, 'app'); // the live representation is kept
+});
+
+test('fetchCodexLimits fills the live account email from auth.json when the RPC omits it', async () => {
+  const idToken = makeIdToken({ email: 'live@example.com', chatgpt_account_id: 'acct_live' });
+  const providers = await fetchCodexLimits({
+    codexManagedAccounts: [
+      { id: 'm', email: 'managed@example.com', accountKey: 'sha256:managed', homePath: '/tmp/token-monitor-codex/m' }
+    ]
+  }, {
+    now: () => Date.parse('2026-06-01T00:00:00Z'),
+    env: { PATH: '/usr/bin' },
+    codexAuthPath: '/fake/.codex/auth.json',
+    readFileSync: (p) => {
+      assert.equal(p, '/fake/.codex/auth.json');
+      return JSON.stringify({ tokens: { id_token: idToken } });
+    },
+    readCodexRpc: async (deps) => {
+      // Live RPC returns no email (the real-world bug); managed home returns its own.
+      if (!deps.env.CODEX_HOME) {
+        return { account: { planType: 'plus' }, rateLimits: { primary: { usedPercent: 2, resetsAt: '2026-06-01T05:00:00Z', windowDurationMins: 300 } }, sourceDetail: 'app' };
+      }
+      return codexPayload('managed@example.com');
+    }
+  });
+
+  const live = providers.find((provider) => provider.sourceDetail === 'app');
+  assert.ok(live, 'live account should be present');
+  assert.equal(live.accountEmail, 'live@example.com');
+  assert.match(live.accountKey, /^sha256:[0-9a-f]{64}$/);
 });
 
 test('Codex exhausted quota remains a live provider with zero remaining window', () => {

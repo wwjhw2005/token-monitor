@@ -1,6 +1,7 @@
 'use strict';
 
 const fs = require('node:fs');
+const crypto = require('node:crypto');
 const os = require('node:os');
 const path = require('node:path');
 const { app, BrowserWindow, globalShortcut, ipcMain, nativeImage, screen, session, shell } = require('electron');
@@ -9,7 +10,8 @@ const { appVersion } = require('../shared/appVersion');
 const { DEFAULT_CLIENTS, clientsCsvForSetting } = require('../shared/clientTracking');
 const { startCollector } = require('../shared/collector');
 const { createHub } = require('../hub/server');
-const { deepseekToken, normalizeLimitsRefreshMs, parseBoolean, parseLimitProviders } = require('../shared/limitCollector');
+const { deepseekToken, normalizeLimitsRefreshMs, parseBoolean, parseLimitProviders, runCodexLogin } = require('../shared/limitCollector');
+const { codexAuthIdentity, hashAccountKey } = require('../shared/codexAuth');
 const {
   normalizeClientDisplayOrder,
   normalizeHiddenClients,
@@ -40,6 +42,7 @@ const {
   pruneArchivedClientUsage
 } = require('../shared/clientUsageArchive');
 const { aggregateDevices, aggregateHistory, carryDeviceHistory } = require('../shared/usage');
+const { syncLimits } = require('../shared/limits');
 const { historyPreview } = require('../shared/history');
 const { readSessionDetail } = require('../shared/sessionDetail');
 const { startDiscordRpc, stopDiscordRpc, updateDiscordRpc } = require('./discordRpc');
@@ -178,6 +181,7 @@ function defaultSettings() {
     language: 'auto',
     opencodeCookie: '',
     deepseekApiKey: '',
+    codexManagedAccounts: [],
     appUpdate: {
       lastCheckedAt: null,
       lastKnownLatest: null,
@@ -200,6 +204,157 @@ function normalizeDeepSeekApiKey(value) {
 
 function currentDeepSeekApiKey() {
   return settings?.deepseekApiKey || deepseekToken(process.env);
+}
+
+let codexLoginInFlight = false;
+
+function normalizeCodexManagedAccounts(value) {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set();
+  const accounts = [];
+  for (const account of value) {
+    if (!account || typeof account !== 'object') continue;
+    const id = String(account.id || '').trim();
+    const homePath = String(account.homePath || '').trim();
+    if (!id || !homePath) continue;
+    const accountKey = String(account.accountKey || '').trim();
+    const dedupe = accountKey || String(account.email || '').trim().toLowerCase() || id;
+    if (seen.has(dedupe)) continue;
+    seen.add(dedupe);
+    accounts.push({
+      id,
+      email: String(account.email || '').trim().toLowerCase(),
+      accountKey,
+      accountLabel: String(account.accountLabel || '').trim(),
+      homePath,
+      authPath: String(account.authPath || path.join(homePath, 'auth.json')).trim(),
+      addedAt: account.addedAt || new Date().toISOString(),
+      updatedAt: account.updatedAt || account.addedAt || new Date().toISOString()
+    });
+  }
+  return accounts;
+}
+
+function codexAccountsForRenderer() {
+  return normalizeCodexManagedAccounts(settings?.codexManagedAccounts).map(({
+    id, email, accountKey, accountLabel, addedAt, updatedAt
+  }) => ({ id, email, accountKey, accountLabel, addedAt, updatedAt }));
+}
+
+function codexManagedAccountsForCollector() {
+  return normalizeCodexManagedAccounts(settings?.codexManagedAccounts);
+}
+
+function codexManagedRoot() {
+  return path.join(app.getPath('userData'), 'managed-codex-homes');
+}
+
+function findExistingCodexAccount(accounts, identity) {
+  return accounts.find((account) => (
+    (identity.accountKey && account.accountKey === identity.accountKey) ||
+    (identity.email && account.email === identity.email)
+  ));
+}
+
+function codexAccountId(identity, existing) {
+  if (existing?.id) return existing.id;
+  return `codex-${(identity.accountKey || hashAccountKey(identity.email)).replace(/^sha256:/, '').slice(0, 12)}`;
+}
+
+// Deletes a managed home only when it resolves under our managed root, mirroring
+// CodexBar's safe-delete guard so a bad record can never wipe an arbitrary path.
+async function removeManagedHomeIfSafe(homePath) {
+  if (!homePath) return;
+  const resolvedHome = path.resolve(homePath);
+  const resolvedRoot = path.resolve(codexManagedRoot());
+  if (resolvedHome === resolvedRoot) return;
+  if (!resolvedHome.startsWith(`${resolvedRoot}${path.sep}`)) return;
+  await fs.promises.rm(resolvedHome, { recursive: true, force: true });
+}
+
+// Records a managed account for the auth that already lives in `homePath`, then
+// reloads the collector so the new account's limits show up immediately.
+function commitCodexManagedAccount(identity, homePath, existing) {
+  const now = new Date().toISOString();
+  const id = codexAccountId(identity, existing);
+  const accounts = normalizeCodexManagedAccounts(settings.codexManagedAccounts);
+  const record = {
+    id,
+    email: identity.email,
+    accountKey: identity.accountKey || hashAccountKey(identity.email || id),
+    accountLabel: identity.accountLabel,
+    homePath,
+    authPath: path.join(homePath, 'auth.json'),
+    addedAt: existing?.addedAt || now,
+    updatedAt: now
+  };
+  settings.codexManagedAccounts = normalizeCodexManagedAccounts([
+    ...accounts.filter((account) => account.id !== id),
+    record
+  ]);
+  saveSettings();
+  startMode();
+  return codexAccountsForRenderer().find((account) => account.id === id);
+}
+
+function codexLoginErrorMessage(result) {
+  const detail = result.output ? `\n\n${result.output}` : '';
+  switch (result.outcome) {
+    case 'missingBinary':
+      return 'Codex CLI not found. Install Codex, then try again.';
+    case 'launchFailed':
+      return `Could not start codex login.${detail}`;
+    case 'timedOut':
+      return `Sign-in timed out. Finish the browser login, then try again.${detail}`;
+    default:
+      return `codex login failed.${detail}`;
+  }
+}
+
+// Best practice: each account gets its own OAuth grant via an isolated
+// `codex login` (CodexBar/tokscale model), so it never shares a refresh-token
+// lineage with the user's live Codex CLI login.
+async function addCodexManagedAccount(onOutput) {
+  await fs.promises.mkdir(codexManagedRoot(), { recursive: true });
+  const tempHome = path.join(codexManagedRoot(), `pending-${crypto.randomUUID()}`);
+  await fs.promises.mkdir(tempHome, { recursive: true });
+  try {
+    const result = await runCodexLogin({ homePath: tempHome, onOutput }, { env: process.env });
+    if (result.outcome !== 'success') {
+      return { ok: false, error: codexLoginErrorMessage(result), outcome: result.outcome };
+    }
+    let auth;
+    try {
+      auth = JSON.parse(await fs.promises.readFile(path.join(tempHome, 'auth.json'), 'utf8'));
+    } catch (_) {
+      return { ok: false, error: 'Sign-in finished but no Codex credentials were written.' };
+    }
+    const identity = codexAuthIdentity(auth);
+    if (!identity.accountKey && !identity.email) {
+      return { ok: false, error: 'Could not identify the Codex account after sign-in.' };
+    }
+    const existing = findExistingCodexAccount(normalizeCodexManagedAccounts(settings.codexManagedAccounts), identity);
+    const homePath = path.join(codexManagedRoot(), codexAccountId(identity, existing));
+    if (path.resolve(homePath) !== path.resolve(tempHome)) {
+      await removeManagedHomeIfSafe(homePath);
+      await fs.promises.rename(tempHome, homePath);
+    }
+    return { ok: true, account: commitCodexManagedAccount(identity, homePath, existing) };
+  } finally {
+    await removeManagedHomeIfSafe(tempHome).catch(() => {});
+  }
+}
+
+async function removeCodexManagedAccount(id) {
+  const accountId = String(id || '').trim();
+  const accounts = normalizeCodexManagedAccounts(settings.codexManagedAccounts);
+  const account = accounts.find((entry) => entry.id === accountId);
+  if (!account) return { ok: false, error: 'Account not found' };
+  settings.codexManagedAccounts = accounts.filter((entry) => entry.id !== accountId);
+  saveSettings();
+  await removeManagedHomeIfSafe(account.homePath);
+  startMode();
+  return { ok: true, accounts: codexAccountsForRenderer() };
 }
 
 function migrateLimitProviders(value) {
@@ -614,6 +769,7 @@ function readSettings() {
     if (saved.serviceStatusRefreshMs !== undefined) {
       merged.serviceStatusRefreshMs = normalizeServiceStatusRefreshMs(saved.serviceStatusRefreshMs);
     }
+    merged.codexManagedAccounts = normalizeCodexManagedAccounts(merged.codexManagedAccounts);
     if (saved.windowBehavior === undefined && saved.alwaysOnTop !== undefined) {
       merged.windowBehavior = saved.alwaysOnTop ? 'floating' : 'normal';
     }
@@ -903,7 +1059,7 @@ async function postToHub(summary) {
   const response = await fetch(url, {
     method: 'POST',
     headers: { 'content-type': 'application/json', ...(secret ? { authorization: `Bearer ${secret}` } : {}) },
-    body: JSON.stringify(summary)
+    body: JSON.stringify({ ...summary, limits: syncLimits(summary.limits) })
   });
   if (!response.ok) throw new Error(`Hub ${response.status}: ${(await response.text()).slice(0, 200)}`);
   if (settings.lastPostedDeviceId !== summary.deviceId) {
@@ -938,6 +1094,7 @@ function startSyncCollector() {
     limitsRefreshMs: normalizeLimitsRefreshMs(settings.limitsRefreshMs),
     opencodeCookie: settings.opencodeCookie || process.env.TOKEN_MONITOR_OPENCODE_COOKIE || '',
     deepseekApiKey: settings.deepseekApiKey || '',
+    codexManagedAccounts: codexManagedAccountsForCollector(),
     onUpdate: async (summary) => {
       const visibleSummary = summaryWithArchivedClientUsage(summary);
       lastCollectedDevice = { ...visibleSummary, receivedAt: new Date().toISOString() };
@@ -1033,6 +1190,7 @@ function startLocalCollector() {
     limitsRefreshMs: normalizeLimitsRefreshMs(settings.limitsRefreshMs),
     opencodeCookie: settings.opencodeCookie || process.env.TOKEN_MONITOR_OPENCODE_COOKIE || '',
     deepseekApiKey: settings.deepseekApiKey || '',
+    codexManagedAccounts: codexManagedAccountsForCollector(),
     onUpdate: (summary, reason) => {
       const visibleSummary = summaryWithArchivedClientUsage(summary);
       // History only rides along on gated ticks; carry the last known history
@@ -1177,6 +1335,7 @@ function settingsForRenderer() {
   return {
     ...settings,
     deepseekApiKey: '',
+    codexManagedAccounts: codexAccountsForRenderer(),
     deepseekApiKeyConfigured: Boolean(currentDeepSeekApiKey()),
     deepseekApiKeySource,
     windowToggleShortcutStatus: currentWindowToggleShortcutStatus()
@@ -1853,6 +2012,7 @@ app.whenReady().then(() => {
     const previousStartAtLogin = settings.startAtLogin;
     const normalizedCurrency = patch.currency !== undefined ? normalizeCurrency(patch.currency, settings.currency) : normalizeCurrency(settings.currency);
     const normalizedPatch = { ...patch, currency: normalizedCurrency };
+    delete normalizedPatch.codexManagedAccounts;
     if (patch.clients !== undefined) normalizedPatch.clients = clientsCsvForSetting(patch.clients, '');
     if (patch.deepseekApiKey !== undefined) normalizedPatch.deepseekApiKey = normalizeDeepSeekApiKey(patch.deepseekApiKey);
     settings = normalizeWindowBehaviorSettings({
@@ -2194,6 +2354,19 @@ app.whenReady().then(() => {
     opencodeStatusCache = { value, at: now };
     return value;
   });
+  ipcMain.handle('codex:accounts', () => codexAccountsForRenderer());
+  ipcMain.handle('codex:addAccount', async (event) => {
+    if (codexLoginInFlight) return { ok: false, error: 'A Codex sign-in is already in progress.' };
+    codexLoginInFlight = true;
+    try {
+      return await addCodexManagedAccount((text) => {
+        if (!event.sender.isDestroyed()) event.sender.send('codex:loginOutput', text);
+      });
+    } finally {
+      codexLoginInFlight = false;
+    }
+  });
+  ipcMain.handle('codex:removeAccount', async (_event, id) => removeCodexManagedAccount(id));
   ipcMain.on('window:minimize', () => {
     if (settings?.trayMode) hidePopover();
     else mainWindow?.minimize();

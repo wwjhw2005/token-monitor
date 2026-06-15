@@ -14,6 +14,7 @@ const opencodeLimits = require('./opencodeLimits');
 const opencodeWeb = require('./opencodeWeb');
 const { sharedDataDir } = require('./config');
 const { recordConsumption } = require('./deepseekBalanceHistory');
+const { codexAuthIdentity } = require('./codexAuth');
 
 const LIMIT_PROVIDER_IDS = ['claude', 'codex', 'cursor', 'antigravity', 'opencode', 'deepseek'];
 const LIMIT_REFRESH_VALUES = new Set([60_000, 120_000, 300_000, 900_000, 1_800_000]);
@@ -1141,6 +1142,7 @@ function mapCodexRateLimitsToProvider(payload, meta = {}) {
     provider: 'codex',
     accountKey: meta.accountKey || '',
     accountLabel: meta.accountLabel || codexAccountLabel(payload),
+    accountEmail: meta.accountEmail || payload.account?.email || '',
     source: meta.source || 'rpc',
     sourceDetail: meta.sourceDetail || payload.sourceDetail,
     status: 'ok',
@@ -1224,6 +1226,91 @@ function quoteWindowsCmdArg(value) {
   const text = String(value);
   if (/^[A-Za-z0-9_./:=\\-]+$/.test(text)) return text;
   return `"${text.replace(/"/g, '\\"')}"`;
+}
+
+function codexLoginSpawnSpec(command, platform = process.platform) {
+  const args = ['login'];
+  if (platform !== 'win32' || !/\.(cmd|bat)$/i.test(command)) {
+    return { command, args };
+  }
+  return {
+    command: 'cmd.exe',
+    args: ['/d', '/s', '/c', [quoteWindowsCmdArg(command), ...args.map(quoteWindowsCmdArg)].join(' ')]
+  };
+}
+
+function killCodexLoginProcess(child, platform = process.platform, deps = {}) {
+  if (!child || typeof child.kill !== 'function') return;
+  const spawnFn = deps.spawn || spawn;
+  try {
+    // Login spawns a browser/callback helper, so kill the whole tree, not just codex.
+    if (platform === 'win32') {
+      if (child.pid) {
+        try { spawnFn('taskkill', ['/pid', String(child.pid), '/t', '/f'], { windowsHide: true }); } catch (_) {}
+      }
+      child.kill();
+      return;
+    }
+    if (child.pid) {
+      try { process.kill(-child.pid, 'SIGTERM'); return; } catch (_) {}
+    }
+    child.kill('SIGTERM');
+  } catch (_) {}
+}
+
+// Runs `codex login` with CODEX_HOME scoped to an isolated managed home so the
+// account gets its own OAuth grant, fully decoupled from the user's live Codex
+// CLI login. Returns { outcome, exitCode, output }; output is streamed to
+// options.onOutput as it arrives (so the renderer can surface the login URL).
+function runCodexLogin(options = {}, deps = {}) {
+  const spawnFn = deps.spawn || spawn;
+  const env = deps.env || process.env;
+  const platform = deps.platform || process.platform;
+  const setTimer = deps.setTimeout || setTimeout;
+  const clearTimer = deps.clearTimeout || clearTimeout;
+  const onOutput = typeof options.onOutput === 'function' ? options.onOutput : () => {};
+  const timeoutMs = Number(options.timeoutMs || deps.codexLoginTimeoutMs || 180000);
+  const command = codexRpcCommandCandidates({ ...deps, env, platform })[0];
+  if (!command) return Promise.resolve({ outcome: 'missingBinary', exitCode: null, output: '' });
+
+  const spec = codexLoginSpawnSpec(command, platform);
+  let child;
+  try {
+    child = spawnFn(spec.command, spec.args, {
+      windowsHide: true,
+      detached: platform !== 'win32',
+      env: { ...withCodexPathHints(env, platform), CODEX_HOME: options.homePath }
+    });
+  } catch (error) {
+    return Promise.resolve({ outcome: 'launchFailed', exitCode: null, output: String(error?.message || error) });
+  }
+
+  return new Promise((resolve) => {
+    let output = '';
+    let settled = false;
+    let timer = null;
+    const append = (chunk) => {
+      const text = chunk == null ? '' : String(chunk);
+      if (!text) return;
+      output += text;
+      if (output.length > 8000) output = output.slice(-8000);
+      onOutput(text);
+    };
+    const finish = (outcome, exitCode) => {
+      if (settled) return;
+      settled = true;
+      if (timer !== null) clearTimer(timer);
+      resolve({ outcome, exitCode: exitCode ?? null, output: output.trim() });
+    };
+    child.stdout?.on('data', append);
+    child.stderr?.on('data', append);
+    child.on('error', (error) => { append(String(error?.message || error)); finish('launchFailed', null); });
+    child.on('close', (code) => finish(code === 0 ? 'success' : 'failed', code));
+    timer = setTimer(() => {
+      killCodexLoginProcess(child, platform, { spawn: spawnFn });
+      finish('timedOut', null);
+    }, timeoutMs);
+  });
 }
 
 function spawnCodexAppServer(deps = {}) {
@@ -1502,17 +1589,135 @@ async function readCodexRpc(deps = {}) {
   throw lastError || errorWithStatus('notConfigured', 'Codex CLI not found');
 }
 
-async function fetchCodexLimits(options = {}, deps = {}) {
+function normalizeCodexManagedAccounts(value) {
+  if (!Array.isArray(value)) return [];
+  return value.map((account) => {
+    if (!account || typeof account !== 'object') return null;
+    const id = String(account.id || '').trim();
+    const homePath = String(account.homePath || account.codexHome || '').trim();
+    if (!id || !homePath) return null;
+    return {
+      id,
+      homePath,
+      authPath: String(account.authPath || '').trim(),
+      email: String(account.email || '').trim().toLowerCase(),
+      accountKey: String(account.accountKey || '').trim(),
+      accountLabel: String(account.accountLabel || account.plan || '').trim()
+    };
+  }).filter(Boolean);
+}
+
+function codexAccountKeyFromSeed(seed) {
+  const raw = String(seed || '').trim();
+  return raw.startsWith('sha256:') ? raw : hashKey('codex', raw || 'account');
+}
+
+async function fetchManagedCodexAccountLimits(account, options = {}, deps = {}) {
   const nowMs = (deps.now || Date.now)();
-  const payload = await readCodexRpc(deps);
-  const identity = payload.account?.email || `${payload.account?.type || 'account'}:${payload.account?.planType || ''}:${deps.codexAuthPath || codexAuthPath(deps.env || process.env)}`;
+  const env = {
+    ...(deps.env || process.env),
+    CODEX_HOME: account.homePath
+  };
+  const pathApi = pathApiForPlatform(deps.platform || process.platform);
+  const accountDeps = {
+    ...deps,
+    env,
+    codexAuthPath: account.authPath || pathApi.join(account.homePath, 'auth.json')
+  };
+  const reader = deps.readCodexRpc || readCodexRpc;
+  const accountKeySeed = account.accountKey || account.email || account.id || account.homePath;
+  try {
+    const payload = await reader(accountDeps);
+    const email = payload.account?.email || account.email;
+    const identity = account.accountKey || email || account.id || account.homePath;
+    return mapCodexRateLimitsToProvider(payload, {
+      accountKey: codexAccountKeyFromSeed(identity),
+      accountEmail: email,
+      accountLabel: account.accountLabel || codexAccountLabel(payload),
+      updatedAt: nowIso(nowMs),
+      source: 'rpc',
+      sourceDetail: 'managed'
+    });
+  } catch (error) {
+    return normalizeLimitProvider({
+      provider: 'codex',
+      accountKey: codexAccountKeyFromSeed(accountKeySeed),
+      accountEmail: account.email,
+      accountLabel: account.accountLabel,
+      source: 'rpc',
+      sourceDetail: 'managed',
+      status: providerStatusFromError(error),
+      updatedAt: nowIso(nowMs),
+      windows: []
+    });
+  }
+}
+
+// Reads the live login's identity (email + stable account id) from its
+// auth.json. The RPC `account/read` often omits the email, so the JWT in
+// auth.json is the reliable source — and keying on the account id keeps the
+// live account consistent with managed accounts for cross-device dedup.
+function readLiveCodexIdentity(deps = {}) {
+  const read = deps.readFileSync || fs.readFileSync;
+  const authPath = deps.codexAuthPath || codexAuthPath(deps.env || process.env);
+  try {
+    return codexAuthIdentity(JSON.parse(read(authPath, 'utf8')));
+  } catch (_) {
+    return { email: '', accountLabel: '', providerAccountId: '', accountKey: '' };
+  }
+}
+
+async function fetchLiveCodexAccount(deps = {}, nowMs = Date.now()) {
+  const reader = deps.readCodexRpc || readCodexRpc;
+  const payload = await reader(deps);
+  const authIdentity = readLiveCodexIdentity(deps);
+  const email = authIdentity.email || payload.account?.email || '';
+  const fallbackSeed = payload.account?.email || `${payload.account?.type || 'account'}:${payload.account?.planType || ''}:${deps.codexAuthPath || codexAuthPath(deps.env || process.env)}`;
   return mapCodexRateLimitsToProvider(payload, {
-    accountKey: hashKey('codex', identity),
+    accountKey: authIdentity.accountKey || hashKey('codex', fallbackSeed),
+    accountEmail: email,
     accountLabel: codexAccountLabel(payload),
     updatedAt: nowIso(nowMs),
     source: 'rpc',
     sourceDetail: payload.sourceDetail
   });
+}
+
+async function fetchCodexLimits(options = {}, deps = {}) {
+  const nowMs = (deps.now || Date.now)();
+  const managedAccounts = normalizeCodexManagedAccounts(options.codexManagedAccounts || deps.codexManagedAccounts);
+  // Single live account: keep the original single-provider shape (and error
+  // propagation) so a signed-out/not-configured state surfaces as before.
+  if (managedAccounts.length === 0) return fetchLiveCodexAccount(deps, nowMs);
+
+  const providers = [];
+  // Dedupe by account id (accountKey) first, then email — so signing in the
+  // account that's already the live login shows ONE row, even if one side has
+  // no email. Both paths key on the stable account id, so the same account
+  // matches regardless of how it was added.
+  const seen = new Set();
+  const identityKeys = (provider) => [
+    provider.accountKey ? `key:${provider.accountKey}` : '',
+    provider.accountEmail ? `email:${provider.accountEmail}` : ''
+  ].filter(Boolean);
+  const markSeen = (provider) => { for (const key of identityKeys(provider)) seen.add(key); };
+  const alreadySeen = (provider) => identityKeys(provider).some((key) => seen.has(key));
+  // The live system account (the one the Codex app/CLI is currently signed into)
+  // stays visible alongside managed accounts — adding a managed account never
+  // hides the login you are actually using. Best-effort: a signed-out/Keychain-
+  // only live account just drops out, leaving the managed accounts.
+  try {
+    const live = await fetchLiveCodexAccount(deps, nowMs);
+    providers.push(live);
+    markSeen(live);
+  } catch (_) {}
+  for (const account of managedAccounts) {
+    const provider = await fetchManagedCodexAccountLimits(account, options, deps);
+    if (alreadySeen(provider)) continue;
+    providers.push(provider);
+    markSeen(provider);
+  }
+  return providers;
 }
 
 async function fetchAntigravityLimits(options = {}, deps = {}) {
@@ -1723,7 +1928,9 @@ async function collectLimitsOnce(options = {}, deps = {}) {
   const providers = [];
   for (const provider of parseLimitProviders(options.limitProviders ?? options.providers)) {
     try {
-      providers.push(await fetchers[provider](options));
+      const result = await fetchers[provider](options);
+      if (Array.isArray(result)) providers.push(...result);
+      else providers.push(result);
     } catch (error) {
       providers.push(statusProvider(provider, providerStatusFromError(error), nowIso(nowMs)));
     }
@@ -1936,6 +2143,7 @@ module.exports = {
   fetchCodexLimits,
   fetchCursorLimits,
   fetchDeepSeekLimits,
+  runCodexLogin,
   deepseekToken,
   selectFundedRow,
   mapClaudeCliUsageToProvider,

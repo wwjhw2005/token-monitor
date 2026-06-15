@@ -286,6 +286,25 @@
             <span class="settings-section-meta"><span id="accountsSettingsSummary" class="settings-section-summary"></span><span class="settings-section-disclosure" aria-hidden="true"></span></span>
           </button>
           <div id="accountsSettingsDetails" class="settings-section-details hidden">
+            <div id="codexAccountGroup" class="settings-group cursor-account-group">
+              <button id="codexSettingsToggle" class="settings-group-header cursor-settings-toggle" type="button" aria-expanded="false" aria-controls="codexSettingsDetails">
+                <span data-i18n="settings.codex.title">Codex Accounts</span>
+                <span class="cursor-settings-summary">
+                  <span id="codexAccountStatus" class="cursor-status-pill">Not configured</span>
+                  <span class="cursor-disclosure-icon" aria-hidden="true"></span>
+                </span>
+              </button>
+              <div id="codexSettingsDetails" class="cursor-settings-details hidden">
+                <p class="settings-note" data-i18n="settings.codex.description">Sign in to each Codex account you want to track. Each account gets its own isolated managed login on this device, so it never disturbs your live Codex CLI session.</p>
+                <div id="codexAccountList" class="managed-account-list"></div>
+                <div class="settings-actions">
+                  <button id="codexAddAccountButton" data-i18n="settings.codex.addAccount">Add account</button>
+                  <button id="codexRefreshAccountsButton" data-i18n="settings.codex.refresh">Refresh</button>
+                </div>
+                <pre id="codexLoginOutput" class="codex-login-output hidden"></pre>
+                <div id="codexAccountErrorMessage" class="settings-note error hidden"></div>
+              </div>
+            </div>
             <div id="cursorAccountGroup" class="settings-group cursor-account-group">
               <button id="cursorSettingsToggle" class="settings-group-header cursor-settings-toggle" type="button" aria-expanded="false" aria-controls="cursorSettingsDetails">
                 <span data-i18n="settings.cursor.title">Cursor Account</span>
