@@ -57,6 +57,7 @@ const {
   trayToggleAction
 } = require('./trayModeSettings');
 const { SERVICE_STATUS_PROVIDERS, createServiceStatusClient } = require('./serviceStatus');
+const { classifyStreamFailure } = require('./syncConnection');
 const { describeWindowBehavior, normalizeWindowBehaviorSettings } = require('./windowBehavior');
 const {
   normalizeWindowToggleShortcut,
@@ -936,6 +937,7 @@ let localStats = null;
 let sseAbortController = null;
 let sseRetryTimer = null;
 let streamConnected = false;
+let streamFailure = null;
 let syncCollectorHandle = null;
 let lastCollectedDevice = null;
 let tray = null;
@@ -1234,6 +1236,7 @@ function updateTrayDisplay() {
 
 function sendStatus(connected, extra) {
   streamConnected = Boolean(connected);
+  streamFailure = streamConnected ? null : ((extra && extra.reason) ? { reason: extra.reason, detail: extra.detail ?? null } : streamFailure);
   sendPush({ event: 'status', data: { connected: streamConnected, mode, ...(extra || {}) } });
 }
 
@@ -1321,7 +1324,7 @@ async function startStatsStream() {
       signal: controller.signal
     });
     if (!response.ok || !response.body) {
-      sendStatus(false, { code: response.status });
+      sendStatus(false, classifyStreamFailure({ status: response.status }));
       scheduleStreamRetry();
       return;
     }
@@ -1344,11 +1347,11 @@ async function startStatsStream() {
         }
       }
     }
-    sendStatus(false, { reason: 'eof' });
+    sendStatus(false, classifyStreamFailure({ eof: true }));
     scheduleStreamRetry();
   } catch (error) {
     if (controller.signal.aborted) return;
-    sendStatus(false, { reason: error.message });
+    sendStatus(false, classifyStreamFailure({ errorCode: error?.cause?.code || error?.code, message: error?.message }));
     scheduleStreamRetry();
   }
 }
@@ -2351,7 +2354,7 @@ app.whenReady().then(() => {
     const { client, sessionId, period, sessionCost } = args || {};
     return readSessionDetail({ client, sessionId, period, sessionCost, home: os.homedir() });
   });
-  ipcMain.handle('stream:status', () => ({ connected: streamConnected, mode }));
+  ipcMain.handle('stream:status', () => ({ connected: streamConnected, mode, ...(streamFailure || {}) }));
   ipcMain.handle('serviceStatus:get', (_event, options) => serviceStatusClient.getServiceStatus({
     force: Boolean(options?.force),
     providerIds: Array.isArray(options?.providerIds) ? options.providerIds : null

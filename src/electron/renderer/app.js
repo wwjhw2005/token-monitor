@@ -138,7 +138,7 @@ function normalizeInitialViewValue(value, allowed, fallback) {
   return allowed.has(raw) ? raw : fallback;
 }
 
-const state = { period: normalizeInitialViewValue(initialViewState.period, viewPeriodValues, 'today'), appUpdate: null, breakdown: normalizeInitialViewValue(initialViewState.breakdown, viewBreakdownValues, 'tool'), settings: null, stats: null, serviceStatus: null, serviceStatusBusy: false, serviceProvidersExpanded: false, trendSettingsExpanded: false, serviceStatusTicker: null, refreshTimer: null, refreshBusy: false, refreshFeedbackTimer: null, currentTotal: 0, rowSignature: '', streamConnected: false, mode: 'idle', appInfo: null, tokscaleStatus: null, tokscaleCheck: null, tokscaleBusy: false, hubInfo: null, cursorAccount: { status: null, error: '' }, cursorAccountExpanded: false, codexAccountExpanded: false, codexAccountError: '', customPricingExpanded: false, opencodeAccount: { status: null, error: '' }, opencodeCookieExpanded: false, deepseekAccountExpanded: false, deepseekPendingCheckSince: 0, floatingBubble: initialFloatingBubble, suppressInitialNumberAnimation: window.__TOKEN_MONITOR_SUPPRESS_INITIAL_NUMBER_ANIMATION__ === true, openSession: null, detailSort: 'time', recordingWindowShortcut: false, windowShortcutInvalid: false };
+const state = { period: normalizeInitialViewValue(initialViewState.period, viewPeriodValues, 'today'), appUpdate: null, breakdown: normalizeInitialViewValue(initialViewState.breakdown, viewBreakdownValues, 'tool'), settings: null, stats: null, serviceStatus: null, serviceStatusBusy: false, serviceProvidersExpanded: false, trendSettingsExpanded: false, serviceStatusTicker: null, refreshTimer: null, refreshBusy: false, refreshFeedbackTimer: null, currentTotal: 0, rowSignature: '', streamConnected: false, streamFailure: null, mode: 'idle', appInfo: null, tokscaleStatus: null, tokscaleCheck: null, tokscaleBusy: false, hubInfo: null, cursorAccount: { status: null, error: '' }, cursorAccountExpanded: false, codexAccountExpanded: false, codexAccountError: '', customPricingExpanded: false, opencodeAccount: { status: null, error: '' }, opencodeCookieExpanded: false, deepseekAccountExpanded: false, deepseekPendingCheckSince: 0, floatingBubble: initialFloatingBubble, suppressInitialNumberAnimation: window.__TOKEN_MONITOR_SUPPRESS_INITIAL_NUMBER_ANIMATION__ === true, openSession: null, detailSort: 'time', recordingWindowShortcut: false, windowShortcutInvalid: false };
 state.settingsSections = Object.fromEntries(SETTINGS_SECTION_IDS.map((id) => [id, false]));
 const defaultAppearance = { glassOpacity: 68, glassBlur: 32, zoomFactor: 1, systemGlass: true, showLiveDot: true, showToolIcons: true, titleIconOnly: false, settingsInTitlebar: false };
 let preferenceDrag = null;
@@ -157,6 +157,7 @@ Object.assign(els, {
   hubSecretCopyButton: document.getElementById('hubSecretCopyButton'),
   hubSecretRegenButton: document.getElementById('hubSecretRegenButton'),
   hubStatusRow: document.getElementById('hubStatusRow'),
+  syncClientStatus: document.getElementById('syncClientStatus'),
   hubAddressList: document.getElementById('hubAddressList'),
   startupGroup: document.getElementById('startupGroup'),
   startAtLoginInput: document.getElementById('startAtLoginInput'),
@@ -1653,6 +1654,28 @@ function setStatus(text, isError = false) {
   els.status.classList.toggle('error', isError);
 }
 
+const STREAM_REASON_KEYS = {
+  unauthorized: 'settings.sync.offline.unauthorized',
+  refused: 'settings.sync.offline.refused',
+  timeout: 'settings.sync.offline.timeout',
+  dns: 'settings.sync.offline.dns',
+  unreachable: 'settings.sync.offline.unreachable',
+  server_error: 'settings.sync.offline.serverError',
+  disconnected: 'settings.sync.offline.disconnected',
+  network: 'settings.sync.offline.network'
+};
+
+function streamFailureText(failure) {
+  if (!failure || !failure.reason) return '';
+  // Only render reasons that come from the stream classifier. Local-collector
+  // statuses (e.g. 'collecting') can land in streamFailure during client→local
+  // fallback; mapping those to a sync error would be a false "Connection failed".
+  const key = STREAM_REASON_KEYS[failure.reason];
+  if (!key) return '';
+  const base = t(key);
+  return failure.detail ? `${base} (${failure.detail})` : base;
+}
+
 function statusTextFor(mode, connected) {
   if (mode === 'sync') return connected ? 'Live' : 'Offline';
   if (mode === 'local') return connected ? 'Local' : 'Collecting…';
@@ -1660,7 +1683,11 @@ function statusTextFor(mode, connected) {
 }
 
 function liveDotTitle(mode, connected) {
-  if (mode === 'sync') return connected ? 'Hub stream live' : 'Hub stream offline';
+  if (mode === 'sync') {
+    if (connected) return t('status.hubStreamLive');
+    const reason = streamFailureText(state.streamFailure);
+    return reason ? `${t('status.hubStreamOffline')}: ${reason}` : t('status.hubStreamOffline');
+  }
   if (mode === 'local') return connected ? 'Local collector running' : 'Local collector starting…';
   return 'Idle';
 }
@@ -1743,7 +1770,11 @@ async function refreshStats(options = {}) {
     maybeUpdateBarsIcon();
     if (feedback) settleRefreshButtonState('refreshed');
   } catch (error) {
-    setStatus(error.message, true);
+    // The dot colour shows the offline state and the reason lives in the
+    // live-dot tooltip + sync settings line, so keep the header status pill
+    // hidden instead of surfacing the raw hub error (e.g. a 404 HTML page).
+    console.log(`[refresh] getStats failed: ${error.message}`);
+    setStatus(statusTextFor(state.mode, state.streamConnected));
     if (feedback) settleRefreshButtonState('error');
   } finally {
     if (feedback) state.refreshBusy = false;
@@ -2385,6 +2416,7 @@ function syncHubModeUi() {
     els.hubSecretInput.value = state.settings.hubHostSecret || '';
     renderHubStatus();
   }
+  renderSyncClientStatus();
 }
 
 function renderHubStatus() {
@@ -2413,6 +2445,20 @@ function renderHubStatus() {
   els.hubStatusRow.textContent = t('settings.sync.listening', { port: info.listeningPort });
   els.hubStatusRow.className = 'hub-status ok';
   renderHubAddresses(info.lanAddresses || [], info.listeningPort);
+}
+
+function renderSyncClientStatus() {
+  if (!els.syncClientStatus) return;
+  // Gate on the runtime mode, not just the hubMode setting: client mode with no
+  // URL falls back to the local collector (mode 'local'), and its statuses must
+  // not surface as a sync failure in this row. Matches liveDotTitle's gating.
+  const show = state.settings?.hubMode === 'client' && state.mode === 'sync' && !state.streamConnected;
+  const text = show ? streamFailureText(state.streamFailure) : '';
+  els.syncClientStatus.textContent = text;
+  els.syncClientStatus.className = 'hub-status error';
+  // Empty .hub-status still renders a bordered box, so hide it entirely when
+  // there is nothing to show (connected, or not in client mode).
+  els.syncClientStatus.hidden = !text;
 }
 
 function renderHubAddresses(addresses, port) {
@@ -3351,7 +3397,9 @@ async function init() {
     if (status) {
       state.streamConnected = Boolean(status.connected);
       state.mode = status.mode || state.mode;
+      state.streamFailure = status.connected ? null : (status.reason ? { reason: status.reason, detail: status.detail ?? null } : null);
       setLiveDot(state.streamConnected);
+      renderSyncClientStatus();
     }
   } catch (_) {}
   await refreshStats();
@@ -3613,8 +3661,10 @@ window.tokenMonitor.onStatsPush?.((payload) => {
   if (payload.event === 'status') {
     state.streamConnected = Boolean(payload.data?.connected);
     if (payload.data?.mode) state.mode = payload.data.mode;
+    state.streamFailure = state.streamConnected ? null : (payload.data?.reason ? { reason: payload.data.reason, detail: payload.data.detail ?? null } : state.streamFailure);
   } else if (payload.data?.stats) {
     state.streamConnected = true;
+    state.streamFailure = null;
     if (payload.data?.mode) state.mode = payload.data.mode;
     state.stats = payload.data.stats;
   } else {
@@ -3622,6 +3672,7 @@ window.tokenMonitor.onStatsPush?.((payload) => {
   }
   setLiveDot(state.streamConnected);
   setStatus(statusTextFor(state.mode, state.streamConnected));
+  renderSyncClientStatus();
   if (payload.data?.stats) {
     render();
     renderLimitProviderCheckboxes();
