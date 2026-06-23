@@ -1284,6 +1284,43 @@ function startLocalCollector() {
       sendPush({ event: 'stats', data: { type: 'stats', reason, stats: localStats, at: new Date().toISOString() } });
       sendStatus(true, { reason });
     },
+    // Progressive push: mid-tick partial results (today-only / today+month).
+    // Only wired for the local collector; sync/host modes never see these.
+    // History is carried forward by carryDeviceHistory; limits are carried
+    // forward manually so the limits panel doesn't flash empty between scans.
+    // Month/allTime/clientStatus are also carried forward when omitted so
+    // warm full scans stay stable across progressive updates.
+    onPreview: (summary) => {
+      const prevDevice = localDevice;
+      // Capture carry-forward needs before summaryWithArchivedClientUsage,
+      // which fills in empty periods for undefined fields (archived client path).
+      const needsMonth = !summary.month;
+      const needsAllTime = !summary.allTime;
+      const needsClientStatus = !summary.clientStatus;
+
+      const visible = summaryWithArchivedClientUsage(summary);
+      localDevice = carryDeviceHistory(localDevice, { ...visible, receivedAt: new Date().toISOString() });
+      // Carry forward usage periods omitted from the preview so warm full
+      // scans don't flash month/allTime to empty between tokscale scans.
+      if (needsMonth && prevDevice?.month) {
+        localDevice = { ...localDevice, month: prevDevice.month };
+      }
+      if (needsAllTime && prevDevice?.allTime) {
+        localDevice = { ...localDevice, allTime: prevDevice.allTime };
+      }
+      // Carry forward clientStatus when allTime is not yet available.
+      if (needsClientStatus && prevDevice?.clientStatus) {
+        localDevice = { ...localDevice, clientStatus: prevDevice.clientStatus };
+      }
+      if (!visible.limits && prevDevice?.limits) {
+        localDevice = { ...localDevice, limits: prevDevice.limits };
+      }
+      lastCollectedDevice = localDevice;
+      localStats = withHistoryPreview(aggregateDevices([localDevice], 0), [localDevice]);
+      updateDiscordRpc(localStats, settings.currency);
+      sendPush({ event: 'stats', data: { type: 'stats', reason: 'progress', stats: localStats, at: new Date().toISOString() } });
+      sendStatus(true, { reason: 'progress' });
+    },
     onError: (error, reason) => {
       sendStatus(false, { reason: `${reason}:${error.message}` });
     },

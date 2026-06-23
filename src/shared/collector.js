@@ -375,10 +375,12 @@ async function collectUsageOnce(options) {
       // Serial on purpose: concurrent scans triple the peak CPU/IO load, which
       // is what let the issue #15 self-trigger loop spike tokscale past 500% CPU.
       const todayJson = await runTokscaleFn({ clients: normalizedClients, flags: ['--today'], commandTimeoutMs });
-      const monthJson = await runTokscaleFn({ clients: normalizedClients, flags: ['--month'], commandTimeoutMs });
-      const allTimeJson = await runTokscaleFn({ clients: normalizedClients, flags: ['--since', allTimeSince], commandTimeoutMs });
       today = extractUsageFromTokscale(todayJson);
+      try { if (typeof options.onProgress === 'function') options.onProgress({ today, updatedAt: new Date().toISOString() }); } catch (_) {}
+      const monthJson = await runTokscaleFn({ clients: normalizedClients, flags: ['--month'], commandTimeoutMs });
       month = extractUsageFromTokscale(monthJson);
+      try { if (typeof options.onProgress === 'function') options.onProgress({ today, month, updatedAt: new Date().toISOString() }); } catch (_) {}
+      const allTimeJson = await runTokscaleFn({ clients: normalizedClients, flags: ['--since', allTimeSince], commandTimeoutMs });
       allTime = extractUsageFromTokscale(allTimeJson);
     }
     applySessionTimestamps({ today, month, allTime }, options.homeDir || os.homedir());
@@ -539,7 +541,7 @@ function startCollector(options) {
   const {
     clients, allTimeSince, commandTimeoutMs, deviceId, agentVersion, agentRuntime,
     intervalMs, historyIntervalMs = 15 * 60 * 1000, historyEnabled = true, watchEnabled, watchDebounceMs, limitsEnabled,
-    onUpdate, onError, logger
+    onUpdate, onPreview, onError, logger
   } = options;
   const log = logger || (() => {});
   const limitsCollector = limitsEnabled !== false ? createLimitsCollector(options) : null;
@@ -586,7 +588,44 @@ function startCollector(options) {
         forceLimits: Boolean(tickOptions.forceLimits),
         todayOnlyAnchor: anchored ? anchor : null,
         wslAnchor: anchored ? wslAnchor : null,
-        onAnchorComputed: (x) => { captured = x; }
+        onAnchorComputed: (x) => { captured = x; },
+        onProgress: (partial) => {
+          if (!partial.today) return;
+          try {
+            if (typeof onPreview === 'function') {
+              const preview = {
+                deviceId, hostname: os.hostname(),
+                platform: `${process.platform}-${process.arch}`,
+                updatedAt: partial.updatedAt,
+                agentVersion, agentRuntime,
+                trackedClients: (clients || '').split(',').filter(Boolean),
+                today: partial.today
+              };
+              // Only include month/allTime when actually scanned. During warm
+              // full scans the main.js handler carries the previous values
+              // forward for omitted fields, so these cards don't flash empty.
+              if (partial.month) {
+                preview.month = wslAnchor
+                  ? mergePeriods(partial.month, wslAnchor.month)
+                  : partial.month;
+              }
+              if (partial.allTime) {
+                preview.allTime = wslAnchor
+                  ? mergePeriods(partial.allTime, wslAnchor.allTime)
+                  : partial.allTime;
+              }
+              // Only derive clientStatus when allTime is available; warm
+              // scans carry the previous status forward in main.js.
+              if (partial.allTime) {
+                preview.clientStatus = deriveClientStatus(clients, partial.allTime);
+              }
+              onPreview(preview);
+            }
+          } catch (_) {
+            // Progressive push errors must not abort the remaining period scans.
+            // The final onUpdate will report the complete data.
+          }
+        }
       });
       if (stopped) return;
       if (!anchored && captured) {
