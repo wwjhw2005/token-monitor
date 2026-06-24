@@ -251,6 +251,32 @@ test('tray all-sessions mode can consider multiple providers for one configured 
   assert.doesNotMatch(pickConfigured, /new Map\(providers\.map\(\(p\) => \[String\(p\.provider\)\.toLowerCase\(\), p\]\)\)/);
 });
 
+test('Grok renders its single Monthly billing window full-width instead of an empty session/weekly pair', () => {
+  // Grok only exposes a billing window. The default render branch draws
+  // session+weekly, which would leave Grok with no visible bar. A dedicated
+  // grok branch must surface the billing window as a wide row.
+  const app = readRendererFile('app.js');
+  const renderProviderWindows = functionBody(app, 'renderProviderWindows', 'renderLimitProviderRow');
+
+  assert.match(renderProviderWindows, /provider\.provider === 'grok'/);
+  assert.match(renderProviderWindows, /windowForKind\(provider, 'billing'\)/);
+  assert.match(renderProviderWindows, /limitWindowNode\(monthly\.label \|\| 'Monthly', monthly, color, 0\.68\)/);
+  assert.match(renderProviderWindows, /limit-window-wide/);
+});
+
+test('tray bars draw the billing window for a billing-only provider instead of two empty bars', () => {
+  // renderBarsIcon used to unconditionally draw session+weekly, painting two
+  // empty tracks for a Grok-only selection. It must now branch: session/weekly
+  // when present, else the single billing bar on the top track.
+  const app = readRendererFile('app.js');
+  const renderBarsIcon = functionBody(app, 'renderBarsIcon', 'renderAllSessionsIcon');
+
+  assert.match(renderBarsIcon, /w\.kind === 'billing'/);
+  assert.match(renderBarsIcon, /if \(session \|\| weekly\)/);
+  assert.match(renderBarsIcon, /} else if \(billing\)/);
+  assert.match(renderBarsIcon, /drawBar\(layout\.barsStartY, Number\(billing\.remainingPercent\)\)/);
+});
+
 test('DeepSeek main Limits row uses a balance meter without since-tracking copy', () => {
   const app = readRendererFile('app.js');
   const renderProviderWindows = functionBody(app, 'renderProviderWindows', 'renderLimitProviderRow');

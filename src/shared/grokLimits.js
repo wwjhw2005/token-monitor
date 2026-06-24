@@ -113,7 +113,7 @@ function normalizeIsoReset(value) {
 function buildWindow(label, used, limit, resetsAt) {
   if (!Number.isFinite(used) || !Number.isFinite(limit) || limit <= 0) return null;
   return {
-    kind: 'session',
+    kind: 'billing',
     label,
     usedPercent: clampPercent((used / limit) * 100),
     resetsAt,
@@ -161,13 +161,17 @@ async function fetchGrokLimits(options = {}, deps = {}) {
       windows: []
     });
   }
+  const timeoutMs = Number(deps.fetchTimeoutMs || 12000);
+  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
   try {
     const fetchFn = deps.fetch || fetch;
     const response = await fetchFn(GROK_BILLING_URL, {
       headers: {
         Authorization: `Bearer ${credential.token}`,
         Accept: 'application/json'
-      }
+      },
+      ...(controller ? { signal: controller.signal } : {})
     });
     if (response.status === 401 || response.status === 403) {
       return normalizeLimitProvider({
@@ -206,6 +210,8 @@ async function fetchGrokLimits(options = {}, deps = {}) {
       updatedAt,
       windows: []
     });
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 }
 

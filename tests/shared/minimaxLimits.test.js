@@ -327,6 +327,49 @@ test('fetchMinimaxLimits maps HTTP 401 to unauthorized', async () => {
   assert.deepEqual(r.windows, []);
 });
 
+test('fetchMinimaxLimits maps HTTP 403 to unauthorized and retries the other region', async () => {
+  // 403 is a token rejection, not a server fault — same handling as 401, so the
+  // global→CN retry still gets a chance to find a working region.
+  const calls = [];
+  const body = {
+    data: {
+      model_remains: [
+        { model_name: 'general', current_interval_remaining_percent: 80, current_weekly_remaining_percent: 70 }
+      ]
+    }
+  };
+  const r = await fetchMinimaxLimits({}, {
+    env: { MINIMAX_TOKEN_PLAN_KEY: 'eyJ' },
+    now: () => 1_716_350_000_000,
+    fetch: async (url) => {
+      calls.push(url);
+      if (url === MINIMAX_REMAINS_URL_EN) return { ok: false, status: 403, json: async () => ({}) };
+      return okResponse(body);
+    }
+  });
+  assert.deepEqual(calls, [MINIMAX_REMAINS_URL_EN, MINIMAX_REMAINS_URL_CN]);
+  assert.equal(r.status, 'ok');
+  assert.equal(r.region, 'cn');
+});
+
+test('fetchMinimaxLimits aborts and returns unavailable when the fetch exceeds the timeout', async () => {
+  let receivedSignal = null;
+  const r = await fetchMinimaxLimits({ minimaxApiHost: 'cn' }, {
+    env: { MINIMAX_TOKEN_PLAN_KEY: 'eyJ' },
+    now: () => 1_716_350_000_000,
+    fetchTimeoutMs: 10,
+    fetch: async (_url, init) => {
+      receivedSignal = init.signal;
+      return new Promise((_, reject) => {
+        init.signal.addEventListener('abort', () => reject(new Error('aborted')));
+      });
+    }
+  });
+  assert.ok(receivedSignal, 'fetch should receive an AbortSignal');
+  assert.equal(r.status, 'unavailable');
+  assert.deepEqual(r.windows, []);
+});
+
 test('fetchMinimaxLimits retries the CN host when the global host rejects the token', async () => {
   const calls = [];
   const body = {

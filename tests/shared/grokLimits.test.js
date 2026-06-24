@@ -113,7 +113,7 @@ test('parseGrokBilling produces a single monthly window from a typical response'
   };
   const windows = parseGrokBilling(body);
   assert.equal(windows.length, 1);
-  assert.equal(windows[0].kind, 'session');
+  assert.equal(windows[0].kind, 'billing');
   assert.equal(windows[0].label, 'Monthly');
   assert.equal(windows[0].usedPercent, 67);
   assert.equal(windows[0].resetsAt, '2026-07-01T00:00:00.000Z');
@@ -200,6 +200,39 @@ test('fetchGrokLimits maps fetch network error to unavailable', async () => {
     { env: {}, fetch: async () => { throw new Error('ECONNREFUSED'); } }
   );
   assert.equal(r.status, 'unavailable');
+});
+
+test('fetchGrokLimits aborts and returns unavailable when the fetch exceeds the timeout', async () => {
+  // A fetch that ignores the abort signal and never resolves would hang the
+  // test forever; instead we honor the signal so the AbortController path is
+  // exercised end-to-end. A 10ms timeout proves the default 12s is wiring,
+  // not a real wait.
+  let receivedSignal = null;
+  const r = await fetchGrokLimits(
+    { grokBearerToken: 'eyJ' },
+    {
+      env: {},
+      fetchTimeoutMs: 10,
+      fetch: async (_url, init) => {
+        receivedSignal = init.signal;
+        return new Promise((_, reject) => {
+          init.signal.addEventListener('abort', () => reject(new Error('aborted')));
+        });
+      }
+    }
+  );
+  assert.ok(receivedSignal, 'fetch should receive an AbortSignal');
+  assert.equal(r.status, 'unavailable');
+  assert.deepEqual(r.windows, []);
+});
+
+test('fetchGrokLimits maps HTTP 403 to unauthorized (token rejected, not a server fault)', async () => {
+  const r = await fetchGrokLimits(
+    { grokBearerToken: 'eyJ' },
+    { env: {}, fetch: async () => ({ status: 403, ok: false, json: async () => ({}) }) }
+  );
+  assert.equal(r.status, 'unauthorized');
+  assert.deepEqual(r.windows, []);
 });
 
 test('fetchGrokLimits prefers explicit grokBearerToken over env', async () => {

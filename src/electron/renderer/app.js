@@ -1231,10 +1231,22 @@ function renderProviderWindows(provider, color) {
         windows.append(spendNode);
       }
     }
+  } else if (provider.provider === 'grok') {
+    // Grok exposes a single Monthly billing window (no session/weekly). Render it
+    // full-width so it doesn't share a row with an empty placeholder. This mirrors
+    // how Cursor's billing cycle and OpenCode's Monthly are handled.
+    windows.classList.add('limit-windows-grok');
+    const monthly = windowForKind(provider, 'billing');
+    if (monthly) {
+      const node = limitWindowNode(monthly.label || 'Monthly', monthly, color, 0.68);
+      node.classList.add('limit-window-wide');
+      windows.append(node);
+    }
   } else {
     // Default: render only the windows the provider actually has. Providers
-    // that only expose a single window (e.g. Grok Monthly) shouldn't leave
-    // a half-empty "Weekly" bar next to the real one.
+    // that only expose a single window shouldn't leave a half-empty bar next to
+    // the real one. (Grok is handled above; this branch covers minimax's
+    // 5h session + weekly pair and any future session/weekly provider.)
     const session = windowForKind(provider, 'session');
     const weekly = windowForKind(provider, 'weekly');
     if (session) windows.append(limitWindowNode(session.label || 'Session', session, color, 0.95));
@@ -4455,6 +4467,7 @@ function renderBarsIcon(stats, height = 44, picker = pickWorstProvider, colors =
   if (!provider) return null;
   const session = (provider.windows || []).find((w) => w.kind === 'session');
   const weekly = (provider.windows || []).find((w) => w.kind === 'weekly');
+  const billing = (provider.windows || []).find((w) => w.kind === 'billing');
   const providerImage = trayProviderImages[provider.provider];
   const { trayBarFillWidth, trayBarsLayout } = window.TokenMonitorTrayBars;
   const layout = trayBarsLayout(height);
@@ -4484,8 +4497,15 @@ function renderBarsIcon(stats, height = 44, picker = pickWorstProvider, colors =
     ctx.restore();
   }
 
-  drawBar(layout.barsStartY, Number(session?.remainingPercent));
-  drawBar(layout.barsStartY + layout.barHeight + layout.barGap, Number(weekly?.remainingPercent));
+  if (session || weekly) {
+    drawBar(layout.barsStartY, Number(session?.remainingPercent));
+    drawBar(layout.barsStartY + layout.barHeight + layout.barGap, Number(weekly?.remainingPercent));
+  } else if (billing) {
+    // Billing-only providers (Grok Monthly) have no session/weekly pair — draw the
+    // single monthly bar on the top track and leave the bottom track empty, instead
+    // of painting two empty bars.
+    drawBar(layout.barsStartY, Number(billing.remainingPercent));
+  }
   return canvas.toDataURL('image/png');
 }
 

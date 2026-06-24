@@ -190,15 +190,22 @@ async function fetchMinimaxLimits(options = {}, deps = {}) {
     });
   }
   const fetchJson = deps.fetchJson || (async (u, headers) => {
-    const response = await (deps.fetch || fetch)(u, { headers });
-    if (!response.ok) {
-      const status = response.status === 401 ? 'unauthorized' : response.status === 429 ? 'sourceRateLimited' : 'unavailable';
-      const error = new Error(`${u} returned ${response.status}`);
-      error.status = status;
-      error.statusCode = response.status;
-      throw error;
+    const timeoutMs = Number(deps.fetchTimeoutMs || 12000);
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+    try {
+      const response = await (deps.fetch || fetch)(u, { headers, ...(controller ? { signal: controller.signal } : {}) });
+      if (!response.ok) {
+        const status = (response.status === 401 || response.status === 403) ? 'unauthorized' : response.status === 429 ? 'sourceRateLimited' : 'unavailable';
+        const error = new Error(`${u} returned ${response.status}`);
+        error.status = status;
+        error.statusCode = response.status;
+        throw error;
+      }
+      return response.json();
+    } finally {
+      if (timer) clearTimeout(timer);
     }
-    return response.json();
   });
   const headers = {
     Authorization: `Bearer ${key}`,
