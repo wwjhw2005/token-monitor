@@ -5,14 +5,22 @@
 ## What's changed
 
 ### Added
-- New **Home** view: a default overview that combines a limits alert, top models, a usage trend, and a 12-month activity heatmap on one screen.
-- A new view switcher lets you jump straight to any view, alongside the existing button that cycles to the next one.
-- **Windows:** usage from running WSL distributions is now scanned and merged into your totals automatically (on by default).
-- **OpenCode multiple accounts:** add several OpenCode accounts as named profiles, each with its own rate-limit tracking. (#24)
-- Usage tracking for three more tools: **Pi, Zed, and Kilo Code**. (#25)
+- **GitHub Copilot limits support:** sign in from Settings and show Copilot limit windows alongside the other AI Tool Limits providers.
+- **Grok and Minimax limits support:** show Grok billing/credits and Minimax Token Plan limits from the Limits views, tray, and provider account cards. (#32)
+- Usage tracking for **MiMo Code** and **ZCode**, with matching app icons and WSL discovery markers.
+- **Windows WSL controls:** Settings -> Collection now includes a **Scan tools inside WSL** toggle and a **WSL detection** panel that shows which running distro/home paths contribute usage.
+- **Display currency auto-update:** costs can use daily refreshed exchange rates, with manual overrides still available in Settings. (#33)
+
+### Improved
+- Full collector scans now publish progressive results sooner, reducing the wait during heavier scans. (#27)
+- The collector now preserves its full-scan anchor across restarts and refreshes WSL snapshots on interval ticks, reducing unnecessary full rescans. (#29)
+- Tokscale is bundled at **4.0.4**, including the Codex fork/replay accounting fix.
 
 ### Fixed
-- OpenCode session cookies are no longer included in the renderer settings payload.
+- Stale devices no longer keep old today/month totals alive in Hub aggregates. (#37)
+- Collector period windows now share one capture time, avoiding mismatched boundary timestamps. (#37)
+- Hermes Agent watches are limited to the `state.db` file family so unrelated file changes do not retrigger collection. (#38)
+- WSL usage remains included correctly during warm progressive previews.
 
 ## Which file should I download?
 
@@ -47,14 +55,22 @@ open-source: https://github.com/junhoyeo/tokscale
 ## 更新内容
 
 ### 新增
-- 全新 **主页** 视图：将额度提醒、热门模型、用量趋势和近 12 个月的活动热力图整合到一个概览页面，并作为默认首页。
-- 新增视图切换菜单，可直接跳转到任意视图；原本的按钮仍可循环切换到下一个视图。
-- **Windows：** 现在会自动扫描正在运行的 WSL 发行版用量并合并进总计（默认开启）。
-- **OpenCode 多账号：** 可将多个 OpenCode 账号保存为命名设定档，每个账号都有独立的额度追踪。(#24)
-- 新增三个工具的用量追踪：**Pi、Zed 和 Kilo Code**。(#25)
+- **GitHub Copilot 额度支持：** 可在设置中登录，并与其他 AI 工具用量上限提供方一起显示 Copilot 的额度窗口。
+- **Grok 和 Minimax 额度支持：** 在额度视图、托盘和提供方账号卡片中显示 Grok billing/credits 与 Minimax Token Plan 额度。(#32)
+- 新增 **MiMo Code** 和 **ZCode** 用量追踪，并补齐对应应用图标与 WSL 发现标记。
+- **Windows WSL 控制：** 设置 -> 采集 现在包含 **扫描 WSL 里的工具** 开关，以及显示哪些运行中的发行版/home 路径贡献用量的 **WSL 检测** 面板。
+- **显示币别自动汇率：** 成本可使用每日自动刷新的汇率，仍可在设置中手动覆写。(#33)
+
+### 改进
+- 完整采集扫描现在会更早推送渐进结果，降低重型扫描时的等待感。(#27)
+- 采集器会跨重启保留 full-scan anchor，并在定期扫描时刷新 WSL 快照，减少不必要的完整重扫。(#29)
+- Tokscale 已内置升级到 **4.0.4**，包含 Codex fork/replay 统计修复。
 
 ### 修复
-- OpenCode 的会话 cookie 不再出现在渲染层的设置数据中。
+- Hub 聚合时，过期设备不再让旧的今日/本月总量继续保留。(#37)
+- 采集器的 period windows 现在共用同一个捕获时间，避免边界时间戳不一致。(#37)
+- Hermes Agent 监听范围已限制在 `state.db` 文件族，避免无关文件变化重新触发采集。(#38)
+- WSL 用量在 warm progressive preview 期间会继续正确并入。
 
 ## 应该下载哪个文件？
 
