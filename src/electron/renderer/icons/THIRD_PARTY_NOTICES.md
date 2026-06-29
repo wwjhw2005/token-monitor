@@ -1,16 +1,17 @@
-Settings section icons are local copies of open-source SVG icons.
+Renderer icon assets include local copies of open-source SVG icons.
 
 Sources:
 - Lucide Icons: https://github.com/lucide-icons/lucide
-  - general.svg: sliders-horizontal
-  - main.svg: panels-top-left
-  - collection.svg: database
-  - limits.svg: gauge
-  - accounts.svg: users-round
-  - sync.svg: cloud-sync
-  - appearance.svg: palette
+  - actions/settings.svg: settings
+  - settings/general.svg: sliders-horizontal
+  - settings/main.svg: panels-top-left
+  - settings/collection.svg: database
+  - settings/accounts.svg: users-round
+  - settings/sync.svg: cloud-sync
+  - settings/appearance.svg: palette
+  - views/home.svg: house
 - Tabler Icons: https://github.com/tabler/tabler-icons
-  - window.svg: app-window
+  - settings/window.svg: app-window
 - svg-spinners: https://github.com/rayliwell/svg-spinners
   - inline refresh loading icon: bars-rotate-fade
 

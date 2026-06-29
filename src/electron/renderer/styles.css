@@ -326,6 +326,18 @@ body.floating-bubble-collapsed-right .floating-bubble-tab {
   backdrop-filter: blur(18px);
 }
 .icon-button { width: 34px; height: 28px; padding: 0; font-size: 14px; line-height: 1; }
+.settings-icon-button {
+  display: inline-grid;
+  place-items: center;
+}
+.settings-icon-button::before {
+  content: "";
+  width: 13px;
+  height: 13px;
+  background: currentColor;
+  -webkit-mask: url("icons/actions/settings.svg") center / contain no-repeat;
+  mask: url("icons/actions/settings.svg") center / contain no-repeat;
+}
 .icon-button:hover, .refresh-button:hover, .mode-button:hover, .settings-actions button:hover, .shortcut-recorder button:hover { border-color: var(--line-strong); background: rgba(var(--overlay-rgb), 0.072); }
 .icon-button.active { border-color: rgba(var(--accent-rgb), 0.58); color: var(--green); background: rgba(var(--accent-rgb), 0.08); }
 .settings-panel {
@@ -1624,6 +1636,9 @@ body.floating-bubble-collapsed-right .floating-bubble-tab {
   mask-size: contain;
   -webkit-mask-repeat: no-repeat;
   mask-repeat: no-repeat;
+}
+.home-module-jump.view-icon-limits {
+  transform: translateY(0);
 }
 .home-module-body {
   display: grid;

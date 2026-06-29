@@ -165,11 +165,15 @@ test('refresh button exposes busy, success, and error feedback states', () => {
   assert.match(cssRule(css, '.refresh-button.is-refresh-error'), /border-color:\s*rgba\(255,\s*99,\s*99/);
   assert.match(css, /prefers-reduced-motion:\s*reduce[\s\S]*?\.refresh-button\.is-refreshing \.refresh-button-spinner[\s\S]*?animation:\s*none/);
 
-  const notice = readRendererFile('icons/settings/THIRD_PARTY_NOTICES.md');
+  const notice = readRendererFile('icons/THIRD_PARTY_NOTICES.md');
   assert.match(notice, /inline refresh loading icon: bars-rotate-fade/);
   assert.match(notice, /svg-spinners/);
   assert.match(notice, /svg-spinners license:/);
   assert.match(notice, /Copyright \(c\) Utkarsh Verma/);
   assert.match(notice, /Copyright \(c\) Ryan Halliwell/);
-  assert.equal(fs.existsSync(path.join(rendererDir, 'icons', 'THIRD_PARTY_NOTICES.md')), false, 'icon notices stay in the existing settings notice file');
+  assert.equal(
+    fs.existsSync(path.join(rendererDir, 'icons', 'settings', 'THIRD_PARTY_NOTICES.md')),
+    false,
+    'settings-specific notice file was consolidated into the shared icon notice file',
+  );
 });
