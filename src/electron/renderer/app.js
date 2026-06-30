@@ -178,7 +178,7 @@ function normalizeInitialViewValue(value, allowed, fallback) {
   return allowed.has(raw) ? raw : fallback;
 }
 
-const state = { period: normalizeInitialViewValue(initialViewState.period, viewPeriodValues, 'today'), appUpdate: null, breakdown: normalizeInitialViewValue(initialViewState.breakdown, viewBreakdownValues, 'home'), viewSwitcherOpen: false, viewSwitcherHasOpened: false, settings: null, stats: null, homeHistory: null, homeHistoryBusy: false, homeHistoryRequested: false, homeHistoryPreviewKey: '', homeActivityScrollLeft: null, homeActivityFollowEnd: true, homeActivityResizeObserver: null, serviceStatus: null, serviceStatusBusy: false, serviceProvidersExpanded: false, trendSettingsExpanded: false, homeSettingsExpanded: false, homeLimitSettingsExpanded: false, serviceStatusTicker: null, refreshTimer: null, refreshBusy: false, refreshFeedbackTimer: null, currentTotal: 0, rowSignature: '', streamConnected: false, streamFailure: null, mode: 'idle', appInfo: null, tokscaleStatus: null, tokscaleCheck: null, tokscaleBusy: false, hubInfo: null, cursorAccount: { status: null, error: '' }, cursorAccountExpanded: false, codexAccountExpanded: false, codexAccountError: '', customPricingExpanded: false, opencodeProfileCount: 0, opencodeCookieExpanded: false, deepseekAccountExpanded: false, deepseekPendingCheckSince: 0, minimaxAccountExpanded: false, minimaxPendingCheckSince: 0, copilotAccountExpanded: false, copilotManualExpanded: false, copilotPendingCheckSince: 0, copilotSignInBusy: false, copilotSignInCancelable: false, copilotSignInFlowId: '', copilotAuthorizeMessage: '', copilotLoginStatus: '', copilotErrorMessage: '', floatingBubble: initialFloatingBubble, suppressInitialNumberAnimation: window.__TOKEN_MONITOR_SUPPRESS_INITIAL_NUMBER_ANIMATION__ === true, openSession: null, detailSort: 'time', recordingWindowShortcut: false, windowShortcutInvalid: false };
+const state = { period: normalizeInitialViewValue(initialViewState.period, viewPeriodValues, 'today'), appUpdate: null, breakdown: normalizeInitialViewValue(initialViewState.breakdown, viewBreakdownValues, 'home'), viewSwitcherOpen: false, viewSwitcherHasOpened: false, resetCreditsTooltipHasOpened: false, resetCreditsTooltipActive: false, resetCreditsTooltipRenderPending: false, settings: null, stats: null, homeHistory: null, homeHistoryBusy: false, homeHistoryRequested: false, homeHistoryPreviewKey: '', homeActivityScrollLeft: null, homeActivityFollowEnd: true, homeActivityResizeObserver: null, serviceStatus: null, serviceStatusBusy: false, serviceProvidersExpanded: false, trendSettingsExpanded: false, homeSettingsExpanded: false, homeLimitSettingsExpanded: false, serviceStatusTicker: null, refreshTimer: null, refreshBusy: false, refreshFeedbackTimer: null, currentTotal: 0, rowSignature: '', streamConnected: false, streamFailure: null, mode: 'idle', appInfo: null, tokscaleStatus: null, tokscaleCheck: null, tokscaleBusy: false, hubInfo: null, cursorAccount: { status: null, error: '' }, cursorAccountExpanded: false, codexAccountExpanded: false, codexAccountError: '', customPricingExpanded: false, opencodeProfileCount: 0, opencodeCookieExpanded: false, deepseekAccountExpanded: false, deepseekPendingCheckSince: 0, minimaxAccountExpanded: false, minimaxPendingCheckSince: 0, copilotAccountExpanded: false, copilotManualExpanded: false, copilotPendingCheckSince: 0, copilotSignInBusy: false, copilotSignInCancelable: false, copilotSignInFlowId: '', copilotAuthorizeMessage: '', copilotLoginStatus: '', copilotErrorMessage: '', floatingBubble: initialFloatingBubble, suppressInitialNumberAnimation: window.__TOKEN_MONITOR_SUPPRESS_INITIAL_NUMBER_ANIMATION__ === true, openSession: null, detailSort: 'time', recordingWindowShortcut: false, windowShortcutInvalid: false };
 state.settingsSections = Object.fromEntries(SETTINGS_SECTION_IDS.map((id) => [id, false]));
 const defaultAppearance = { glassOpacity: 68, glassBlur: 32, zoomFactor: 1, systemGlass: true, showLiveDot: true, showToolIcons: true, titleIconOnly: false, settingsInTitlebar: false };
 let preferenceDrag = null;
@@ -1064,6 +1064,113 @@ function formatKiroOverageValue(window) {
   return parts.join(' · ');
 }
 
+function formatCodexResetCreditsValue(resetCredits) {
+  const available = Number(resetCredits?.availableCount);
+  if (!Number.isFinite(available)) return '';
+  const count = Math.max(0, Math.floor(available));
+  if (count <= 0) return '';
+  return `${count} reset${count === 1 ? '' : 's'}`;
+}
+
+function formatCodexResetCreditsExpiry(resetCredits) {
+  const date = resetCredits?.nextExpiresAt ? new Date(resetCredits.nextExpiresAt) : null;
+  if (!date || Number.isNaN(date.getTime())) return '';
+  const diffMs = date.getTime() - Date.now();
+  return diffMs <= 0 ? 'Next expires now' : `Next expires in ${formatDuration(diffMs)}`;
+}
+
+function codexResetCreditExpirationDates(resetCredits) {
+  const values = Array.isArray(resetCredits?.expirations) ? resetCredits.expirations : [];
+  return values
+    .map((value) => new Date(value))
+    .filter((date) => !Number.isNaN(date.getTime()))
+    .sort((a, b) => a.getTime() - b.getTime());
+}
+
+function codexResetCreditExpiryLabel(date) {
+  const diffMs = date.getTime() - Date.now();
+  return diffMs <= 0 ? 'Expires now' : `Expires in ${formatDuration(diffMs)}`;
+}
+
+function resetCreditsTooltipShouldHoldRender() {
+  if (!state.resetCreditsTooltipActive || !els.limitsPanel) return false;
+  return Boolean(els.limitsPanel.querySelector('.limit-reset-credits-info-wrap:hover, .limit-reset-credits-info-wrap:focus-within'));
+}
+
+function flushPendingResetCreditsTooltipRender() {
+  if (!state.resetCreditsTooltipRenderPending || state.breakdown !== 'limits') return;
+  state.resetCreditsTooltipRenderPending = false;
+  renderLimits();
+}
+
+function codexResetCreditsNode(resetCredits) {
+  const valueText = formatCodexResetCreditsValue(resetCredits);
+  if (!valueText) return null;
+  const expiryText = formatCodexResetCreditsExpiry(resetCredits);
+  const expirationDates = codexResetCreditExpirationDates(resetCredits);
+  const item = document.createElement('div');
+  item.className = 'limit-window limit-window-wide limit-window-note limit-reset-credits';
+  const line = document.createElement('div');
+  line.className = 'limit-reset-credits-line';
+  const value = document.createElement('span');
+  value.className = 'limit-reset-credits-value';
+  value.textContent = valueText;
+  line.append(value);
+  if (expiryText) {
+    const expiryGroup = document.createElement('span');
+    expiryGroup.className = 'limit-reset-credits-expiry-group';
+    const expiry = document.createElement('span');
+    expiry.className = 'limit-reset-credits-expiry';
+    expiry.textContent = expiryText;
+    expiryGroup.append(expiry);
+    if (expirationDates.length > 1) {
+      const infoWrap = document.createElement('span');
+      infoWrap.className = 'limit-reset-credits-info-wrap';
+      infoWrap.classList.toggle('has-opened', state.resetCreditsTooltipHasOpened);
+      const info = document.createElement('span');
+      info.className = 'limit-reset-credits-info';
+      info.textContent = 'i';
+      info.tabIndex = 0;
+      info.setAttribute('aria-label', expirationDates.map((date, index) => `Reset ${index + 1}: ${codexResetCreditExpiryLabel(date)}`).join(', '));
+      const tooltip = document.createElement('span');
+      tooltip.className = 'limit-reset-credits-tooltip';
+      tooltip.setAttribute('role', 'tooltip');
+      expirationDates.forEach((date, index) => {
+        const row = document.createElement('span');
+        row.className = 'limit-reset-credit-detail';
+        const label = document.createElement('span');
+        label.textContent = `Reset ${index + 1}`;
+        const tooltipExpiry = document.createElement('span');
+        tooltipExpiry.textContent = codexResetCreditExpiryLabel(date);
+        row.append(label, tooltipExpiry);
+        tooltip.append(row);
+      });
+      const markResetCreditsTooltipOpened = () => {
+        state.resetCreditsTooltipHasOpened = true;
+        state.resetCreditsTooltipActive = true;
+        infoWrap.classList.add('has-opened');
+      };
+      const releaseResetCreditsTooltip = () => {
+        requestAnimationFrame(() => {
+          if (infoWrap.matches(':hover, :focus-within')) return;
+          state.resetCreditsTooltipActive = false;
+          flushPendingResetCreditsTooltipRender();
+        });
+      };
+      infoWrap.addEventListener('pointerenter', markResetCreditsTooltipOpened);
+      infoWrap.addEventListener('focusin', markResetCreditsTooltipOpened);
+      infoWrap.addEventListener('pointerleave', releaseResetCreditsTooltip);
+      infoWrap.addEventListener('focusout', releaseResetCreditsTooltip);
+      infoWrap.append(info, tooltip);
+      expiryGroup.append(infoWrap);
+    }
+    line.append(expiryGroup);
+  }
+  item.append(line);
+  item.setAttribute('aria-label', ['Reset credits', valueText, expiryText].filter(Boolean).join(', '));
+  return item;
+}
+
 const CURRENCY_SYMBOLS = { CNY: '¥', USD: '$' };
 
 function formatMoney(value, currency) {
@@ -1228,7 +1335,14 @@ function renderLimitProviderHead(id, label, provider, color, options = {}) {
 function renderProviderWindows(provider, color) {
   const windows = document.createElement('div');
   windows.className = 'limit-windows';
-  if (provider.provider === 'cursor') {
+  if (provider.provider === 'codex') {
+    const session = windowForKind(provider, 'session');
+    const weekly = windowForKind(provider, 'weekly');
+    if (session) windows.append(limitWindowNode(session.label || 'Session', session, color, 0.95));
+    if (weekly) windows.append(limitWindowNode(weekly.label || 'Weekly', weekly, color, 0.68));
+    const resetNode = codexResetCreditsNode(provider.resetCredits);
+    if (resetNode) windows.append(resetNode);
+  } else if (provider.provider === 'cursor') {
     windows.classList.add('limit-windows-cursor');
     const billingWindows = windowsForKind(provider, 'billing');
     const visibleWindows = billingWindows.length > 0 ? billingWindows : [null];
@@ -1409,6 +1523,11 @@ function renderOpenCodeAccountGroup(label, providers, color) {
 
 function renderLimits() {
   if (!els.limitsPanel) return;
+  if (resetCreditsTooltipShouldHoldRender()) {
+    state.resetCreditsTooltipRenderPending = true;
+    return;
+  }
+  state.resetCreditsTooltipRenderPending = false;
   const limitsEnabled = state.settings?.limitsEnabled !== false;
   const enabled = enabledLimitProviderSet();
   const providers = providersByLimitProviderId(state.stats?.limits?.providers || []);

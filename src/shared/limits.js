@@ -136,6 +136,58 @@ function normalizeProviderBalance(input) {
   };
 }
 
+function normalizeResetCreditExpirations(input) {
+  const raw = input?.expirations ?? input?.expirationTimes ?? input?.expiresAtList ?? input?.expires_at_list ?? input?.credits;
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set();
+  const expirations = [];
+  for (const value of raw) {
+    if (value && typeof value === 'object') {
+      const status = String(value.status || '').toLowerCase();
+      if (status && status !== 'available') continue;
+    }
+    const sourceValue = value && typeof value === 'object'
+      ? value.expiresAt ?? value.expires_at ?? value.nextExpiresAt ?? value.next_expires_at
+      : value;
+    const normalized = normalizeIsoTimestamp(sourceValue);
+    if (!normalized || seen.has(normalized)) continue;
+    seen.add(normalized);
+    expirations.push(normalized);
+  }
+  expirations.sort((a, b) => Date.parse(a) - Date.parse(b));
+  return expirations;
+}
+
+function normalizeProviderResetCredits(input) {
+  if (!input || typeof input !== 'object') return null;
+  const available = numberOrNull(
+    input.availableCount
+    ?? input.available_count
+    ?? input.available
+    ?? input.remainingCount
+    ?? input.remaining_count
+  );
+  const nextExpiresAt = normalizeIsoTimestamp(
+    input.nextExpiresAt
+    ?? input.next_expires_at
+    ?? input.nextExpirationAt
+    ?? input.next_expiration_at
+    ?? input.expiresAt
+    ?? input.expires_at
+  );
+  const expirations = normalizeResetCreditExpirations(input);
+  const firstExpiration = expirations[0] || null;
+  const effectiveNextExpiresAt = [nextExpiresAt, firstExpiration]
+    .filter(Boolean)
+    .sort((a, b) => Date.parse(a) - Date.parse(b))[0] || null;
+  if (available === null && !effectiveNextExpiresAt && expirations.length === 0) return null;
+  return {
+    availableCount: available === null ? null : Math.max(0, Math.floor(available)),
+    nextExpiresAt: effectiveNextExpiresAt,
+    ...(expirations.length > 0 ? { expirations } : {})
+  };
+}
+
 function normalizeRegion(value) {
   const raw = String(value || '').trim().toLowerCase();
   if (!raw) return '';
@@ -164,6 +216,7 @@ function normalizeLimitProvider(input) {
     windows,
     balanceUsd: numberOrNull(input.balanceUsd),
     balance: normalizeProviderBalance(input.balance),
+    resetCredits: normalizeProviderResetCredits(input.resetCredits ?? input.rateLimitResetCredits ?? input.rate_limit_reset_credits),
     region: normalizeRegion(input.region)
   };
 }

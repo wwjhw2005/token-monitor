@@ -94,7 +94,17 @@ test('syncLimits carries Codex account key, email and plan label to the authenti
   const payload = syncLimits({
     updatedAt: '2026-06-14T10:00:00.000Z',
     providers: [
-      codexProvider('sha256:codex-a', 'a@example.com', 18, '2026-06-14T10:00:00.000Z')
+      {
+        ...codexProvider('sha256:codex-a', 'a@example.com', 18, '2026-06-14T10:00:00.000Z'),
+        resetCredits: {
+          availableCount: 2,
+          nextExpiresAt: '2026-07-18T23:00:00Z',
+          expirations: [
+            '2026-07-18T23:00:00Z',
+            '2026-07-19T01:00:00Z'
+          ]
+        }
+      }
     ]
   });
 
@@ -104,6 +114,14 @@ test('syncLimits carries Codex account key, email and plan label to the authenti
   assert.equal(payload.providers[0].accountName, 'a');
   assert.equal(payload.providers[0].accountEmail, 'a@example.com');
   assert.equal(payload.providers[0].accountLabel, 'Plus');
+  assert.deepEqual(payload.providers[0].resetCredits, {
+    availableCount: 2,
+    nextExpiresAt: '2026-07-18T23:00:00.000Z',
+    expirations: [
+      '2026-07-18T23:00:00.000Z',
+      '2026-07-19T01:00:00.000Z'
+    ]
+  });
 });
 
 test('publicLimits strips Codex account identity fields', () => {

@@ -40,6 +40,8 @@ const CLAUDE_OAUTH_CLIENT_ID = '9d1c250a-e61b-44d9-88ed-5944d1962f5e';
 const CLAUDE_REFRESH_LEEWAY_MS = 5 * 60 * 1000;
 const CLAUDE_SESSION_WINDOW_MINUTES = 5 * 60;
 const CLAUDE_WEEKLY_WINDOW_MINUTES = 7 * 24 * 60;
+const CODEX_CHATGPT_BASE_URL = 'https://chatgpt.com/backend-api';
+const CODEX_RESET_CREDITS_PATH = '/wham/rate-limit-reset-credits';
 const TOKEN_MONITOR_USER_AGENT = `token-monitor/${appVersion()} (+https://github.com/Javis603/token-monitor)`;
 
 function nowIso(nowMs) {
@@ -1124,6 +1126,158 @@ function codexRateLimitSnapshot(payload = {}) {
   return rateLimitsById.codex || payload.rateLimits || payload.rate_limits || {};
 }
 
+function codexResetCreditsSnapshot(payload = {}) {
+  const rateLimits = codexRateLimitSnapshot(payload);
+  return payload.rateLimitResetCredits
+    || payload.rate_limit_reset_credits
+    || rateLimits.rateLimitResetCredits
+    || rateLimits.rate_limit_reset_credits
+    || null;
+}
+
+function codexAccessTokenFromAuth(auth) {
+  const tokens = auth?.tokens || auth || {};
+  return String(tokens.access_token || auth?.access_token || '').trim();
+}
+
+function codexProviderAccountIdFromAuth(auth) {
+  return codexAuthIdentity(auth).providerAccountId;
+}
+
+function parseCodexChatGptBaseUrl(configContents) {
+  for (const rawLine of String(configContents || '').split(/\r?\n/)) {
+    const line = rawLine.split('#')[0].trim();
+    if (!line) continue;
+    const match = /^chatgpt_base_url\s*=\s*(.+)$/.exec(line);
+    if (!match) continue;
+    return match[1].trim().replace(/^["']|["']$/g, '').trim();
+  }
+  return '';
+}
+
+function normalizeCodexChatGptBaseUrl(value) {
+  let normalized = String(value || '').trim() || CODEX_CHATGPT_BASE_URL;
+  normalized = normalized.replace(/\/+$/, '');
+  if (/^https:\/\/(?:chatgpt|chat)\.openai\.com$/i.test(normalized) || /^https:\/\/chatgpt\.com$/i.test(normalized)) {
+    normalized += '/backend-api';
+  }
+  return normalized;
+}
+
+function codexChatGptBaseUrl(deps = {}) {
+  const env = deps.env || process.env;
+  const read = deps.readFileSync || fs.readFileSync;
+  const base = env.CODEX_HOME || path.join(os.homedir(), '.codex');
+  const configPath = deps.codexConfigPath || path.join(base, 'config.toml');
+  try {
+    const parsed = parseCodexChatGptBaseUrl(read(configPath, 'utf8'));
+    if (parsed) return normalizeCodexChatGptBaseUrl(parsed);
+  } catch (_) {}
+  return CODEX_CHATGPT_BASE_URL;
+}
+
+function parseCodexResetCreditsPayload(payload, nowMs = Date.now()) {
+  const availableCount = Number(payload?.available_count ?? payload?.availableCount);
+  if (!Number.isFinite(availableCount) || availableCount < 0) {
+    throw errorWithStatus('unavailable', 'Invalid Codex reset credits response');
+  }
+  const expirations = [];
+  for (const credit of Array.isArray(payload?.credits) ? payload.credits : []) {
+    const status = String(credit?.status || '').toLowerCase();
+    if (status !== 'available') continue;
+    const expiresAt = credit?.expires_at ?? credit?.expiresAt;
+    const expiresMs = Date.parse(expiresAt);
+    if (!Number.isFinite(expiresMs) || expiresMs <= nowMs) continue;
+    expirations.push(new Date(expiresMs).toISOString());
+  }
+  expirations.sort((a, b) => Date.parse(a) - Date.parse(b));
+  return {
+    availableCount: Math.floor(availableCount),
+    nextExpiresAt: expirations[0] || null,
+    ...(expirations.length > 0 ? { expirations } : {})
+  };
+}
+
+async function fetchCodexResetCredits(deps = {}) {
+  const read = deps.readFileSync || fs.readFileSync;
+  const authPath = deps.codexAuthPath || codexAuthPath(deps.env || process.env);
+  let auth;
+  try {
+    auth = JSON.parse(read(authPath, 'utf8'));
+  } catch (_) {
+    throw errorWithStatus('notConfigured', 'Codex auth.json not found');
+  }
+  const accessToken = codexAccessTokenFromAuth(auth);
+  if (!accessToken) throw errorWithStatus('unauthorized', 'Codex access token not found');
+
+  const fetchFn = deps.fetch || fetch;
+  const timeoutMs = Number(deps.codexResetCreditsTimeoutMs || 4000);
+  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+  const url = `${codexChatGptBaseUrl(deps)}${CODEX_RESET_CREDITS_PATH}`;
+  const accountId = deps.codexAccountId || codexProviderAccountIdFromAuth(auth);
+  try {
+    const headers = {
+      authorization: `Bearer ${accessToken}`,
+      accept: 'application/json',
+      'user-agent': TOKEN_MONITOR_USER_AGENT,
+      'openai-beta': 'codex-1',
+      originator: 'Codex Desktop'
+    };
+    if (accountId) headers['chatgpt-account-id'] = accountId;
+    const response = await fetchFn(url, {
+      method: 'GET',
+      headers,
+      ...(controller ? { signal: controller.signal } : {})
+    });
+    if (!response.ok) {
+      const status = response.status === 401 || response.status === 403 ? 'unauthorized'
+        : response.status === 429 ? 'sourceRateLimited' : 'unavailable';
+      throw errorWithStatus(status, `rate-limit-reset-credits returned ${response.status}`);
+    }
+    const json = await response.json();
+    return parseCodexResetCreditsPayload(json, (deps.now || Date.now)());
+  } catch (error) {
+    if (error?.name === 'AbortError') throw errorWithStatus('unavailable', 'rate-limit-reset-credits timed out');
+    throw error;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+function mergeCodexResetCredits(primary, fallback) {
+  const first = primary && typeof primary === 'object' ? primary : null;
+  const second = fallback && typeof fallback === 'object' ? fallback : null;
+  if (!first) return second;
+  if (!second) return first;
+  const expirations = first.expirations ?? first.expirationTimes ?? first.expiresAtList ?? first.expires_at_list
+    ?? second.expirations ?? second.expirationTimes ?? second.expiresAtList ?? second.expires_at_list;
+  return {
+    availableCount: first.availableCount ?? first.available_count ?? second.availableCount ?? second.available_count,
+    nextExpiresAt: first.nextExpiresAt ?? first.next_expires_at ?? first.expiresAt ?? first.expires_at
+      ?? second.nextExpiresAt ?? second.next_expires_at ?? second.expiresAt ?? second.expires_at,
+    ...(expirations ? { expirations } : {})
+  };
+}
+
+async function readCodexResetCredits(deps = {}) {
+  if (deps.readCodexResetCredits) return deps.readCodexResetCredits(deps);
+  return fetchCodexResetCredits(deps);
+}
+
+async function withCodexOAuthResetCredits(payload, deps = {}) {
+  const existing = codexResetCreditsSnapshot(payload);
+  try {
+    const oauthResetCredits = await readCodexResetCredits(deps);
+    return {
+      ...payload,
+      rateLimitResetCredits: mergeCodexResetCredits(oauthResetCredits, existing)
+    };
+  } catch (_) {
+    return payload;
+  }
+}
+
 function codexAccountLabel(payload = {}) {
   const snapshot = codexRateLimitSnapshot(payload);
   const account = payload.account || {};
@@ -1163,7 +1317,8 @@ function mapCodexRateLimitsToProvider(payload, meta = {}) {
     sourceDetail: meta.sourceDetail || payload.sourceDetail,
     status: 'ok',
     updatedAt: meta.updatedAt,
-    windows
+    windows,
+    resetCredits: codexResetCreditsSnapshot(payload)
   });
 }
 
@@ -1570,6 +1725,7 @@ async function readCodexRpcWithCommand(command, deps = {}) {
       account,
       rateLimits,
       rateLimitsByLimitId,
+      rateLimitResetCredits: rateLimitResult?.rateLimitResetCredits || rateLimitResult?.rate_limit_reset_credits || null,
       sourceDetail: codexCommandSourceDetail(command, deps.platform || process.platform)
     };
   } finally {
@@ -1630,7 +1786,7 @@ async function fetchManagedCodexAccountLimits(account, _options = {}, deps = {})
   const reader = deps.readCodexRpc || readCodexRpc;
   const accountKeySeed = account.accountKey || account.email || account.id || account.homePath;
   try {
-    const payload = await reader(accountDeps);
+    const payload = await withCodexOAuthResetCredits(await reader(accountDeps), accountDeps);
     const email = payload.account?.email || account.email;
     const identity = account.accountKey || email || account.id || account.homePath;
     return mapCodexRateLimitsToProvider(payload, {
@@ -1672,7 +1828,7 @@ function readLiveCodexIdentity(deps = {}) {
 
 async function fetchLiveCodexAccount(deps = {}, nowMs = Date.now()) {
   const reader = deps.readCodexRpc || readCodexRpc;
-  const payload = await reader(deps);
+  const payload = await withCodexOAuthResetCredits(await reader(deps), deps);
   const authIdentity = readLiveCodexIdentity(deps);
   const email = authIdentity.email || payload.account?.email || '';
   const fallbackSeed = payload.account?.email || `${payload.account?.type || 'account'}:${payload.account?.planType || ''}:${deps.codexAuthPath || codexAuthPath(deps.env || process.env)}`;

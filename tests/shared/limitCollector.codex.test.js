@@ -312,3 +312,155 @@ test('Codex exhausted quota remains a live provider with zero remaining window',
   assert.equal(provider.windows[1].kind, 'weekly');
   assert.equal(provider.windows[1].remainingPercent, 61);
 });
+
+test('Codex provider preserves manual reset credits from RPC payload', () => {
+  const provider = mapCodexRateLimitsToProvider({
+    account: { planType: 'plus' },
+    rateLimits: {
+      primary: {
+        usedPercent: 54,
+        resetsAt: 1782801999,
+        windowDurationMins: 300
+      },
+      secondary: {
+        usedPercent: 8,
+        resetsAt: 1783388799,
+        windowDurationMins: 10080
+      }
+    },
+    rateLimitResetCredits: {
+      availableCount: 2,
+      nextExpiresAt: '2026-07-18T23:00:00Z',
+      expirations: [
+        '2026-07-18T23:00:00Z',
+        '2026-07-19T01:00:00Z'
+      ]
+    }
+  }, {
+    source: 'rpc',
+    sourceDetail: 'app',
+    updatedAt: '2026-06-30T00:00:00Z'
+  });
+
+  assert.deepEqual(provider.resetCredits, {
+    availableCount: 2,
+    nextExpiresAt: '2026-07-18T23:00:00.000Z',
+    expirations: [
+      '2026-07-18T23:00:00.000Z',
+      '2026-07-19T01:00:00.000Z'
+    ]
+  });
+});
+
+test('fetchCodexLimits keeps reset credits returned by the Codex RPC reader', async () => {
+  const { EventEmitter } = require('node:events');
+  const providers = await fetchCodexLimits({}, {
+    now: () => Date.parse('2026-06-30T00:00:00Z'),
+    env: { PATH: '/usr/bin' },
+    codexCommand: 'codex',
+    ...noLiveAuth,
+    spawn: () => {
+      const child = new EventEmitter();
+      child.stdout = new EventEmitter();
+      child.stderr = new EventEmitter();
+      child.stdin = {
+        write(line) {
+          const message = JSON.parse(String(line));
+          const respond = (result) => {
+            queueMicrotask(() => child.stdout.emit('data', `${JSON.stringify({ id: message.id, result })}\n`));
+          };
+          if (message.method === 'initialize') respond({});
+          if (message.method === 'account/rateLimits/read') {
+            respond({
+              rateLimits: {
+                primary: { usedPercent: 54, resetsAt: '2026-06-30T05:00:00Z', windowDurationMins: 300 },
+                secondary: { usedPercent: 8, resetsAt: '2026-07-07T00:00:00Z', windowDurationMins: 10080 }
+              },
+              rateLimitResetCredits: { availableCount: 2 }
+            });
+          }
+          if (message.method === 'account/read') respond({ account: { email: 'live@example.com', planType: 'plus' } });
+        }
+      };
+      child.kill = () => {};
+      return child;
+    }
+  });
+
+  assert.equal(providers.resetCredits.availableCount, 2);
+});
+
+test('fetchCodexLimits augments reset credits expiry from the Codex OAuth endpoint', async () => {
+  const idToken = makeIdToken({ email: 'live@example.com', chatgpt_account_id: 'acct_live' });
+  const fetches = [];
+  const providers = await fetchCodexLimits({}, {
+    now: () => Date.parse('2026-06-30T00:00:00Z'),
+    env: { PATH: '/usr/bin', CODEX_HOME: '/tmp/token-monitor-codex/live' },
+    codexAuthPath: '/tmp/token-monitor-codex/live/auth.json',
+    codexCommand: 'codex',
+    readFileSync: (file) => {
+      if (String(file).endsWith('auth.json')) {
+        return JSON.stringify({ tokens: { access_token: 'access-token', id_token: idToken } });
+      }
+      if (String(file).endsWith('config.toml')) {
+        return 'chatgpt_base_url = "https://chatgpt.com/backend-api/"\n';
+      }
+      throw new Error(`unexpected read ${file}`);
+    },
+    fetch: async (url, options) => {
+      fetches.push({ url, options });
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          credits: [
+            {
+              id: 'expired',
+              status: 'available',
+              expires_at: '2026-06-17T00:39:53Z'
+            },
+            {
+              id: 'later',
+              status: 'available',
+              expires_at: '2026-07-18T00:39:53.731630Z'
+            },
+            {
+              id: 'earlier',
+              status: 'available',
+              expires_at: '2026-07-12T04:03:43.263391Z'
+            },
+            {
+              id: 'future-status',
+              status: 'future_status',
+              expires_at: '2026-07-10T04:03:43Z'
+            }
+          ],
+          available_count: 2
+        })
+      };
+    },
+    readCodexRpc: async () => ({
+      account: { email: 'live@example.com', planType: 'plus' },
+      rateLimits: {
+        primary: { usedPercent: 54, resetsAt: '2026-06-30T05:00:00Z', windowDurationMins: 300 }
+      },
+      rateLimitResetCredits: { availableCount: 2 },
+      sourceDetail: 'app'
+    })
+  });
+
+  assert.equal(fetches.length, 1);
+  assert.equal(fetches[0].url, 'https://chatgpt.com/backend-api/wham/rate-limit-reset-credits');
+  assert.equal(fetches[0].options.headers.authorization, 'Bearer access-token');
+  assert.equal(fetches[0].options.headers['chatgpt-account-id'], 'acct_live');
+  assert.equal(fetches[0].options.headers['openai-beta'], 'codex-1');
+  assert.equal(fetches[0].options.headers.originator, 'Codex Desktop');
+  assert.deepEqual(providers.resetCredits, {
+    availableCount: 2,
+    nextExpiresAt: '2026-07-12T04:03:43.263Z',
+    expirations: [
+      '2026-07-12T04:03:43.263Z',
+      '2026-07-18T00:39:53.731Z'
+    ]
+  });
+});
