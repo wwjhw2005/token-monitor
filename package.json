@@ -17,9 +17,11 @@
     "prepack": "npm run icons",
     "predist:mac": "npm run icons",
     "predist:win": "npm run icons",
+    "predist:linux": "npm run icons",
     "pack": "electron-builder --dir",
     "dist:mac": "electron-builder --mac --arm64",
     "dist:win": "electron-builder --win --x64",
+    "dist:linux": "electron-builder --linux --x64",
     "lint": "eslint .",
     "verify": "npm run lint && npm test"
   },
@@ -79,6 +81,20 @@
         }
       ],
       "icon": "build/icons/icon.ico"
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "category": "Development",
+      "icon": "build/icons",
+      "synopsis": "Live token & cost widget for AI coding tools",
+      "description": "Real-time token, cost, and AI limits widget with multi-device sync for Claude Code, Codex, OpenCode and more."
     },
     "publish": null
   },
