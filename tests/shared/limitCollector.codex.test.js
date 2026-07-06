@@ -125,6 +125,52 @@ test('Codex provider preserves source detail for renderer labels', () => {
   assert.equal(provider.accountEmail, 'user@example.com');
 });
 
+test('Codex provider reads quota windows from alternate rate limit ids', () => {
+  const provider = mapCodexRateLimitsToProvider({
+    account: { email: 'user@example.com', planType: 'plus' },
+    rateLimits: { planType: 'plus' },
+    rateLimitsByLimitId: {
+      'gpt-5.4': {
+        primary: {
+          usedPercent: 10,
+          resetsAt: '2026-06-01T05:00:00Z',
+          windowDurationMins: 300
+        },
+        secondary: {
+          usedPercent: 25,
+          resetsAt: '2026-06-07T00:00:00Z',
+          windowDurationMins: 10080
+        }
+      }
+    }
+  }, {
+    source: 'rpc',
+    sourceDetail: 'app',
+    updatedAt: '2026-06-01T00:00:00Z'
+  });
+
+  assert.equal(provider.status, 'ok');
+  assert.deepEqual(provider.windows.map((window) => window.kind), ['session', 'weekly']);
+  assert.equal(provider.windows[0].remainingPercent, 90);
+  assert.equal(provider.windows[1].remainingPercent, 75);
+});
+
+test('Codex provider keeps successful empty quota reads as ok', () => {
+  const provider = mapCodexRateLimitsToProvider({
+    account: { email: 'user@example.com', planType: 'plus' },
+    rateLimits: { planType: 'plus' },
+    rateLimitsByLimitId: {}
+  }, {
+    source: 'rpc',
+    sourceDetail: 'app',
+    updatedAt: '2026-06-01T00:00:00Z'
+  });
+
+  assert.equal(provider.status, 'ok');
+  assert.equal(provider.accountLabel, 'Plus');
+  assert.deepEqual(provider.windows, []);
+});
+
 test('Codex provider supports managed-account source detail', () => {
   const provider = mapCodexRateLimitsToProvider({
     account: { email: 'managed@example.com', planType: 'plus' },
@@ -303,6 +349,111 @@ test('fetchCodexLimits fills the live account email from auth.json when the RPC 
   assert.ok(live, 'live account should be present');
   assert.equal(live.accountEmail, 'live@example.com');
   assert.match(live.accountKey, /^sha256:[0-9a-f]{64}$/);
+});
+
+test('fetchCodexLimits retries empty Codex quota reads on the same RPC session', async () => {
+  const { EventEmitter } = require('node:events');
+  let spawns = 0;
+  let rateLimitReads = 0;
+  const providers = await fetchCodexLimits({}, {
+    now: () => Date.parse('2026-06-01T00:00:00Z'),
+    env: { PATH: '/usr/bin' },
+    codexCommand: 'codex',
+    codexEmptyQuotaRetryDelayMs: 0,
+    ...noLiveAuth,
+    spawn: () => {
+      spawns += 1;
+      const child = new EventEmitter();
+      child.stdout = new EventEmitter();
+      child.stderr = new EventEmitter();
+      child.stdin = {
+        write(line) {
+          const message = JSON.parse(String(line));
+          const respond = (result) => {
+            queueMicrotask(() => child.stdout.emit('data', `${JSON.stringify({ id: message.id, result })}\n`));
+          };
+          if (message.method === 'initialize') respond({});
+          if (message.method === 'account/rateLimits/read') {
+            rateLimitReads += 1;
+            respond(rateLimitReads === 1
+              ? {
+                  rateLimits: { planType: 'plus' },
+                  rateLimitsByLimitId: {}
+                }
+              : {
+                  rateLimits: {
+                    primary: {
+                      usedPercent: 4,
+                      resetsAt: '2026-06-01T05:00:00Z',
+                      windowDurationMins: 300
+                    }
+                  }
+                });
+          }
+          if (message.method === 'account/read') respond({ account: { email: 'live@example.com', planType: 'plus' } });
+        }
+      };
+      child.kill = () => {};
+      return child;
+    }
+  });
+
+  assert.equal(spawns, 1);
+  assert.equal(rateLimitReads, 2);
+  assert.equal(providers.status, 'ok');
+  assert.equal(providers.accountLabel, 'Plus');
+  assert.equal(providers.windows[0].remainingPercent, 96);
+});
+
+test('fetchCodexLimits does not retry usage-based Codex plans without quota windows', async () => {
+  const { EventEmitter } = require('node:events');
+  const cases = [
+    { planType: 'enterprise_cbp_usage_based', label: 'Enterprise' },
+    { planType: 'self serve business usage based', label: 'Business' }
+  ];
+
+  for (const { planType, label } of cases) {
+    let spawns = 0;
+    let rateLimitReads = 0;
+    const providers = await fetchCodexLimits({}, {
+      now: () => Date.parse('2026-06-01T00:00:00Z'),
+      env: { PATH: '/usr/bin' },
+      codexCommand: 'codex',
+      codexEmptyQuotaRetryDelayMs: 0,
+      ...noLiveAuth,
+      spawn: () => {
+        spawns += 1;
+        const child = new EventEmitter();
+        child.stdout = new EventEmitter();
+        child.stderr = new EventEmitter();
+        child.stdin = {
+          write(line) {
+            const message = JSON.parse(String(line));
+            const respond = (result) => {
+              queueMicrotask(() => child.stdout.emit('data', `${JSON.stringify({ id: message.id, result })}\n`));
+            };
+            if (message.method === 'initialize') respond({});
+            if (message.method === 'account/rateLimits/read') {
+              rateLimitReads += 1;
+              respond({
+                rateLimits: { planType },
+                rateLimitsByLimitId: {}
+              });
+            }
+            if (message.method === 'account/read') respond({ account: { email: 'live@example.com', planType } });
+          }
+        };
+        child.kill = () => {};
+        return child;
+      }
+    });
+
+    assert.equal(spawns, 1);
+    assert.equal(rateLimitReads, 1);
+    assert.equal(providers.status, 'ok');
+    assert.equal(providers.accountLabel, label);
+    assert.deepEqual(providers.windows, []);
+  }
 });
 
 test('Codex exhausted quota remains a live provider with zero remaining window', () => {

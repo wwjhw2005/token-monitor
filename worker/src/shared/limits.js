@@ -276,11 +276,18 @@ function providerCollapseKey(provider) {
   return provider.provider;
 }
 
+function providerWindowRank(provider) {
+  if (provider?.provider !== 'codex') return 0;
+  return Array.isArray(provider.windows) && provider.windows.length > 0 ? 1 : 0;
+}
+
 function pickBetterProvider(current, candidate) {
   if (!current) return candidate;
   if (current.stale !== candidate.stale) return current.stale ? candidate : current;
   const rankDiff = statusRank(candidate.status) - statusRank(current.status);
   if (rankDiff !== 0) return rankDiff > 0 ? candidate : current;
+  const windowRankDiff = providerWindowRank(candidate) - providerWindowRank(current);
+  if (windowRankDiff !== 0) return windowRankDiff > 0 ? candidate : current;
   return timestampMs(candidate.updatedAt) >= timestampMs(current.updatedAt) ? candidate : current;
 }
 

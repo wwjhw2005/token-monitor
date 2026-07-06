@@ -42,6 +42,7 @@ const CLAUDE_SESSION_WINDOW_MINUTES = 5 * 60;
 const CLAUDE_WEEKLY_WINDOW_MINUTES = 7 * 24 * 60;
 const CODEX_CHATGPT_BASE_URL = 'https://chatgpt.com/backend-api';
 const CODEX_RESET_CREDITS_PATH = '/wham/rate-limit-reset-credits';
+const CODEX_EMPTY_QUOTA_RETRY_DELAY_MS = 300;
 const TOKEN_MONITOR_USER_AGENT = `token-monitor/${appVersion()} (+https://github.com/Javis603/token-monitor)`;
 
 function nowIso(nowMs) {
@@ -1144,9 +1145,28 @@ function codexWindowKind(name, window) {
   return 'session';
 }
 
+function hasCodexRateLimitWindows(snapshot) {
+  return Boolean(snapshot && typeof snapshot === 'object' && (snapshot.primary || snapshot.secondary));
+}
+
+function codexRateLimitsById(payload = {}) {
+  return payload.rateLimitsByLimitId || payload.rate_limits_by_limit_id || {};
+}
+
+function codexDirectRateLimits(payload = {}) {
+  return payload.rateLimits || payload.rate_limits || {};
+}
+
 function codexRateLimitSnapshot(payload = {}) {
-  const rateLimitsById = payload.rateLimitsByLimitId || payload.rate_limits_by_limit_id || {};
-  return rateLimitsById.codex || payload.rateLimits || payload.rate_limits || {};
+  const rateLimitsById = codexRateLimitsById(payload);
+  const direct = codexDirectRateLimits(payload);
+  if (hasCodexRateLimitWindows(rateLimitsById.codex)) return rateLimitsById.codex;
+  if (hasCodexRateLimitWindows(direct)) return direct;
+  for (const [id, snapshot] of Object.entries(rateLimitsById)) {
+    if (id === 'codex') continue;
+    if (hasCodexRateLimitWindows(snapshot)) return snapshot;
+  }
+  return rateLimitsById.codex || direct || {};
 }
 
 function codexResetCreditsSnapshot(payload = {}) {
@@ -1302,11 +1322,21 @@ async function withCodexOAuthResetCredits(payload, deps = {}) {
 }
 
 function codexAccountLabel(payload = {}) {
+  return codexPlanLabelFromParts(...codexPlanParts(payload));
+}
+
+function codexPlanParts(payload = {}) {
   const snapshot = codexRateLimitSnapshot(payload);
+  const direct = codexDirectRateLimits(payload);
+  const codexSnapshot = codexRateLimitsById(payload).codex || {};
   const account = payload.account || {};
-  return codexPlanLabelFromParts(
+  return [
     snapshot.planType,
     snapshot.plan_type,
+    direct.planType,
+    direct.plan_type,
+    codexSnapshot.planType,
+    codexSnapshot.plan_type,
     account.planType,
     account.plan_type,
     account.loginMethod,
@@ -1315,7 +1345,33 @@ function codexAccountLabel(payload = {}) {
     account.subscription?.planType,
     account.subscription?.plan_type,
     account.subscription?.plan
+  ];
+}
+
+function codexPlanCanHaveQuotaWindows(payload = {}) {
+  const raw = codexPlanParts(payload).filter(Boolean).join(' ').toLowerCase();
+  return !(raw.includes('usage_based') || raw.includes('usage based') || raw.includes('cbp'));
+}
+
+function shouldRetryCodexEmptyQuotaPayload(payload = {}) {
+  if (hasCodexRateLimitWindows(codexRateLimitSnapshot(payload))) return false;
+  if (!codexPlanCanHaveQuotaWindows(payload)) return false;
+  const account = payload.account || {};
+  return Boolean(
+    codexAccountLabel(payload)
+    || account.email
+    || account.planType
+    || account.plan_type
+    || account.type
   );
+}
+
+async function waitForCodexEmptyQuotaRetry(deps = {}) {
+  const delayMs = Number(deps.codexEmptyQuotaRetryDelayMs ?? CODEX_EMPTY_QUOTA_RETRY_DELAY_MS);
+  if (!Number.isFinite(delayMs) || delayMs <= 0) return;
+  await new Promise((resolve) => {
+    setTimeout(resolve, delayMs);
+  });
 }
 
 function mapCodexRateLimitsToProvider(payload, meta = {}) {
@@ -1727,6 +1783,18 @@ function shouldTryNextCodexCommand(error) {
   );
 }
 
+function codexRpcPayload(rateLimitResult, account, command, deps = {}) {
+  const rateLimitsByLimitId = rateLimitResult?.rateLimitsByLimitId || rateLimitResult?.rate_limits_by_limit_id || {};
+  const rateLimits = rateLimitResult?.rateLimits || rateLimitResult?.rate_limits || rateLimitsByLimitId.codex || {};
+  return {
+    account,
+    rateLimits,
+    rateLimitsByLimitId,
+    rateLimitResetCredits: rateLimitResult?.rateLimitResetCredits || rateLimitResult?.rate_limit_reset_credits || null,
+    sourceDetail: codexCommandSourceDetail(command, deps.platform || process.platform)
+  };
+}
+
 async function readCodexRpcWithCommand(command, deps = {}) {
   const timeoutMs = Number(deps.codexRpcTimeoutMs || 12000);
   const child = spawnCodexAppServer({ ...deps, codexCommand: command });
@@ -1736,21 +1804,27 @@ async function readCodexRpcWithCommand(command, deps = {}) {
       clientInfo: { name: 'token-monitor', title: 'Token Monitor', version: appVersion() }
     });
     rpc.notify('initialized', {});
-    const rateLimitResult = await rpc.send('account/rateLimits/read');
+    let rateLimitResult = await rpc.send('account/rateLimits/read');
     const accountResult = await rpc.send('account/read').catch(() => null);
     const account = accountResult?.account || null;
-    const rateLimitsByLimitId = rateLimitResult?.rateLimitsByLimitId || rateLimitResult?.rate_limits_by_limit_id || {};
-    const rateLimits = rateLimitResult?.rateLimits || rateLimitResult?.rate_limits || rateLimitsByLimitId.codex || {};
-    if (!account && !rateLimits?.primary && !rateLimits?.secondary) {
+    let payload = codexRpcPayload(rateLimitResult, account, command, deps);
+    if (deps.codexEmptyQuotaRetry !== false && shouldRetryCodexEmptyQuotaPayload(payload)) {
+      await waitForCodexEmptyQuotaRetry(deps);
+      try {
+        rateLimitResult = await rpc.send('account/rateLimits/read');
+        const retryPayload = codexRpcPayload(rateLimitResult, account, command, deps);
+        if (hasCodexRateLimitWindows(codexRateLimitSnapshot(retryPayload))) {
+          payload = {
+            ...retryPayload,
+            rateLimitResetCredits: retryPayload.rateLimitResetCredits || payload.rateLimitResetCredits
+          };
+        }
+      } catch (_) {}
+    }
+    if (!account && !hasCodexRateLimitWindows(codexRateLimitSnapshot(payload))) {
       throw errorWithStatus('notConfigured', 'Codex account not configured');
     }
-    return {
-      account,
-      rateLimits,
-      rateLimitsByLimitId,
-      rateLimitResetCredits: rateLimitResult?.rateLimitResetCredits || rateLimitResult?.rate_limit_reset_credits || null,
-      sourceDetail: codexCommandSourceDetail(command, deps.platform || process.platform)
-    };
+    return payload;
   } finally {
     try { child.kill('SIGTERM'); } catch (_) {}
   }

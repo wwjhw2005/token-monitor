@@ -90,6 +90,35 @@ test('aggregateLimits merges the same Codex account across devices and keeps dis
   assert.equal(accountA.sourceDeviceId, 'desktop');
 });
 
+test('aggregateLimits keeps Codex quota windows over a newer empty transient snapshot', () => {
+  const withWindows = codexProvider('sha256:codex-a', 'a@example.com', 50, '2026-06-14T10:00:00.000Z');
+  const emptyTransient = {
+    ...codexProvider('sha256:codex-a', 'a@example.com', 0, '2026-06-14T10:05:00.000Z'),
+    windows: []
+  };
+  const aggregate = aggregateLimits([
+    {
+      deviceId: 'macbook',
+      limits: {
+        updatedAt: '2026-06-14T10:00:00.000Z',
+        providers: [withWindows]
+      }
+    },
+    {
+      deviceId: 'desktop',
+      limits: {
+        updatedAt: '2026-06-14T10:05:00.000Z',
+        providers: [emptyTransient]
+      }
+    }
+  ], 0, Date.parse('2026-06-14T10:06:00.000Z'));
+
+  const accountA = aggregate.providers.find((provider) => provider.accountKey === 'sha256:codex-a');
+  assert.equal(accountA.sourceDeviceId, 'macbook');
+  assert.equal(accountA.windows.length, 1);
+  assert.equal(accountA.windows[0].remainingPercent, 50);
+});
+
 test('syncLimits carries Codex account key, email and plan label to the authenticated hub', () => {
   const payload = syncLimits({
     updatedAt: '2026-06-14T10:00:00.000Z',
