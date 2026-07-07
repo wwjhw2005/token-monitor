@@ -4,18 +4,12 @@
 
 ## What's changed
 
-### Added
-- **AI Tool Limits providers:** Settings -> AI Tool Limits now supports GLM / Z.ai, Volcengine, and Qoder quota tracking, with account setup, provider cards, and matching source labels. (#84)
-- **Home activity details:** The Home Activity heatmap now shows a per-day token tooltip and highlights the hovered day. (#83)
-
-### Changed
-- **New install title style:** Fresh installs now start with the compact title-icon header enabled; existing appearance settings stay unchanged.
-
 ### Improved
-- **Home activity freshness:** Today's heatmap cell now uses the live Today total, so the Activity chart stays aligned with the headline usage after refreshes or crossing midnight.
+- **Account labels:** AI Tool Limits account labels now render with consistent capitalization in provider cards and the Codex account list.
+- **Bundled tokscale 4.2.0:** Detects Kiro IDE sessions (the usage watcher now covers them for live refresh), keeps OpenCode's own recorded costs instead of re-pricing them from tokens, and counts Claude Code deep-nested subagent transcripts.
 
 ### Fixed
-- **Codex quota windows:** Short empty Codex quota reads no longer clear recent session or weekly windows, keeping the Codex limits card populated when the CLI/API response is temporarily incomplete.
+- **GLM / Z.ai legacy quota:** Old GLM Coding Plans with a single 5-hour token quota no longer show it as a "Weekly" window — it renders as the 5-hour session window, and the monthly MCP bucket now shows a Monthly reset instead of a bogus 1-minute window. (#85)
 
 ## Which file should I download?
 
@@ -57,18 +51,12 @@ open-source: https://github.com/junhoyeo/tokscale
 
 ## 更新内容
 
-### 新增
-- **AI 工具额度提供商：** 设置 -> AI 工具额度 现在支持 GLM / Z.ai、Volcengine 和 Qoder 额度追踪，并提供账号配置、额度卡片和对应的来源标签。（#84）
-- **主界面活动详情：** 主界面的活动热力图现在会在悬停时显示每日 token 提示，并高亮当前日期格。（#83）
-
-### 变更
-- **新安装默认标题样式：** 全新安装现在默认启用紧凑的标题图标；已有外观设置保持不变。
-
 ### 改进
-- **主界面活动实时性：** 今日热力图格现在使用实时「今日」总量，刷新或跨过午夜后也会和上方用量一致。
+- **账号标签：** AI 工具额度的账号标签现在在额度卡片和 Codex 账号列表中统一首字母大写显示。
+- **内置 tokscale 4.2.0：** 新增 Kiro IDE 会话识别（用量监看现在也覆盖该目录，实现秒级刷新），保留 OpenCode 自身记录的费用、不再按 token 重新计价，并计入 Claude Code 深层子代理会话。
 
 ### 修复
-- **Codex 额度窗口：** 短暂的空额度读取不会再清掉最近的 session 或 weekly 窗口，CLI/API 临时没有返回完整数据时，Codex 额度卡片仍会保持可用。
+- **GLM / Z.ai 旧版额度：** 旧版 GLM Coding Plan 的单一 5 小时 token 额度不再误显示为「Weekly」窗口，而是正确显示为 5 小时会话窗口；按月的 MCP 桶现在显示按月重置，不再出现错误的 1 分钟窗口。（#85）
 
 ## 应该下载哪个文件？
 
