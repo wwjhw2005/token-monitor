@@ -148,7 +148,7 @@ npx wrangler deploy
 
 ## デスクトップインストーラー
 
-[releases ページ](https://github.com/Javis603/token-monitor/releases) からダウンロードできます。リリースは署名されていません。macOS (arm64)、Windows (x64)、Linux x64 AppImage の初回起動手順はリリースノートに記載されています。その他のプラットフォームは `npm start` でソースから実行します。
+[releases ページ](https://github.com/Javis603/token-monitor/releases) からダウンロードできます。macOS ビルドは署名および notarize 済みです。Windows 署名は準備中で、Linux は AppImage として配布されます。アプリは GitHub Releases を確認し、対応しているアプリ内アップデートは 設定 → アップデート からインストールできます。その他のプラットフォームは `npm start` でソースから実行します。
 
 アプリの状態は OS のユーザーデータディレクトリに保存されます。アプリと一緒にそのフォルダを削除すると完全にアンインストールできます。
 
@@ -160,7 +160,7 @@ npx wrangler deploy
 
 ## ソースからビルド
 
-リリースは署名されていないため、自分でビルドできます。Node.js 22.13+ と **対象 OS** が必要です（electron-builder は macOS `.dmg` と Windows `.exe` のクロスビルド不可）。
+自分でインストーラーをビルドする場合は、**対象 OS** 上で Node.js 22.13+ を使用してください（electron-builder は macOS `.dmg` と Windows `.exe` のクロスビルド不可）。
 
 ```bash
 npm install
@@ -170,7 +170,7 @@ npm run dist:linux # Linux x64 AppImage        → dist/
 npm run pack       # インストーラーなしのアプリディレクトリ（ローカルテスト用）
 ```
 
-出力は `dist/` に生成されます。その他のプラットフォームにはパッケージング対象がないため、`npm start` で実行してください。
+出力は `dist/` に生成されます。Windows と Linux は対象 OS 上で上記の対応する `dist:*` スクリプトを使います。macOS リリース版をパッケージングするには、この Mac に Developer ID Application の署名 ID が必要です。ローカル開発または未対応プラットフォームでは `npm start` を使ってください。
 
 ## 動作の仕組み
 
