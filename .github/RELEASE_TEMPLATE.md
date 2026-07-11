@@ -5,18 +5,13 @@
 ## What's changed
 
 ### Added
-- **Compact total tokens:** Appearance now offers **Show compact total tokens** for an abbreviated total-token display. (#114)
-- **Tray quota percentages:** Choose **Limits: session limits for the first two tools** as the tray content to see their session-limit percentages at a glance. (#102)
-- **Codex email masking:** AI Tool Limits can now mask Codex account email addresses.
-
-### Improved
-- **Codex account sign-in:** The browser sign-in flow now exposes an openable/copyable login link, tries available Codex installations, and supports the Codex CLI bundled with the ChatGPT macOS app. (#110, #113)
+- **MiMo account tracking:** AI Tool Limits now supports MiMo (Xiaomi), with cookie-based sign-in and multi-account tracking for balance and Token Plan quota. (#97)
+- **Kimi Code account tracking:** AI Tool Limits now supports Kimi Code, with API-key-based quota checks. (#91)
 
 ### Fixed
-- **Codex account badge:** The local-account checkmark no longer appears for a single Codex account; it is shown only to distinguish accounts in a multi-account group.
-- **Synced limits:** Fresh provider data now takes precedence over stale device records in multi-device sync. (#111)
-- **Antigravity CLI usage:** Antigravity CLI usage is now counted under Antigravity, including CLI-only WSL homes. (#107)
-- **Tray limit indicators:** Stale quota-bar icons and empty icon spacing no longer linger in the system tray. (#89)
+- **Codex quota refreshes:** Session and weekly percentages no longer flicker to empty or incorrect values during transient refresh failures (rate limiting, temporary unavailability); the last known-good values are kept until a real update lands. (#116)
+- **Multi-device sync payloads:** Oversized usage payloads are now rejected with a clear error instead of failing unpredictably, and synced data drops the unbounded all-time session history while keeping all totals and breakdowns intact. (#121)
+- **Total tokens display:** Long total-token numbers now scale to fit the available width instead of clipping. (#117)
 
 ## Which file should I download?
 
@@ -55,18 +50,13 @@ open-source: https://github.com/junhoyeo/tokscale
 ## 更新内容
 
 ### 新增
-- **简写总 Token：** 外观设置新增「显示简写总 Token」，可将总 Token 显示为简写形式。（#114）
-- **托盘额度百分比：** 托盘内容可选择「额度：前两个工具的单次额度」，一眼查看前两个工具的单次额度百分比。（#102）
-- **Codex 邮箱遮罩：** AI 工具额度现在可以遮罩 Codex 账号邮箱地址。
-
-### 改进
-- **Codex 账号登录：** 浏览器登录流程现在会显示可打开或复制的登录链接、尝试可用的 Codex 安装，并支持 macOS ChatGPT app 内置的 Codex CLI。（#110、#113）
+- **MiMo 账号追踪：** AI 工具额度现已支持 MiMo（小米），通过 Cookie 登录并支持多账号追踪余额与 Token Plan 额度。（#97）
+- **Kimi Code 账号追踪：** AI 工具额度现已支持 Kimi Code，通过 API 密钥查询额度。（#91）
 
 ### 修复
-- **Codex 账号标记：** 只有一个 Codex 账号时，本机账号的 ✓ 不再错误显示；仅在多账号列表中用于区分账号。
-- **同步额度：** 多设备同步时，最新的 provider 数据现在会优先于过期设备记录。（#111）
-- **Antigravity CLI 用量：** Antigravity CLI 用量现在会计入 Antigravity，且支持仅有 CLI 数据的 WSL 主目录。（#107）
-- **托盘额度指示器：** 系统托盘不再残留过期的额度条图标或空白图标间距。（#89）
+- **Codex 额度刷新：** 在额度刷新出现暂时性失败（限流、暂不可用）时，单次与每周百分比不再闪烁为空白或错误数值，会保留最近一次的正确数据，直到下一次真正更新。（#116）
+- **多设备同步负载：** 超大用量负载现在会返回明确的错误，而不是不可预期地失败；同步数据不再包含无上限增长的全部时间会话记录，但仍保留全部汇总与明细。（#121）
+- **总 Token 显示：** 较长的总 Token 数字现在会自动缩放以适应显示宽度，不再被裁切。（#117）
 
 ## 应该下载哪个文件？
 
