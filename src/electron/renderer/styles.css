@@ -2842,11 +2842,23 @@ html.is-windows .limit-live-badge {
   align-items: center;
   gap: 5px;
 }
-.limit-reset-credits-expiry {
-  flex: 0 0 auto;
+.limit-reset-credits-timeline {
+  display: inline-flex;
+  align-items: baseline;
   color: var(--text);
   opacity: 0.66;
+}
+.limit-reset-credits-time {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
   white-space: nowrap;
+}
+.limit-reset-credits-time + .limit-reset-credits-time {
+  margin-left: 3px;
+}
+.limit-reset-credits-separator {
+  opacity: 0.72;
 }
 .limit-reset-credits-info-wrap {
   position: relative;
@@ -2886,8 +2898,11 @@ html.is-windows .limit-live-badge {
   bottom: calc(100% + 5px);
   z-index: 20;
   display: grid;
-  min-width: 166px;
-  gap: 4px;
+  width: max-content;
+  min-width: 0;
+  grid-template-columns: max-content max-content;
+  column-gap: 12px;
+  row-gap: 4px;
   padding: 6px 7px;
   border: 1px solid rgba(var(--line-rgb), 0.22);
   border-radius: 7px;
@@ -2926,10 +2941,7 @@ html.is-windows .limit-live-badge {
   transition: none;
 }
 .limit-reset-credit-detail {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
+  display: contents;
 }
 .limit-reset-credit-detail span:first-child {
   min-width: 0;
@@ -2941,6 +2953,7 @@ html.is-windows .limit-live-badge {
   flex: 0 0 auto;
   color: var(--text);
   opacity: 0.54;
+  text-align: right;
   white-space: nowrap;
 }
 @media (prefers-reduced-motion: reduce) {

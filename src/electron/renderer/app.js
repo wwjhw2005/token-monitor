@@ -1301,24 +1301,29 @@ function formatCodexResetCreditsValue(resetCredits) {
   return `${count} reset${count === 1 ? '' : 's'}`;
 }
 
-function formatCodexResetCreditsExpiry(resetCredits) {
-  const date = resetCredits?.nextExpiresAt ? new Date(resetCredits.nextExpiresAt) : null;
-  if (!date || Number.isNaN(date.getTime())) return '';
-  const diffMs = date.getTime() - Date.now();
-  return diffMs <= 0 ? 'Next expires now' : `Next expires in ${formatDuration(diffMs)}`;
-}
-
 function codexResetCreditExpirationDates(resetCredits) {
   const values = Array.isArray(resetCredits?.expirations) ? resetCredits.expirations : [];
-  return values
+  const dates = values
     .map((value) => new Date(value))
     .filter((date) => !Number.isNaN(date.getTime()))
     .sort((a, b) => a.getTime() - b.getTime());
+  if (dates.length > 0) return dates;
+  const fallback = resetCredits?.nextExpiresAt ? new Date(resetCredits.nextExpiresAt) : null;
+  return fallback && !Number.isNaN(fallback.getTime()) ? [fallback] : [];
 }
 
 function codexResetCreditExpiryLabel(date) {
   const diffMs = date.getTime() - Date.now();
+  return diffMs <= 0 ? 'now' : formatDuration(diffMs);
+}
+
+function codexResetCreditExpiryDetailLabel(date) {
+  const diffMs = date.getTime() - Date.now();
   return diffMs <= 0 ? 'Expires now' : `Expires in ${formatDuration(diffMs)}`;
+}
+
+function codexResetCreditExpiryDateLabel(date) {
+  return new Intl.DateTimeFormat(currentLocale(), { month: 'numeric', day: 'numeric' }).format(date);
 }
 
 function resetCreditsTooltipShouldHoldRender() {
@@ -1348,7 +1353,6 @@ function flushPendingCodexSwitchPopoverRender() {
 function codexResetCreditsNode(resetCredits) {
   const valueText = formatCodexResetCreditsValue(resetCredits);
   if (!valueText) return null;
-  const expiryText = formatCodexResetCreditsExpiry(resetCredits);
   const expirationDates = codexResetCreditExpirationDates(resetCredits);
   const item = document.createElement('div');
   item.className = 'limit-window limit-window-wide limit-window-note limit-reset-credits';
@@ -1358,13 +1362,28 @@ function codexResetCreditsNode(resetCredits) {
   value.className = 'limit-reset-credits-value';
   value.textContent = valueText;
   line.append(value);
-  if (expiryText) {
+  if (expirationDates.length > 0) {
     const expiryGroup = document.createElement('span');
     expiryGroup.className = 'limit-reset-credits-expiry-group';
-    const expiry = document.createElement('span');
-    expiry.className = 'limit-reset-credits-expiry';
-    expiry.textContent = expiryText;
-    expiryGroup.append(expiry);
+    const timeline = document.createElement('span');
+    timeline.className = 'limit-reset-credits-timeline';
+    const summaryParts = expirationDates.slice(0, 3).map(codexResetCreditExpiryLabel);
+    const hiddenExpirationCount = expirationDates.length - summaryParts.length;
+    if (hiddenExpirationCount > 0) summaryParts.push(`+${hiddenExpirationCount}`);
+    summaryParts.forEach((text, index) => {
+      const time = document.createElement('span');
+      time.className = 'limit-reset-credits-time';
+      if (index > 0) {
+        const separator = document.createElement('span');
+        separator.className = 'limit-reset-credits-separator';
+        separator.textContent = '·';
+        separator.setAttribute('aria-hidden', 'true');
+        time.append(separator);
+      }
+      time.append(document.createTextNode(text));
+      timeline.append(time);
+    });
+    expiryGroup.append(timeline);
     if (expirationDates.length > 1) {
       const infoWrap = document.createElement('span');
       infoWrap.className = 'limit-reset-credits-info-wrap';
@@ -1373,15 +1392,15 @@ function codexResetCreditsNode(resetCredits) {
       info.className = 'limit-reset-credits-info';
       info.textContent = 'i';
       info.tabIndex = 0;
-      info.setAttribute('aria-label', expirationDates.map((date, index) => `Reset ${index + 1}: ${codexResetCreditExpiryLabel(date)}`).join(', '));
+      info.setAttribute('aria-label', expirationDates.map((date, index) => `Reset ${index + 1}: ${codexResetCreditExpiryDetailLabel(date)}`).join(', '));
       const tooltip = document.createElement('span');
       tooltip.className = 'limit-reset-credits-tooltip';
       tooltip.setAttribute('role', 'tooltip');
-      expirationDates.forEach((date, index) => {
+      expirationDates.forEach((date) => {
         const row = document.createElement('span');
         row.className = 'limit-reset-credit-detail';
         const label = document.createElement('span');
-        label.textContent = `Reset ${index + 1}`;
+        label.textContent = codexResetCreditExpiryDateLabel(date);
         const tooltipExpiry = document.createElement('span');
         tooltipExpiry.textContent = codexResetCreditExpiryLabel(date);
         row.append(label, tooltipExpiry);
@@ -1409,7 +1428,7 @@ function codexResetCreditsNode(resetCredits) {
     line.append(expiryGroup);
   }
   item.append(line);
-  item.setAttribute('aria-label', ['Reset credits', valueText, expiryText].filter(Boolean).join(', '));
+  item.setAttribute('aria-label', ['Reset credits', valueText, expirationDates.map(codexResetCreditExpiryDetailLabel).join(', ')].filter(Boolean).join(', '));
   return item;
 }
 
