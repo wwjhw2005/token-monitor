@@ -20,6 +20,7 @@ const cursorAuth = require('./cursorAuth');
 const { findSessionFiles, codexSessionFile } = require('./sessionFiles');
 const opencodeSession = require('./opencodeSession');
 const { buildPromaHistoryGraph, buildPromaPeriods, collectPromaRows } = require('./promaUsage');
+const { hashKey } = require('./hashKey');
 
 function toUnpackedPath(p) {
   // electron-builder asarUnpack stores real files at .../app.asar.unpacked/...
@@ -285,6 +286,60 @@ function timestampFromJsonLine(line) {
   }
 }
 
+const projectPathCache = new Map();
+
+function projectPathFromJsonl(filePath) {
+  let text;
+  let cacheKey;
+  try {
+    const stat = fs.statSync(filePath);
+    cacheKey = `${stat.size}:${stat.mtimeMs}`;
+    const cached = projectPathCache.get(filePath);
+    if (cached?.key === cacheKey) return cached.value;
+    const fd = fs.openSync(filePath, 'r');
+    try {
+      const size = Math.min(256 * 1024, fs.fstatSync(fd).size);
+      const buffer = Buffer.alloc(size);
+      fs.readSync(fd, buffer, 0, size, 0);
+      text = buffer.toString('utf8');
+    } finally { fs.closeSync(fd); }
+  } catch (_) { return ''; }
+  for (const line of text.split(/\r?\n/)) {
+    if (!line.trim()) continue;
+    try {
+      const obj = JSON.parse(line);
+      const payload = obj.payload && typeof obj.payload === 'object' ? obj.payload : obj;
+      const value = payload.cwd || payload.project_path || payload.projectPath || payload.workingDirectory || payload.working_directory;
+      if (typeof value === 'string' && value.trim()) {
+        const result = value.trim();
+        projectPathCache.set(filePath, { key: cacheKey, value: result });
+        return result;
+      }
+    } catch (_) { /* skip partial or non-JSON lines */ }
+  }
+  projectPathCache.set(filePath, { key: cacheKey, value: '' });
+  return '';
+}
+
+function normalizeProjectPath(value) {
+  let normalized = String(value || '').trim().replace(/\\/g, '/');
+  if (!normalized) return '';
+  const windows = /^[a-z]:\//i.test(normalized) || normalized.startsWith('//');
+  const root = normalized === '/' || /^[a-z]:\/$/i.test(normalized);
+  if (!root) normalized = normalized.replace(/\/+$/, '');
+  return windows ? normalized.toLowerCase() : normalized;
+}
+
+function projectIdentity(value) {
+  const normalized = normalizeProjectPath(value);
+  if (!normalized) return {};
+  const root = normalized === '/' || /^[a-z]:\/$/i.test(normalized);
+  let displayPath = String(value || '').trim().replace(/\\/g, '/');
+  if (!root) displayPath = displayPath.replace(/\/+$/, '');
+  const label = root ? (normalized === '/' ? '/' : `${normalized[0].toUpperCase()}:\\`) : displayPath.split('/').pop();
+  return { projectId: hashKey('project', normalized), projectLabel: label };
+}
+
 function lastJsonlTimestamp(filePath) {
   const tail = readFileTail(filePath);
   const lines = tail.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
@@ -308,27 +363,40 @@ function sessionRefsForPeriods(periods) {
 
 function sessionTimestampMap(periods, home = os.homedir(), deps = {}) {
   const refs = sessionRefsForPeriods(periods);
+  const metadata = deps.metadataCache || new Map();
+  const resolvedSessionKeys = deps.resolvedSessionKeys || new Set();
+  const attemptedSessionKeys = deps.attemptedSessionKeys || new Set();
   const byClient = new Map();
   for (const ref of refs.values()) {
+    const key = `${ref.client}:${ref.sessionId}`;
+    if (resolvedSessionKeys.has(key)) continue;
+    if (!deps.retryMisses && attemptedSessionKeys.has(key)) continue;
     if (!byClient.has(ref.client)) byClient.set(ref.client, new Set());
     byClient.get(ref.client).add(ref.sessionId);
   }
 
-  const metadata = new Map();
   const applyFile = (client, sessionId, filePath) => {
     const startedAt = timestampFromSessionId(sessionId);
     const lastUsedAt = lastJsonlTimestamp(filePath) || startedAt;
-    metadata.set(`${client}:${sessionId}`, { startedAt, lastUsedAt });
+    const identity = projectIdentity(projectPathFromJsonl(filePath));
+    const key = `${client}:${sessionId}`;
+    metadata.set(key, { startedAt, lastUsedAt, ...identity });
+    if (identity.projectId) resolvedSessionKeys.add(key);
   };
 
   // OpenCode has no transcript file — its timestamps come from the opencode.db `session` table.
   const opencodeIds = byClient.get('opencode') || new Set();
   if (opencodeIds.size > 0) {
-    const readOpencodeMeta = deps.readOpencodeMeta || ((ids) => opencodeSession.readSessionMeta(ids));
+    const readOpencodeMeta = deps.readOpencodeMeta || (deps.scopedHome
+      ? (ids) => opencodeSession.readSessionMetaForHome(ids, home, deps.opencodeDeps)
+      : (ids) => opencodeSession.readSessionMeta(ids, deps.opencodeDeps));
     for (const [sessionId, meta] of readOpencodeMeta(opencodeIds)) {
       const startedAt = meta.startedAt || '';
       const lastUsedAt = meta.lastUsedAt || startedAt;
-      if (startedAt || lastUsedAt) metadata.set(`opencode:${sessionId}`, { startedAt, lastUsedAt });
+      const identity = projectIdentity(meta.projectPath);
+      const key = `opencode:${sessionId}`;
+      if (startedAt || lastUsedAt || identity.projectId) metadata.set(key, { startedAt, lastUsedAt, ...identity });
+      if (identity.projectId) resolvedSessionKeys.add(key);
     }
   }
 
@@ -347,10 +415,13 @@ function sessionTimestampMap(periods, home = os.homedir(), deps = {}) {
 
   for (const ref of refs.values()) {
     const key = `${ref.client}:${ref.sessionId}`;
+    if (resolvedSessionKeys.has(key)) continue;
     if (metadata.has(key)) continue;
     const timestamp = timestampFromSessionId(ref.sessionId);
     if (timestamp) metadata.set(key, { startedAt: timestamp, lastUsedAt: timestamp });
+    if (!['claude', 'codex', 'opencode'].includes(ref.client)) resolvedSessionKeys.add(key);
   }
+  for (const ref of refs.values()) attemptedSessionKeys.add(`${ref.client}:${ref.sessionId}`);
 
   return metadata;
 }
@@ -363,6 +434,8 @@ function applySessionTimestamps(periods, home, deps = {}) {
       if (!meta) continue;
       if (meta.startedAt && (!session.startedAt || Date.parse(meta.startedAt) < Date.parse(session.startedAt))) session.startedAt = meta.startedAt;
       if (meta.lastUsedAt && (!session.lastUsedAt || Date.parse(meta.lastUsedAt) > Date.parse(session.lastUsedAt))) session.lastUsedAt = meta.lastUsedAt;
+      if (meta.projectId) session.projectId = meta.projectId;
+      if (meta.projectLabel) session.projectLabel = meta.projectLabel;
     }
   }
 }
@@ -471,6 +544,18 @@ async function collectUsageOnce(options) {
   // tokscale binary resolution, which is genuinely platform-bound).
   const platformValue = options.platform || process.platform;
   const normalizedClients = normalizeClientsCsv(clients);
+  const projectsEnabled = options.projectsEnabled !== false;
+  const localSessionMetadataDeps = {
+    ...(options.sessionMetadataDeps || {}),
+    metadataCache: new Map(),
+    resolvedSessionKeys: new Set(),
+    attemptedSessionKeys: new Set()
+  };
+  const decorateLocalPeriods = (periods, { retryMisses = false } = {}) => applySessionTimestamps(
+    periods,
+    options.homeDir || os.homedir(),
+    { ...localSessionMetadataDeps, retryMisses }
+  );
   // tokscale doesn't know about Proma yet — filter it out of the subprocess
   // calls so --client doesn't reject an unknown value. Proma is parsed
   // separately below and merged back in.
@@ -524,14 +609,16 @@ async function collectUsageOnce(options) {
       // is what let the issue #15 self-trigger loop spike tokscale past 500% CPU.
       const todayJson = await runTokscaleFn({ clients: tokscaleClients, flags: ['--today'], commandTimeoutMs });
       today = extractUsageFromTokscale(todayJson);
+      if (projectsEnabled && typeof options.onProgress === 'function') decorateLocalPeriods({ today });
       try { if (typeof options.onProgress === 'function') options.onProgress({ today, updatedAt: new Date().toISOString() }); } catch (_) {}
       const monthJson = await runTokscaleFn({ clients: tokscaleClients, flags: ['--month'], commandTimeoutMs });
       month = extractUsageFromTokscale(monthJson);
+      if (projectsEnabled && typeof options.onProgress === 'function') decorateLocalPeriods({ today, month });
       try { if (typeof options.onProgress === 'function') options.onProgress({ today, month, updatedAt: new Date().toISOString() }); } catch (_) {}
       const allTimeJson = await runTokscaleFn({ clients: tokscaleClients, flags: ['--since', allTimeSince], commandTimeoutMs });
       allTime = extractUsageFromTokscale(allTimeJson);
     }
-    applySessionTimestamps({ today, month, allTime }, options.homeDir || os.homedir());
+    if (projectsEnabled) decorateLocalPeriods({ today, month, allTime }, { retryMisses: true });
     if (promaPeriods && !anchorUsed) {
       today = mergePeriods(today, promaPeriods.today);
       month = mergePeriods(month, promaPeriods.month);
@@ -567,7 +654,8 @@ async function collectUsageOnce(options) {
           commandTimeoutMs: options.pricingTimeoutMs ?? Math.min(commandTimeoutMs || PROMA_PRICING_LOOKUP_TIMEOUT_MS, PROMA_PRICING_LOOKUP_TIMEOUT_MS),
           pricingRevision: options.pricingRevision
         }),
-        logger: options.logger
+        logger: options.logger,
+        decoratePeriods: projectsEnabled ? (periods, home) => applySessionTimestamps(periods, home, { scopedHome: true }) : undefined
       });
       wslBundle = wslResult.bundle;
       wslDetected = wslResult.detected;
@@ -586,7 +674,8 @@ async function collectUsageOnce(options) {
           commandTimeoutMs: options.pricingTimeoutMs ?? Math.min(commandTimeoutMs || PROMA_PRICING_LOOKUP_TIMEOUT_MS, PROMA_PRICING_LOOKUP_TIMEOUT_MS),
           pricingRevision: options.pricingRevision
         }),
-        logger: options.logger
+        logger: options.logger,
+        decoratePeriods: projectsEnabled ? (periods, home) => applySessionTimestamps(periods, home, { scopedHome: true }) : undefined
       });
       wslBundle = wslResult.bundle;
       wslDetected = wslResult.detected;
@@ -879,10 +968,10 @@ function wslPeriodsForPreview(wslAnchor, anchorDateKey, todayKey) {
   };
 }
 
-function configFingerprint(clientsCsv, allTimeSince) {
+function configFingerprint(clientsCsv, allTimeSince, projectsEnabled = true) {
   // Deterministic string that captures the config inputs anchor correctness
   // depends on. When this changes, the persisted anchor is invalidated.
-  return `${normalizeClientsCsv(clientsCsv)}|${allTimeSince}`;
+  return `${normalizeClientsCsv(clientsCsv)}|${allTimeSince}|projects:${projectsEnabled !== false ? 'on' : 'off'}`;
 }
 
 // Force a full scan at least this often even when the anchor is otherwise
@@ -925,7 +1014,7 @@ function startCollector(options) {
   try {
     const saved = readJson(anchorPath, null);
     if (saved && saved.dateKey === localTodayKey()) {
-      const fp = configFingerprint(clients, allTimeSince);
+      const fp = configFingerprint(clients, allTimeSince, options.projectsEnabled);
       if (saved.configFingerprint === fp) {
         anchor = { dateKey: saved.dateKey, today: saved.today, month: saved.month, allTime: saved.allTime };
         // Don't restore a persisted WSL snapshot when WSL scanning is now off —
@@ -1036,7 +1125,7 @@ function startCollector(options) {
             allTime: anchor.allTime,
             wslBundle: wslAnchor,
             wslStatus: wslStatusAnchor,
-            configFingerprint: configFingerprint(clients, allTimeSince),
+            configFingerprint: configFingerprint(clients, allTimeSince, options.projectsEnabled),
             fullScanAt: new Date().toISOString()
           }));
         } catch (_) {}
@@ -1149,6 +1238,8 @@ function startCollector(options) {
 
 module.exports = {
   applySessionTimestamps,
+  projectIdentity,
+  projectPathFromJsonl,
   collectHistoryOnce,
   collectUsageOnce,
   clientDataDirPresence,

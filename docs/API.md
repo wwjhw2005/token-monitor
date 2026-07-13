@@ -110,6 +110,8 @@ Example payload:
         "reasoningTokens": 0,
         "startedAt": "2026-05-30T03:44:50.000Z",
         "lastUsedAt": "2026-05-30T04:07:32.679Z",
+        "projectId": "sha256:opaque-project-identifier",
+        "projectLabel": "token-monitor",
         "models": {
           "gpt-5": 1234
         },
@@ -192,7 +194,7 @@ Response includes:
 - `periods.month`
 - `periods.allTime`
 - `periods.*.clientModels` and `periods.*.clientModelCosts` for preserving model breakdowns when a tracked tool is disabled
-- `periods.today.sessions` / `periods.month.sessions` keyed by `client:sessionId` for session-level usage when tokscale exposes session groups; synchronized clients omit the unbounded `allTime.sessions` collection while preserving all aggregate totals and breakdowns
+- `periods.today.sessions` / `periods.month.sessions` keyed by `client:sessionId` for session-level usage when tokscale exposes session groups; widgets may use `lastUsedAt` for recent-first sorting and optional `projectId` / `projectLabel` for workspace-level aggregation. Absolute workspace paths stay on the collecting device and are never part of the wire shape. Synchronized clients omit the unbounded `allTime.sessions` collection while preserving all aggregate totals and breakdowns.
 - `historyPreview.daily[].activeTimeMs`, `historyPreview.monthly[].activeTimeMs`, and `historyPreview.summary.activeTimeMs` when tokscale graph exposes session active-time metrics
 - `limits.providers` aggregated by provider account
 - `devices`

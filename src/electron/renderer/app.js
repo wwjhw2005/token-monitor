@@ -32,6 +32,7 @@ function iconKindFor(rowData, breakdown) {
       ? { kind: 'icon', iconClass: `row-icon-${rowData.client}` }
       : { kind: 'dot' };
   }
+  if (breakdown === 'project') return { kind: 'icon', iconClass: 'row-icon-project' };
   return clientsWithIcon.has(rowData.key)
     ? { kind: 'icon', iconClass: `row-icon-${rowData.key}` }
     : { kind: 'dot' };
@@ -94,6 +95,7 @@ const { limitFillPercent, limitModeSuffix } = window.TokenMonitorLimitDisplayMod
 const i18n = window.TokenMonitorI18n;
 const currencyApi = window.TokenMonitorCurrency;
 const sessionRowsApi = window.TokenMonitorSessionRows;
+const projectRowsApi = window.TokenMonitorProjectRows;
 const sessionDetailApi = window.TokenMonitorSessionDetail;
 const windowShortcutApi = window.TokenMonitorWindowShortcut;
 const LIMIT_REFRESH_OPTIONS = [60000, 120000, 300000, 900000, 1800000];
@@ -140,13 +142,14 @@ const LIMIT_CAPABILITY_TAG_KEYS = {
 };
 const deviceAccent = '#73bdf5';
 const deviceStaleColor = '#8c97a7';
-const baseBreakdownOrder = ['tool', 'device', 'model', 'session'];
+const baseBreakdownOrder = ['tool', 'device', 'model', 'project', 'session'];
 const VIEW_DISPLAY_OPTIONS = [
   { id: 'home', labelKey: 'views.home' },
   { id: 'tool', labelKey: 'views.tool' },
   { id: 'status', labelKey: 'views.status' },
   { id: 'device', labelKey: 'views.device' },
   { id: 'model', labelKey: 'views.model' },
+  { id: 'project', labelKey: 'views.project' },
   { id: 'session', labelKey: 'views.session' },
   { id: 'limits', labelKey: 'views.limits' },
   { id: 'trends', labelKey: 'views.trends' }
@@ -168,6 +171,7 @@ const VIEW_ICON_CLASSES = {
   status: 'view-icon-status',
   device: 'view-icon-device',
   model: 'view-icon-model',
+  project: 'view-icon-project',
   session: 'view-icon-session',
   limits: 'view-icon-limits',
   trends: 'view-icon-trends'
@@ -193,6 +197,7 @@ function normalizeInitialViewValue(value, allowed, fallback) {
 }
 
 const state = { period: normalizeInitialViewValue(initialViewState.period, viewPeriodValues, 'today'), appUpdate: null, breakdown: normalizeInitialViewValue(initialViewState.breakdown, viewBreakdownValues, 'home'), viewSwitcherOpen: false, viewSwitcherHasOpened: false, resetCreditsTooltipHasOpened: false, resetCreditsTooltipActive: false, resetCreditsTooltipRenderPending: false, settings: null, stats: null, homeHistory: null, homeHistoryBusy: false, homeHistoryRequested: false, homeHistoryPreviewKey: '', homeActivityScrollLeft: null, homeActivityFollowEnd: true, homeActivityResizeObserver: null, serviceStatus: null, serviceStatusBusy: false, serviceProvidersExpanded: false, trendSettingsExpanded: false, trendsActivating: false, homeSettingsExpanded: false, homeLimitSettingsExpanded: false, serviceStatusTicker: null, refreshTimer: null, refreshBusy: false, refreshFeedbackTimer: null, currentTotal: 0, rowSignature: '', streamConnected: false, streamFailure: null, mode: 'idle', appInfo: null, tokscaleStatus: null, tokscaleCheck: null, tokscaleBusy: false, hubInfo: null, cursorAccount: { status: null, error: '' }, cursorAccountExpanded: false, codexAccountExpanded: false, codexAccountError: '', codexSignInBusy: false, codexSignInFlowId: '', codexLoginUrl: '', codexLoginStatus: '', codexLoginOutput: '', codexActiveAccount: null, codexPendingActiveAccount: null, codexPendingActiveAccountUntil: 0, codexPendingActiveAccountTimer: null, codexSystemSwitchingAccountId: '', codexSystemSwitchErrorAccountId: '', codexSystemSwitchError: '', codexSwitchPopoverHasOpened: false, codexSwitchPopoverActive: false, codexSwitchPopoverRenderPending: false, customPricingExpanded: false, opencodeProfileCount: 0, opencodeCookieExpanded: false, deepseekAccountExpanded: false, deepseekPendingCheckSince: 0, minimaxAccountExpanded: false, minimaxPendingCheckSince: 0, zaiAccountExpanded: false, zaiPendingCheckSince: 0, zaiteamAccountExpanded: false, zaiteamPendingCheckSince: 0, volcengineAccountExpanded: false, volcenginePendingCheckSince: 0, qoderAccountExpanded: false, qoderPendingCheckSince: 0, kimiAccountExpanded: false, kimiPendingCheckSince: 0, ollamaAccountExpanded: false, ollamaPendingCheckSince: 0, mimoAccountExpanded: false, mimoAccountError: '', copilotAccountExpanded: false, copilotManualExpanded: false, copilotPendingCheckSince: 0, copilotSignInBusy: false, copilotSignInCancelable: false, copilotSignInFlowId: '', copilotAuthorizeMessage: '', copilotLoginStatus: '', copilotErrorMessage: '', floatingBubble: initialFloatingBubble, suppressInitialNumberAnimation: window.__TOKEN_MONITOR_SUPPRESS_INITIAL_NUMBER_ANIMATION__ === true, openSession: null, detailSort: 'time', recordingWindowShortcut: false, windowShortcutInvalid: false };
+state.projectSettingsExpanded = false;
 state.settingsSections = Object.fromEntries(SETTINGS_SECTION_IDS.map((id) => [id, false]));
 const defaultAppearance = { glassOpacity: 68, glassBlur: 32, zoomFactor: 1, systemGlass: true, showLiveDot: true, showToolIcons: true, titleIconOnly: true, showCompactTotalTokens: false, settingsInTitlebar: false };
 let preferenceDrag = null;
@@ -269,15 +274,32 @@ Object.assign(els, {
   sessionDetailHead: document.getElementById('session-detail-head')
 });
 
-document.addEventListener('click', (e) => {
-  const row = e.target.closest('.row.has-accordion');
-  if (row) {
-    const isExpanded = row.classList.contains('expanded');
-    document.querySelectorAll('.row.expanded').forEach(r => r.classList.remove('expanded'));
-    if (!isExpanded) {
-      row.classList.add('expanded');
-    }
+function toggleAccordionRow(row) {
+  const isExpanded = row.classList.contains('expanded');
+  document.querySelectorAll('.row.expanded').forEach((other) => {
+    other.classList.remove('expanded');
+    other.setAttribute('aria-expanded', 'false');
+  });
+  if (!isExpanded) {
+    row.classList.add('expanded');
+    row.setAttribute('aria-expanded', 'true');
   }
+}
+
+function setAttributeIfChanged(element, name, value) {
+  if (element.getAttribute(name) !== value) element.setAttribute(name, value);
+}
+
+document.addEventListener('click', (event) => {
+  const row = event.target.closest('.row.has-accordion');
+  if (row) toggleAccordionRow(row);
+});
+
+document.addEventListener('keydown', (event) => {
+  const row = event.target.closest('.row.has-accordion');
+  if (!row || (event.key !== 'Enter' && event.key !== ' ')) return;
+  event.preventDefault();
+  toggleAccordionRow(row);
 });
 
 document.addEventListener('pointerdown', (event) => {
@@ -858,7 +880,7 @@ function rowTemplate(rowData) {
   return row;
 }
 
-function updateRow(row, { name, subtitle, detail, value, cost, max, color, stale, platform, local, client, kind, cacheReadTokens, outputTokens }) {
+function updateRow(row, { name, subtitle, detail, value, cost, max, color, barBackground, accordionRows, stale, platform, local, client, kind, cacheReadTokens, outputTokens }) {
   const width = rowWidth(value, max);
   const isExpanded = row.classList.contains('expanded');
   row.className = `row${kind ? ` ${kind}-row` : ''}${stale ? ' stale' : ''}${local ? ' local' : ''}`;
@@ -892,11 +914,41 @@ function updateRow(row, { name, subtitle, detail, value, cost, max, color, stale
   row.querySelector('.row-value').textContent = formatNumber(value);
   row.querySelector('.row-cost').textContent = formatCost(cost || 0);
   const fill = row.querySelector('.bar-fill');
-  fill.style.background = color;
+  fill.style.background = barBackground || color;
   fill.style.width = `${width}%`;
 
   const accordionInner = row.querySelector('.row-accordion-inner');
-  if ((cacheReadTokens !== undefined || outputTokens !== undefined) && value > 0 && kind !== 'session') {
+  if (Array.isArray(accordionRows) && accordionRows.length > 0) {
+    const accordionSignature = JSON.stringify(accordionRows.map((tool) => [tool.name, tool.value, Math.round(tool.percent), tool.color]));
+    if (accordionInner.dataset.signature !== accordionSignature) {
+      const content = document.createElement('div');
+      content.className = 'accordion-content project-tool-breakdown';
+      for (const tool of accordionRows) {
+        const item = document.createElement('div');
+        item.className = 'accordion-row project-tool-row';
+        const label = document.createElement('div');
+        label.className = 'accordion-label';
+        const mark = document.createElement('span');
+        mark.className = 'project-tool-mark';
+        mark.style.background = tool.color;
+        const text = document.createElement('span');
+        text.textContent = tool.name;
+        const percent = document.createElement('span');
+        percent.className = 'accordion-pct';
+        percent.textContent = `${Math.round(tool.percent)}%`;
+        label.append(mark, text, percent);
+        const tokens = document.createElement('span');
+        tokens.className = 'accordion-value';
+        tokens.textContent = formatNumber(tool.value);
+        item.append(label, tokens);
+        content.append(item);
+      }
+      accordionInner.replaceChildren(content);
+      accordionInner.dataset.signature = accordionSignature;
+    }
+    row.classList.add('has-accordion');
+    if (isExpanded) row.classList.add('expanded');
+  } else if ((cacheReadTokens !== undefined || outputTokens !== undefined) && value > 0 && kind !== 'session') {
     const cacheRead = cacheReadTokens || 0;
     const output = outputTokens || 0;
     const totalTokens = value || 0;
@@ -905,6 +957,7 @@ function updateRow(row, { name, subtitle, detail, value, cost, max, color, stale
     const hitPct = inputTokens > 0 ? Math.round((cacheRead / inputTokens) * 100) : 0;
     const missPct = inputTokens > 0 ? 100 - hitPct : 0;
     
+    delete accordionInner.dataset.signature;
     accordionInner.innerHTML = `
       <div class="accordion-content">
         <div class="accordion-row">
@@ -924,9 +977,21 @@ function updateRow(row, { name, subtitle, detail, value, cost, max, color, stale
     row.classList.add('has-accordion');
     if (isExpanded) row.classList.add('expanded');
   } else {
-    accordionInner.innerHTML = '';
+    accordionInner.replaceChildren();
+    delete accordionInner.dataset.signature;
     row.classList.remove('has-accordion');
     row.classList.remove('expanded');
+  }
+  if (row.classList.contains('has-accordion')) {
+    if (row.tabIndex !== 0) row.tabIndex = 0;
+    setAttributeIfChanged(row, 'role', 'button');
+    setAttributeIfChanged(row, 'aria-expanded', String(row.classList.contains('expanded')));
+    setAttributeIfChanged(row, 'aria-label', `${name}, ${t('dashboard.stat.totalTokens')}: ${formatNumber(value)}, ${t('dashboard.stat.totalCost')}: ${formatCost(cost || 0)}`);
+  } else {
+    if (row.hasAttribute('tabindex')) row.removeAttribute('tabindex');
+    if (row.hasAttribute('role')) row.removeAttribute('role');
+    if (row.hasAttribute('aria-expanded')) row.removeAttribute('aria-expanded');
+    if (row.hasAttribute('aria-label')) row.removeAttribute('aria-label');
   }
 }
 
@@ -1029,10 +1094,21 @@ function sessionRowsForPeriod(period) {
   return modelRowsForPeriod(period);
 }
 
+function projectRowsForPeriod(period) {
+  return projectRowsApi.projectRowsForPeriod(period, {
+    clientLabels,
+    clientColors,
+    stableColor,
+    fallbackColors: fallbackModelColors,
+    unknownClientLabel: t('projects.unknownTool')
+  });
+}
+
 function rowsForPeriod(period) {
   if (state.breakdown === 'device') return deviceRowsForPeriod();
   if (state.breakdown === 'model') return modelRowsForPeriod(period);
   if (state.breakdown === 'session') return sessionRowsForPeriod(period);
+  if (state.breakdown === 'project') return projectRowsForPeriod(period);
   return toolRowsForPeriod(period);
 }
 
@@ -1052,7 +1128,8 @@ function effectiveViewDisplayOrderValue() {
 
 function availableBreakdownIds() {
   const order = ['home', baseBreakdownOrder[0], 'status', 'trends', ...baseBreakdownOrder.slice(1)];
-  const available = state.settings?.historyEnabled === false ? order.filter((id) => id !== 'trends') : order;
+  let available = state.settings?.historyEnabled === false ? order.filter((id) => id !== 'trends') : order;
+  if (state.settings?.projectsEnabled === false) available = available.filter((id) => id !== 'project');
   return limitViewAvailable() ? [...available, 'limits'] : available;
 }
 
@@ -4697,7 +4774,8 @@ function renderViewPreferences() {
     const label = viewLabel(view);
     const isHidden = hidden.has(id);
     const historyEnabled = state.settings?.historyEnabled !== false;
-    const isDisabled = id === 'trends' && !historyEnabled;
+    const projectsEnabled = state.settings?.projectsEnabled !== false;
+    const isDisabled = (id === 'trends' && !historyEnabled) || (id === 'project' && !projectsEnabled);
     const isEffectivelyHidden = isHidden || isDisabled;
     const row = document.createElement('div');
     row.className = 'view-preference-row';
@@ -4716,7 +4794,11 @@ function renderViewPreferences() {
     visibility.setAttribute('aria-pressed', String(!isEffectivelyHidden));
     visibility.disabled = !isEffectivelyHidden && visibleCount <= 1;
     visibility.append(visibilityIcon(isEffectivelyHidden));
-    visibility.addEventListener('click', () => id === 'trends' ? onTrendVisibilityToggle() : onViewVisibilityToggle(id));
+    visibility.addEventListener('click', () => {
+      if (id === 'trends') return onTrendVisibilityToggle();
+      if (id === 'project') return onProjectVisibilityToggle();
+      return onViewVisibilityToggle(id);
+    });
     const handle = createPreferenceOrderHandle({ kind: 'view', id, label, count: views.length });
     const actions = document.createElement('div');
     actions.className = 'tool-preference-actions';
@@ -4780,6 +4862,36 @@ function renderViewPreferences() {
       const inner = document.createElement('div');
       inner.className = 'accordion-animation-inner';
       inner.appendChild(renderTrendSettingsList());
+      listContainer.appendChild(inner);
+      els.viewDisplayList.appendChild(listContainer);
+    }
+    if (id === 'project') {
+      row.classList.add('has-subgroup');
+      const toggle = document.createElement('button');
+      toggle.type = 'button';
+      toggle.className = `view-subgroup-toggle${state.projectSettingsExpanded ? ' is-expanded' : ''}`;
+      toggle.title = t('settings.views.configureProject', { name: label });
+      toggle.setAttribute('aria-label', toggle.title);
+      toggle.setAttribute('aria-expanded', String(Boolean(state.projectSettingsExpanded)));
+      const toggleIcon = document.createElement('span');
+      toggleIcon.className = 'view-subgroup-icon';
+      toggleIcon.setAttribute('aria-hidden', 'true');
+      toggle.append(toggleIcon);
+      toggle.addEventListener('click', () => {
+        state.projectSettingsExpanded = !state.projectSettingsExpanded;
+        toggle.classList.toggle('is-expanded', state.projectSettingsExpanded);
+        toggle.setAttribute('aria-expanded', String(Boolean(state.projectSettingsExpanded)));
+        const container = document.getElementById('projectSettingsContainer');
+        if (container) container.classList.toggle('hidden', !state.projectSettingsExpanded);
+      });
+      actions.insertBefore(toggle, visibility);
+
+      const listContainer = document.createElement('div');
+      listContainer.id = 'projectSettingsContainer';
+      listContainer.className = `accordion-animated-container${state.projectSettingsExpanded ? '' : ' hidden'}`;
+      const inner = document.createElement('div');
+      inner.className = 'accordion-animation-inner';
+      inner.appendChild(renderProjectSettingsList());
       listContainer.appendChild(inner);
       els.viewDisplayList.appendChild(listContainer);
     }
@@ -5025,6 +5137,26 @@ function renderTrendSettingsList() {
   return wrap;
 }
 
+function renderProjectSettingsList() {
+  const wrap = document.createElement('div');
+  wrap.id = 'projectSettingsList';
+  wrap.className = 'trend-settings-list';
+  const label = document.createElement('label');
+  label.className = 'checkbox-label trend-settings-row';
+  const input = document.createElement('input');
+  input.type = 'checkbox';
+  input.checked = state.settings?.projectsEnabled !== false;
+  const text = document.createElement('span');
+  text.textContent = t('settings.views.enableProjects');
+  label.append(input, text);
+  wrap.append(label);
+  input.addEventListener('change', async () => {
+    await setProjectsEnabled(input.checked);
+    await refreshStats({ force: true });
+  });
+  return wrap;
+}
+
 async function setTrendEnabled(enabled) {
   if (!enabled) {
     await saveSettings({ historyEnabled: enabled });
@@ -5034,6 +5166,16 @@ async function setTrendEnabled(enabled) {
   hidden.delete('trends');
   const nextHiddenViews = Array.from(hidden).join(',');
   await saveSettings({ historyEnabled: enabled, hiddenViews: nextHiddenViews });
+}
+
+async function setProjectsEnabled(enabled) {
+  if (!enabled) {
+    await saveSettings({ projectsEnabled: false });
+    return;
+  }
+  const hidden = hiddenViewSet();
+  hidden.delete('project');
+  await saveSettings({ projectsEnabled: true, hiddenViews: Array.from(hidden).join(',') });
 }
 
 function renderServiceProviderList() {
@@ -5336,6 +5478,15 @@ async function onTrendVisibilityToggle() {
     return;
   }
   await onViewVisibilityToggle('trends');
+}
+
+async function onProjectVisibilityToggle() {
+  if (state.settings?.projectsEnabled === false) {
+    await setProjectsEnabled(true);
+    await refreshStats({ force: true });
+    return;
+  }
+  await onViewVisibilityToggle('project');
 }
 
 async function onLimitProviderToggle() {
