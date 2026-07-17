@@ -104,10 +104,12 @@ const {
   buildTrayIcon,
   createTray,
   formatTrayText,
+  isBarsTrayIconMode,
   pickUsageTrayIconId,
   popoverBounds,
   reconcileCodexAccountSelection,
-  sortCodexAccountsForDisplay
+  sortCodexAccountsForDisplay,
+  shouldUseTemplateTrayIcon
 } = require('./tray');
 const {
   macActivationPolicyMode,
@@ -150,7 +152,7 @@ if (!app.isPackaged) loadDotEnv();
 const APP_NAME = 'Token Monitor';
 const APP_ICON_PATH = path.join(__dirname, '..', '..', 'assets', 'icon.png');
 
-const DEFAULT_WINDOW = { width: 360, height: 500 };
+const DEFAULT_WINDOW = { width: 340, height: 650 };
 const WINDOW_LIMITS = { minWidth: 240, minHeight: 140, maxWidth: 1200, maxHeight: 1400 };
 const ZOOM_LIMITS = { min: 0.7, max: 1.6, step: 0.1 };
 const CSP_HEADER = [
@@ -266,6 +268,7 @@ function defaultSettings() {
     showTrayIcon: true,
     trayMode: false,
     trayContent: 'tokens',
+    showTrayProviderBadge: false,
     windowToggleShortcut: '',
     currency: normalizeCurrency(process.env.TOKEN_MONITOR_CURRENCY || 'USD'),
     currencyRates: {},
@@ -1417,6 +1420,7 @@ function readSettings() {
     delete merged.edgeDrawerEnabled;
     merged.floatingBubbleTrigger = merged.floatingBubbleTrigger === 'hover' ? 'hover' : 'click';
     merged.floatingBubbleContent = normalizeTrayContent(merged.floatingBubbleContent, 'icon');
+    merged.showTrayProviderBadge = parseBoolean(merged.showTrayProviderBadge, false);
     merged.windowToggleShortcut = normalizeWindowToggleShortcut(merged.windowToggleShortcut);
     // 如果设置了 opencodeCookie 但没有 profiles，自动迁移
     if (merged.opencodeCookie && Object.keys(merged.opencodeProfiles || {}).length === 0) {
@@ -2053,7 +2057,7 @@ function updateTrayDisplay() {
     limitProviders: settings?.limitProviders,
     showLimitUsed: settings?.showLimitUsed
   });
-  const barsImageMode = (mode === 'bars' || mode === 'barsSession' || mode === 'barsWeekly' || mode === 'barsAllSessions') && !limitText && providerTrayIcons[mode];
+  const barsImageMode = isBarsTrayIconMode(mode) && !limitText && providerTrayIcons[mode];
   // A renderer-generated icon is cached in the main process. Only reuse it
   // while the current stats still have quota text; otherwise it can outlive
   // the provider data that generated it.
@@ -3621,6 +3625,7 @@ app.whenReady().then(() => {
     const previousShowTrayIcon = settings.showTrayIcon;
     const previousTrayMode = settings.trayMode;
     const previousTrayContent = settings.trayContent;
+    const previousShowTrayProviderBadge = settings.showTrayProviderBadge;
     const previousCurrency = settings.currency;
     const previousStartAtLogin = settings.startAtLogin;
     const previousCustomModelPricing = JSON.stringify(settings.customModelPricing || []);
@@ -3704,6 +3709,7 @@ app.whenReady().then(() => {
         trayMode: patch.trayMode ?? settings.trayMode
       }),
       trayContent: normalizeTrayContent(patch.trayContent ?? settings.trayContent),
+      showTrayProviderBadge: parseBoolean(patch.showTrayProviderBadge ?? settings.showTrayProviderBadge, false),
       floatingBubbleContent: normalizeTrayContent(patch.floatingBubbleContent ?? settings.floatingBubbleContent, 'icon'),
       windowToggleShortcut: normalizeWindowToggleShortcut(patch.windowToggleShortcut ?? settings.windowToggleShortcut),
       currency: normalizedCurrency,
@@ -3804,7 +3810,11 @@ app.whenReady().then(() => {
     if (settings.trayMode !== previousTrayMode) {
       if (settings.trayMode) enterTrayMode();
       else exitTrayMode();
-    } else if (settings.trayContent !== previousTrayContent || settings.currency !== previousCurrency) {
+    } else if (
+      settings.trayContent !== previousTrayContent ||
+      settings.showTrayProviderBadge !== previousShowTrayProviderBadge ||
+      settings.currency !== previousCurrency
+    ) {
       updateTrayDisplay();
     }
     if (patch.currency !== undefined || patch.currencyRates !== undefined) {
@@ -3915,7 +3925,7 @@ app.whenReady().then(() => {
       // Resize by height only; aspect ratio is preserved, so wide bar-style
       // icons keep their width while square provider icons stay 20x20.
       const sized = img.resize({ height: 20, quality: 'best' });
-      if (process.platform === 'darwin') sized.setTemplateImage(true);
+      if (shouldUseTemplateTrayIcon(id, process.platform, settings?.showTrayProviderBadge)) sized.setTemplateImage(true);
       providerTrayIcons[id] = sized;
     }
     updateTrayDisplay();
