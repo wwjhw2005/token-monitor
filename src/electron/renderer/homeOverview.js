@@ -107,6 +107,9 @@
             planStatus: window.planStatus || '',
             amount: finiteNumber(window.amount),
             currency: window.currency || '',
+            used: finiteNumber(window.used),
+            limit: finiteNumber(window.limit),
+            remaining: finiteNumber(window.remaining),
             index: windowIndex
           }))
           .filter((window) => window.remainingPercent != null || window.planStatus === 'expired' || window.value)

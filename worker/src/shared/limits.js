@@ -6,7 +6,7 @@
 const { staleAfterMsForSyncUpload } = require('./syncUploadInterval');
 
 const DEFAULT_LIMITS_REFRESH_MS = 5 * 60 * 1000;
-const VALID_PROVIDERS = new Set(['claude', 'codex', 'cursor', 'antigravity', 'opencode', 'deepseek', 'minimax', 'mimo', 'grok', 'copilot', 'kiro', 'zai', 'volcengine', 'qoder', 'zaiteam', 'kimi', 'ollama']);
+const VALID_PROVIDERS = new Set(['claude', 'codex', 'cursor', 'antigravity', 'opencode', 'deepseek', 'minimax', 'mimo', 'grok', 'copilot', 'kiro', 'zai', 'volcengine', 'qoder', 'zaiteam', 'kimi', 'ollama', 'wecode']);
 const VALID_STATUSES = new Set(['ok', 'disabled', 'notConfigured', 'unauthorized', 'rateLimited', 'sourceRateLimited', 'unavailable', 'error']);
 const VALID_SOURCES = new Set(['oauth', 'cli', 'web', 'rpc', 'local', 'api']);
 const VALID_SOURCE_DETAILS = new Set(['app', 'cli', 'managed', 'unknown']);
@@ -337,7 +337,7 @@ function isConfiguredProvider(provider) {
 }
 
 function providerCollapseKey(provider) {
-  if ((provider.provider === 'codex' || provider.provider === 'opencode' || provider.provider === 'mimo') && isConfiguredProvider(provider)) {
+  if ((provider.provider === 'codex' || provider.provider === 'opencode' || provider.provider === 'mimo' || provider.provider === 'wecode') && isConfiguredProvider(provider)) {
     return providerAggregateKey(provider);
   }
   return provider.provider;

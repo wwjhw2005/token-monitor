@@ -6,7 +6,7 @@ const motionPreferenceApi = window.TokenMonitorMotionPreference;
 const reducedMotionMedia = window.matchMedia?.('(prefers-reduced-motion: reduce)');
 const clientsWithIcon = new Set([
   'claude', 'codex', 'gemini', 'cursor', 'opencode', 'openclaw', 'hermes', 'antigravity', 'cline', 'kimi', 'qwen', 'grok', 'copilot', 'pi', 'zed', 'kilocode', 'micode', 'zcode', 'kiro', 'codebuddy', 'workbuddy', 'proma',
-  'xai', 'deepseek', 'meta', 'mistral', 'qwen', 'moonshot', 'zai', 'zaiteam', 'cohere', 'xiaomi', 'mimo', 'minimax', 'doubao', 'volcengine', 'qoder', 'ollama'
+  'xai', 'deepseek', 'meta', 'mistral', 'qwen', 'moonshot', 'zai', 'zaiteam', 'cohere', 'xiaomi', 'mimo', 'minimax', 'doubao', 'volcengine', 'qoder', 'ollama', 'wecode'
 ]);
 
 function osIconFor(platform) {
@@ -80,7 +80,8 @@ const LIMIT_PROVIDERS = [
   { id: 'volcengine', label: 'Volcengine' },
   { id: 'qoder', label: 'Qoder' },
   { id: 'kimi', label: 'Kimi' },
-  { id: 'ollama', label: 'Ollama' }
+  { id: 'ollama', label: 'Ollama' },
+  { id: 'wecode', label: 'WeCode' }
 ];
 const DEFAULT_LIMIT_PROVIDER_ORDER = LIMIT_PROVIDERS.map((provider) => provider.id).join(',');
 const limitProviderOrderApi = window.TokenMonitorLimitProviderOrder;
@@ -201,7 +202,7 @@ function normalizeInitialViewValue(value, allowed, fallback) {
   return allowed.has(raw) ? raw : fallback;
 }
 
-const state = { period: normalizeInitialViewValue(initialViewState.period, viewPeriodValues, 'today'), appUpdate: null, breakdown: normalizeInitialViewValue(initialViewState.breakdown, viewBreakdownValues, 'home'), viewSwitcherOpen: false, viewSwitcherHasOpened: false, resetCreditsTooltipHasOpened: false, resetCreditsTooltipActive: false, resetCreditsTooltipRenderPending: false, settings: null, stats: null, homeHistory: null, homeHistoryBusy: false, homeHistoryRequested: false, homeHistoryPreviewKey: '', homeActivityScrollLeft: null, homeActivityFollowEnd: true, homeActivityResizeObserver: null, serviceStatus: null, serviceStatusBusy: false, serviceProvidersExpanded: false, trendSettingsExpanded: false, trendsActivating: false, homeSettingsExpanded: false, homeLimitSettingsExpanded: false, serviceStatusTicker: null, refreshTimer: null, refreshBusy: false, refreshFeedbackTimer: null, currentTotal: 0, rowSignature: '', streamConnected: false, streamFailure: null, mode: 'idle', appInfo: null, tokscaleStatus: null, tokscaleCheck: null, tokscaleBusy: false, hubInfo: null, cursorAccount: { status: null, error: '' }, cursorAccountExpanded: false, codexAccountExpanded: false, codexAccountError: '', codexSignInBusy: false, codexSignInFlowId: '', codexLoginUrl: '', codexLoginStatus: '', codexLoginOutput: '', codexActiveAccount: null, codexPendingActiveAccount: null, codexPendingActiveAccountUntil: 0, codexPendingActiveAccountTimer: null, codexSystemSwitchingAccountId: '', codexSystemSwitchErrorAccountId: '', codexSystemSwitchError: '', codexSwitchPopoverHasOpened: false, codexSwitchPopoverActive: false, codexSwitchPopoverRenderPending: false, customPricingExpanded: false, opencodeProfileCount: 0, opencodeCookieExpanded: false, deepseekAccountExpanded: false, deepseekPendingCheckSince: 0, minimaxAccountExpanded: false, minimaxPendingCheckSince: 0, zaiAccountExpanded: false, zaiPendingCheckSince: 0, zaiteamAccountExpanded: false, zaiteamPendingCheckSince: 0, volcengineAccountExpanded: false, volcenginePendingCheckSince: 0, qoderAccountExpanded: false, qoderPendingCheckSince: 0, kimiAccountExpanded: false, kimiPendingCheckSince: 0, ollamaAccountExpanded: false, ollamaPendingCheckSince: 0, mimoAccountExpanded: false, mimoAccountError: '', copilotAccountExpanded: false, copilotManualExpanded: false, copilotPendingCheckSince: 0, copilotSignInBusy: false, copilotSignInCancelable: false, copilotSignInFlowId: '', copilotAuthorizeMessage: '', copilotLoginStatus: '', copilotErrorMessage: '', floatingBubble: initialFloatingBubble, suppressInitialNumberAnimation: window.__TOKEN_MONITOR_SUPPRESS_INITIAL_NUMBER_ANIMATION__ === true, openSession: null, detailSort: 'time', recordingWindowShortcut: false, windowShortcutInvalid: false };
+const state = { period: normalizeInitialViewValue(initialViewState.period, viewPeriodValues, 'today'), appUpdate: null, breakdown: normalizeInitialViewValue(initialViewState.breakdown, viewBreakdownValues, 'home'), viewSwitcherOpen: false, viewSwitcherHasOpened: false, resetCreditsTooltipHasOpened: false, resetCreditsTooltipActive: false, resetCreditsTooltipRenderPending: false, settings: null, stats: null, homeHistory: null, homeHistoryBusy: false, homeHistoryRequested: false, homeHistoryPreviewKey: '', homeActivityScrollLeft: null, homeActivityFollowEnd: true, homeActivityResizeObserver: null, serviceStatus: null, serviceStatusBusy: false, serviceProvidersExpanded: false, trendSettingsExpanded: false, trendsActivating: false, homeSettingsExpanded: false, homeLimitSettingsExpanded: false, serviceStatusTicker: null, refreshTimer: null, refreshBusy: false, refreshFeedbackTimer: null, currentTotal: 0, rowSignature: '', streamConnected: false, streamFailure: null, mode: 'idle', appInfo: null, tokscaleStatus: null, tokscaleCheck: null, tokscaleBusy: false, hubInfo: null, cursorAccount: { status: null, error: '' }, cursorAccountExpanded: false, codexAccountExpanded: false, codexAccountError: '', codexSignInBusy: false, codexSignInFlowId: '', codexLoginUrl: '', codexLoginStatus: '', codexLoginOutput: '', codexActiveAccount: null, codexPendingActiveAccount: null, codexPendingActiveAccountUntil: 0, codexPendingActiveAccountTimer: null, codexSystemSwitchingAccountId: '', codexSystemSwitchErrorAccountId: '', codexSystemSwitchError: '', codexSwitchPopoverHasOpened: false, codexSwitchPopoverActive: false, codexSwitchPopoverRenderPending: false, customPricingExpanded: false, opencodeProfileCount: 0, opencodeCookieExpanded: false, deepseekAccountExpanded: false, deepseekPendingCheckSince: 0, minimaxAccountExpanded: false, minimaxPendingCheckSince: 0, zaiAccountExpanded: false, zaiPendingCheckSince: 0, zaiteamAccountExpanded: false, zaiteamPendingCheckSince: 0, volcengineAccountExpanded: false, volcenginePendingCheckSince: 0, qoderAccountExpanded: false, qoderPendingCheckSince: 0, kimiAccountExpanded: false, kimiPendingCheckSince: 0, ollamaAccountExpanded: false, ollamaPendingCheckSince: 0, wecodeAccountExpanded: false, wecodePendingCheckSince: 0, mimoAccountExpanded: false, mimoAccountError: '', copilotAccountExpanded: false, copilotManualExpanded: false, copilotPendingCheckSince: 0, copilotSignInBusy: false, copilotSignInCancelable: false, copilotSignInFlowId: '', copilotAuthorizeMessage: '', copilotLoginStatus: '', copilotErrorMessage: '', floatingBubble: initialFloatingBubble, suppressInitialNumberAnimation: window.__TOKEN_MONITOR_SUPPRESS_INITIAL_NUMBER_ANIMATION__ === true, openSession: null, detailSort: 'time', recordingWindowShortcut: false, windowShortcutInvalid: false };
 state.appUpdateNotesPresentedVersion = '';
 state.periodMotionActive = false;
 state.animateBarsFromZero = false;
@@ -455,12 +456,13 @@ function settingsSectionSummary(section) {
     const qoderLinked = externalProviderAccountLinked('qoder');
     const kimiLinked = externalProviderAccountLinked('kimi');
     const ollamaLinked = externalProviderAccountLinked('ollama');
+    const wecodeLinked = externalProviderAccountLinked('wecode');
     const mimoLinked = mimoAccountLinked();
     const copilotLinked = copilotAccountLinked();
     const codexLinked = (state.settings?.codexManagedAccounts || []).length > 0;
     return t('settings.summary.accounts', {
-      linked: (codexLinked ? 1 : 0) + (cursorLinked ? 1 : 0) + (opencodeCount > 0 ? 1 : 0) + (deepseekLinked ? 1 : 0) + (minimaxLinked ? 1 : 0) + (zaiLinked ? 1 : 0) + (zaiteamLinked ? 1 : 0) + (volcengineLinked ? 1 : 0) + (qoderLinked ? 1 : 0) + (kimiLinked ? 1 : 0) + (ollamaLinked ? 1 : 0) + (mimoLinked ? 1 : 0) + (copilotLinked ? 1 : 0),
-      total: 13
+      linked: (codexLinked ? 1 : 0) + (cursorLinked ? 1 : 0) + (opencodeCount > 0 ? 1 : 0) + (deepseekLinked ? 1 : 0) + (minimaxLinked ? 1 : 0) + (zaiLinked ? 1 : 0) + (zaiteamLinked ? 1 : 0) + (volcengineLinked ? 1 : 0) + (qoderLinked ? 1 : 0) + (kimiLinked ? 1 : 0) + (ollamaLinked ? 1 : 0) + (wecodeLinked ? 1 : 0) + (mimoLinked ? 1 : 0) + (copilotLinked ? 1 : 0),
+      total: 14
     });
   }
   if (section === 'limits') {
@@ -1824,6 +1826,18 @@ function formatHomeLimitWindowValue(window, showUsed) {
   return `${formatPercent(percent)} ${limitModeSuffix(showUsed)}`;
 }
 
+// WeCode's billing window carries concrete spend (user_usage) and remaining
+// (user_quota − user_usage) amounts alongside the percent. The home module
+// leads with the percent; this secondary line surfaces the actual amounts.
+function formatWecodeAmountDetail(window) {
+  const used = Number(window?.used);
+  const remaining = Number(window?.remaining);
+  const parts = [];
+  if (Number.isFinite(used)) parts.push(`${t('home.used')} ${used.toFixed(2)}`);
+  if (Number.isFinite(remaining)) parts.push(`${t('home.wecode.remaining')} ${remaining.toFixed(2)}`);
+  return parts.join(' · ');
+}
+
 function balanceRemainingWindow(balance) {
   const amount = Math.max(0, Number(balance?.amount || 0));
   const spend = Math.max(0, Number(balance?.monthSpend || 0));
@@ -2444,6 +2458,17 @@ function renderProviderWindows(provider, color) {
       windows.append(node);
     }
     if (weekly) windows.append(limitWindowNode('Weekly', weekly, color, 0.68));
+  } else if (provider.provider === 'wecode') {
+    // WeCode exposes a single billing window: percent on the top line, with the
+    // concrete spend/remaining amounts as a detail on the right (mirrors how
+    // Kiro/Copilot surface absolute counts under the percent bar).
+    windows.classList.add('limit-windows-wecode');
+    const billing = windowForKind(provider, 'billing');
+    if (billing) {
+      const node = limitWindowNode(billing?.label || 'Quota', billing, color, 0.68, null, formatWecodeAmountDetail(billing));
+      node.classList.add('limit-window-wide');
+      windows.append(node);
+    }
   } else if (provider.provider === 'claude') {
     // Claude usually shows session + one all-models weekly, but can carry a second
     // model-scoped weekly (the temporary "Fable only" promo cap). Render every
@@ -2567,6 +2592,30 @@ function renderOpenCodeAccountGroup(label, providers, color) {
   return row;
 }
 
+function wecodeAccountTitle(provider, index) {
+  return String(provider?.accountName || '').trim() || `Account ${index + 1}`;
+}
+
+function renderWecodeAccountGroup(label, providers, color) {
+  const row = document.createElement('div');
+  row.className = `limit-row limit-row-group${providers.some((provider) => provider.stale) ? ' stale' : ''}`;
+  const groupProvider = { provider: 'wecode', status: 'ok', windows: [] };
+  const head = renderLimitProviderHead('wecode', label, groupProvider, color, {
+    planText: `${providers.length} accounts`,
+    hideMeta: true
+  });
+  const accountList = document.createElement('div');
+  accountList.className = 'limit-account-list';
+  providers.forEach((provider, index) => {
+    accountList.append(renderLimitProviderRow('wecode', wecodeAccountTitle(provider, index), provider, color, {
+      accountRow: true,
+      showIcon: false
+    }));
+  });
+  row.append(head, accountList);
+  return row;
+}
+
 function renderLimits() {
   if (!els.limitsPanel) return;
   const holdResetCreditsTooltipRender = resetCreditsTooltipShouldHoldRender();
@@ -2608,6 +2657,10 @@ function renderLimits() {
     }
     if (id === 'mimo' && Array.isArray(visibleProviders) && visibleProviders.length > 1) {
       nodes.push(renderMimoAccountGroup(label, visibleProviders, color));
+      continue;
+    }
+    if (id === 'wecode' && Array.isArray(visibleProviders) && visibleProviders.length > 1) {
+      nodes.push(renderWecodeAccountGroup(label, visibleProviders, color));
       continue;
     }
     const provider = Array.isArray(visibleProviders) ? visibleProviders[0] : visibleProviders;
@@ -3294,7 +3347,9 @@ function homeLimitRows() {
     accountName: (provider, index, providerEntries) => {
       const id = String(provider?.provider || '').trim().toLowerCase();
       const option = providerOptions.find((entry) => entry.id === id);
-      return id === 'codex' && providerEntries.length > 1 ? codexAccountTitle(provider, index) : option?.label || id;
+      if (id === 'codex' && providerEntries.length > 1) return codexAccountTitle(provider, index);
+      if (id === 'wecode' && providerEntries.length > 1) return wecodeAccountTitle(provider, index);
+      return option?.label || id;
     }
   });
 }
@@ -3362,11 +3417,20 @@ function renderHomeLimitModule() {
       line.append(label, value);
       metric.append(line);
       const resetAt = formatReset(window.resetsAt);
+      const resetDescription = window.resetDescription
+        ? t('home.reset', { value: window.resetDescription })
+        : '';
+      const wecodeDetail = row.providerId === 'wecode' && window.kind === 'billing'
+        ? formatWecodeAmountDetail(window)
+        : '';
       const resetText = document.createElement('span');
       resetText.className = 'home-limit-reset';
-      resetText.textContent = resetAt || (window.resetDescription
-        ? t('home.reset', { value: window.resetDescription })
-        : '\u00a0');
+      // WeCode has no reset schedule, so drop the empty reset line and surface
+      // the spend/remaining amounts there instead, keeping the window one line.
+      resetText.textContent = resetAt || resetDescription || wecodeDetail || '\u00a0';
+      if (wecodeDetail && !resetAt && !resetDescription) {
+        resetText.classList.add('home-limit-amount-detail');
+      }
       metric.append(resetText);
       windows.append(metric);
     }
@@ -4086,6 +4150,7 @@ async function refreshStats(options = {}) {
     renderExternalProviderStatus('qoder');
     renderExternalProviderStatus('kimi');
     renderExternalProviderStatus('ollama');
+    renderExternalProviderStatus('wecode');
     renderMimoStatus();
     renderCopilotStatus();
     maybeUpdateBarsIcon();
@@ -5070,6 +5135,7 @@ function syncSettingsForm() {
   renderExternalProviderStatus('qoder');
   renderExternalProviderStatus('kimi');
   renderExternalProviderStatus('ollama');
+  renderExternalProviderStatus('wecode');
   renderMimoStatus();
   renderCopilotStatus();
   renderViewPreferences();
@@ -6869,6 +6935,7 @@ window.tokenMonitor.onStatsPush?.((payload) => {
     renderExternalProviderStatus('qoder');
     renderExternalProviderStatus('kimi');
     renderExternalProviderStatus('ollama');
+    renderExternalProviderStatus('wecode');
     renderCopilotStatus();
     maybeUpdateBarsIcon();
   }
@@ -7540,6 +7607,11 @@ const externalLimitAccountConfig = {
     configuredKey: 'ollamaCookieConfigured',
     sourceKey: 'ollamaCookieSource',
     pendingKey: 'ollamaPendingCheckSince'
+  },
+  wecode: {
+    configuredKey: 'wecodeUsersConfigured',
+    sourceKey: 'wecodeUsersSource',
+    pendingKey: 'wecodePendingCheckSince'
   }
 };
 
@@ -7732,6 +7804,12 @@ function renderExternalProviderStatus(providerName) {
     const siteInput = document.getElementById('qoderSiteInput');
     if (siteInput) siteInput.value = state.settings?.qoderSite === 'cn' ? 'cn' : 'global';
     updateQoderUsagePageHint();
+  }
+  if (providerName === 'wecode') {
+    const usersInput = document.getElementById('wecodeUsersInput');
+    if (usersInput && document.activeElement !== usersInput) usersInput.value = state.settings?.wecodeUsers || '';
+    const proxyInput = document.getElementById('wecodeProxyInput');
+    if (proxyInput && document.activeElement !== proxyInput) proxyInput.value = state.settings?.wecodeProxy || '';
   }
   setCursorStatusText(
     statusEl,
@@ -8870,6 +8948,48 @@ function setupCursorAccountUI() {
       } catch (err) {
         clearExternalProviderCheckPending('kimi');
         errorEl.textContent = t('settings.kimi.saveFailed', { message: err.message });
+        errorEl.classList.remove('hidden');
+      }
+    });
+  }
+
+  const wecodeToggle = document.getElementById('wecodeSettingsToggle');
+  if (wecodeToggle) {
+    wecodeToggle.addEventListener('click', () => setExternalAccountExpanded('wecode', !state.wecodeAccountExpanded));
+    setExternalAccountExpanded('wecode', false);
+    renderExternalProviderStatus('wecode');
+
+    document.getElementById('wecodeLogoutButton').addEventListener('click', async () => {
+      await saveSettings({ wecodeUsers: '' });
+      clearExternalProviderCheckPending('wecode');
+      clearExternalProviderPendingStatus('wecode');
+      renderExternalProviderStatus('wecode');
+    });
+
+    document.getElementById('wecodeRefreshButton').addEventListener('click', async () => {
+      await refreshStats({ force: true });
+    });
+
+    document.getElementById('wecodeUsersSubmit').addEventListener('click', async () => {
+      const usersInput = document.getElementById('wecodeUsersInput');
+      const proxyInput = document.getElementById('wecodeProxyInput');
+      const errorEl = document.getElementById('wecodeErrorMessage');
+      errorEl.classList.add('hidden');
+      if (!String(usersInput.value || '').trim()) {
+        errorEl.textContent = t('settings.wecode.statusNotSet');
+        errorEl.classList.remove('hidden');
+        return;
+      }
+      try {
+        markExternalProviderCheckPending('wecode');
+        await saveSettings({ wecodeUsers: usersInput.value, wecodeProxy: proxyInput.value });
+        renderExternalProviderStatus('wecode');
+        await refreshStats({ force: true });
+        setExternalAccountExpanded('wecode', !externalProviderAccountLinked('wecode'));
+        renderExternalProviderStatus('wecode');
+      } catch (err) {
+        clearExternalProviderCheckPending('wecode');
+        errorEl.textContent = t('settings.wecode.saveFailed', { message: err.message });
         errorEl.classList.remove('hidden');
       }
     });

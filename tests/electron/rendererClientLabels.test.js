@@ -59,16 +59,18 @@ test('renderer uses the Kiro brand icon for the Kiro tool row', () => {
   assert.match(styles, /\.row-icon-kiro\s*\{[^}]*assets\/icons\/kiro\.svg/s);
 });
 
-test('renderer wires limit provider brand icons for Z.ai, Volcengine, and Qoder', () => {
+test('renderer wires limit provider brand icons for Z.ai, Volcengine, Qoder, and WeCode', () => {
   const source = rendererSource();
   const styles = rendererStyles();
 
-  assert.match(source, /clientsWithIcon = new Set\(\[[\s\S]*'zai'[\s\S]*'volcengine'[\s\S]*'qoder'/);
+  assert.match(source, /clientsWithIcon = new Set\(\[[\s\S]*'zai'[\s\S]*'volcengine'[\s\S]*'qoder'[\s\S]*'wecode'/);
   assert.match(styles, /\.limit-icon-zai\s*\{[^}]*assets\/icons\/zai\.svg/s);
   assert.match(styles, /\.limit-icon-volcengine\s*\{[^}]*assets\/icons\/volcengine\.svg/s);
   assert.match(styles, /\.limit-icon-qoder\s*\{[^}]*assets\/icons\/qoder\.svg/s);
   assert.match(styles, /\.limit-icon-ollama\s*\{[^}]*assets\/icons\/ollama\.svg/s);
   assert.match(styles, /\.row-icon-ollama\s*\{[^}]*assets\/icons\/ollama\.svg/s);
+  assert.match(styles, /\.limit-icon-wecode\s*\{[^}]*assets\/icons\/wecode\.svg/s);
+  assert.match(styles, /\.row-icon-wecode\s*\{[^}]*assets\/icons\/wecode\.svg/s);
 });
 
 test('renderer wires the Doubao vendor icon for Doubao model rows', () => {

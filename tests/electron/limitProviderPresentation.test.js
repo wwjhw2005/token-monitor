@@ -772,6 +772,7 @@ test('Accounts summary counts all managed account groups including MiMo and Olla
   assert.match(summaryBody, /const qoderLinked = externalProviderAccountLinked\('qoder'\);/);
   assert.match(summaryBody, /const kimiLinked = externalProviderAccountLinked\('kimi'\);/);
   assert.match(summaryBody, /const ollamaLinked = externalProviderAccountLinked\('ollama'\);/);
+  assert.match(summaryBody, /const wecodeLinked = externalProviderAccountLinked\('wecode'\);/);
   assert.match(summaryBody, /const mimoLinked = mimoAccountLinked\(\);/);
   assert.match(summaryBody, /const copilotLinked = copilotAccountLinked\(\);/);
   assert.match(summaryBody, /\(minimaxLinked \? 1 : 0\)/);
@@ -781,9 +782,10 @@ test('Accounts summary counts all managed account groups including MiMo and Olla
   assert.match(summaryBody, /\(qoderLinked \? 1 : 0\)/);
   assert.match(summaryBody, /\(kimiLinked \? 1 : 0\)/);
   assert.match(summaryBody, /\(ollamaLinked \? 1 : 0\)/);
+  assert.match(summaryBody, /\(wecodeLinked \? 1 : 0\)/);
   assert.match(summaryBody, /\(mimoLinked \? 1 : 0\)/);
   assert.match(summaryBody, /\(copilotLinked \? 1 : 0\)/);
-  assert.match(summaryBody, /total: 13/);
+  assert.match(summaryBody, /total: 14/);
 });
 
 test('account validation does not use a remote aggregate when the local device lacks the provider', () => {

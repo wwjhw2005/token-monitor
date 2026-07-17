@@ -21,7 +21,7 @@ const { startCollector, lookupModelPricing, normalizeHistoryIntervalMs } = requi
 const { customPricingPath } = require('../shared/tokscaleConfig');
 const { applyCustomPricing, normalizeCustomPricingSetting } = require('../shared/tokscaleCustomPricing');
 const { createHub } = require('../hub/server');
-const { collectLimitsOnce, deepseekToken, normalizeLimitsRefreshMs, parseBoolean, parseLimitProviders, runCodexLogin, minimaxToken, copilotToken, zaiToken, zaiRegion, zaiTeamToken, volcengineCredentials, qoderCookie, kimiToken, ollamaSessionCookie } = require('../shared/limitCollector');
+const { collectLimitsOnce, deepseekToken, normalizeLimitsRefreshMs, parseBoolean, parseLimitProviders, runCodexLogin, minimaxToken, copilotToken, zaiToken, zaiRegion, zaiTeamToken, volcengineCredentials, qoderCookie, kimiToken, ollamaSessionCookie, wecodeUsers } = require('../shared/limitCollector');
 const { mergeCodexTransientWindows } = require('../shared/limits');
 const { fetchOllamaLimits, rememberOllamaValidation } = require('../shared/ollamaLimits');
 const { copilotLoginErrorMessage, isAllowedVerificationUrl, runCopilotDeviceFlowLogin } = require('../shared/copilotDeviceFlow');
@@ -289,6 +289,8 @@ function defaultSettings() {
     qoderSite: 'global',
     kimiApiKey: '',
     ollamaCookie: '',
+    wecodeUsers: '',
+    wecodeProxy: '',
     codexManagedAccounts: [],
     mimoManagedAccounts: [],
     appUpdate: {
@@ -425,6 +427,18 @@ function normalizeKimiApiKey(value) {
 
 function currentKimiApiKey() {
   return settings?.kimiApiKey || kimiToken(process.env);
+}
+
+function normalizeWecodeUsers(value) {
+  return wecodeUsers({}, String(value || '')).join(',');
+}
+
+function currentWecodeUsers() {
+  return settings?.wecodeUsers || wecodeUsers(process.env).join(',');
+}
+
+function normalizeWecodeProxy(value) {
+  return String(value || '').trim();
 }
 
 function normalizeCopilotEnterpriseHost(value) {
@@ -1799,6 +1813,8 @@ function startSyncCollector() {
     qoderCookie: settings.qoderCookie || '',
     qoderSite: settings.qoderSite || 'global',
     kimiApiKey: settings.kimiApiKey || '',
+    wecodeUser: settings.wecodeUsers || '',
+    wecodeProxy: settings.wecodeProxy || '',
     ollamaCookie: settings.ollamaCookie || '',
     codexManagedAccounts: codexManagedAccountsForCollector(),
     mimoManagedAccounts: mimoManagedAccountsForCollector(),
@@ -1872,6 +1888,8 @@ function startHostCollector() {
     qoderCookie: settings.qoderCookie || '',
     qoderSite: settings.qoderSite || 'global',
     kimiApiKey: settings.kimiApiKey || '',
+    wecodeUser: settings.wecodeUsers || '',
+    wecodeProxy: settings.wecodeProxy || '',
     ollamaCookie: settings.ollamaCookie || '',
     codexManagedAccounts: codexManagedAccountsForCollector(),
     mimoManagedAccounts: mimoManagedAccountsForCollector(),
@@ -2108,6 +2126,8 @@ function startLocalCollector() {
     qoderCookie: settings.qoderCookie || '',
     qoderSite: settings.qoderSite || 'global',
     kimiApiKey: settings.kimiApiKey || '',
+    wecodeUser: settings.wecodeUsers || '',
+    wecodeProxy: settings.wecodeProxy || '',
     ollamaCookie: settings.ollamaCookie || '',
     codexManagedAccounts: codexManagedAccountsForCollector(),
     mimoManagedAccounts: mimoManagedAccountsForCollector(),
@@ -2352,6 +2372,11 @@ function settingsForRenderer() {
     : kimiToken(process.env)
       ? 'env'
       : '';
+  const wecodeUsersSource = settings?.wecodeUsers
+    ? 'settings'
+    : wecodeUsers(process.env).length > 0
+      ? 'env'
+      : '';
   return {
     ...settings,
     deepseekApiKey: '',
@@ -2393,6 +2418,8 @@ function settingsForRenderer() {
     ollamaCookieSource,
     kimiApiKeyConfigured: Boolean(currentKimiApiKey()),
     kimiApiKeySource,
+    wecodeUsersConfigured: Boolean(currentWecodeUsers()),
+    wecodeUsersSource,
     currencyRatesEffective: effectiveRates || resolveEffectiveRates(rateCache?.rates || {}, settings?.currencyRates || {}),
     currencyRateInfo: rateCache ? { source: rateCache.source, date: rateCache.date, fetchedAt: rateCache.fetchedAt } : null,
     windowToggleShortcutStatus: currentWindowToggleShortcutStatus()
@@ -3588,6 +3615,8 @@ app.whenReady().then(() => {
     const previousQoderSite = settings.qoderSite;
     const previousKimiApiKey = settings.kimiApiKey;
     const previousOllamaCookie = settings.ollamaCookie;
+    const previousWecodeUsers = settings.wecodeUsers;
+    const previousWecodeProxy = settings.wecodeProxy;
     const previousDiscordRpcEnabled = settings.discordRpcEnabled;
     const previousShowTrayIcon = settings.showTrayIcon;
     const previousTrayMode = settings.trayMode;
@@ -3617,6 +3646,8 @@ app.whenReady().then(() => {
     if (patch.qoderSite !== undefined) normalizedPatch.qoderSite = normalizeQoderSite(patch.qoderSite);
     if (patch.kimiApiKey !== undefined) normalizedPatch.kimiApiKey = normalizeKimiApiKey(patch.kimiApiKey);
     if (patch.ollamaCookie !== undefined) normalizedPatch.ollamaCookie = normalizeOllamaCookie(patch.ollamaCookie);
+    if (patch.wecodeUsers !== undefined) normalizedPatch.wecodeUsers = normalizeWecodeUsers(patch.wecodeUsers);
+    if (patch.wecodeProxy !== undefined) normalizedPatch.wecodeProxy = normalizeWecodeProxy(patch.wecodeProxy);
     if (patch.collectionMode !== undefined) normalizedPatch.collectionMode = normalizeCollectionMode(patch.collectionMode, settings.collectionMode);
     if (patch.collectionIntervalMs !== undefined) normalizedPatch.collectionIntervalMs = normalizeCollectionIntervalMs(patch.collectionIntervalMs, settings.collectionIntervalMs);
     if (patch.syncUploadIntervalMs !== undefined) normalizedPatch.syncUploadIntervalMs = normalizeSyncUploadIntervalMs(patch.syncUploadIntervalMs, settings.syncUploadIntervalMs);
@@ -3760,7 +3791,9 @@ app.whenReady().then(() => {
       settings.qoderCookie !== previousQoderCookie ||
       settings.qoderSite !== previousQoderSite ||
       settings.kimiApiKey !== previousKimiApiKey ||
-      settings.ollamaCookie !== previousOllamaCookie
+      settings.ollamaCookie !== previousOllamaCookie ||
+      settings.wecodeUsers !== previousWecodeUsers ||
+      settings.wecodeProxy !== previousWecodeProxy
     ) {
       startMode();
     }

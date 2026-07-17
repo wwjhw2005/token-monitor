@@ -34,7 +34,8 @@
     volcengine: { api: 'API' },
     qoder: { web: 'Web' },
     kimi: { api: 'API' },
-    ollama: { web: 'Web' }
+    ollama: { web: 'Web' },
+    wecode: { api: 'API' }
   };
 
   const CODEX_RPC_DETAIL_LABELS = {
@@ -61,7 +62,8 @@
     volcengine: ['Coding Plan', 'API key'],
     qoder: ['Manual login', 'Web'],
     kimi: ['Coding Plan', 'API key'],
-    ollama: ['Manual login', 'Web']
+    ollama: ['Manual login', 'Web'],
+    wecode: ['API']
   };
 
   // Capability hint -> the status label it would duplicate. When that status is

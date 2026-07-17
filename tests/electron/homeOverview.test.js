@@ -304,6 +304,23 @@ test('home limit windows ignore missing percentage values', () => {
   assert.deepEqual(rows, []);
 });
 
+test('home limit windows carry WeCode spend/remaining amounts for the detail line', () => {
+  const rows = homeLimitAccounts([
+    {
+      key: 'wecode:0',
+      providerId: 'wecode',
+      windows: [{ kind: 'billing', label: 'Quota', used: 30.38676965, limit: 743, remaining: 712.61323035, usedPercent: 4.09 }]
+    }
+  ]);
+
+  assert.equal(rows.length, 1);
+  const window = rows[0].windows[0];
+  assert.equal(window.kind, 'billing');
+  assert.equal(window.used, 30.38676965);
+  assert.equal(window.limit, 743);
+  assert.ok(Math.abs(window.remaining - 712.61323035) < 1e-9);
+});
+
 test('homeModelRows returns one-line token shares without cost fields', () => {
   const rows = homeModelRows([
     { name: 'claude-opus-4-8', value: 34_000_000, cost: 21.96, color: '#cc7c5e' },

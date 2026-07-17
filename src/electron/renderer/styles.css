@@ -2045,6 +2045,10 @@ body.floating-bubble-collapsed-right .floating-bubble-tab {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.home-limit-amount-detail {
+  opacity: 1;
+  font-variant-numeric: tabular-nums;
+}
 .home-area-chart {
   width: 100%;
   height: 70px;
@@ -2345,6 +2349,7 @@ body.floating-bubble-collapsed-right .floating-bubble-tab {
 .row-icon-volcengine     { -webkit-mask-image: url(../../../assets/icons/volcengine.svg);        mask-image: url(../../../assets/icons/volcengine.svg); }
 .row-icon-qoder      { -webkit-mask-image: url(../../../assets/icons/qoder.svg);         mask-image: url(../../../assets/icons/qoder.svg); }
 .row-icon-ollama     { -webkit-mask-image: url(../../../assets/icons/ollama.svg);        mask-image: url(../../../assets/icons/ollama.svg); }
+.row-icon-wecode     { -webkit-mask-image: url(../../../assets/icons/wecode.svg);        mask-image: url(../../../assets/icons/wecode.svg); }
 .row-icon-os-apple   { -webkit-mask-image: url(../../../assets/icons/os-apple.svg);      mask-image: url(../../../assets/icons/os-apple.svg); }
 .row-icon-os-linux   { -webkit-mask-image: url(../../../assets/icons/os-linux.svg);      mask-image: url(../../../assets/icons/os-linux.svg); }
 .row-icon-os-windows { -webkit-mask-image: url(../../../assets/icons/os-windows.svg);    mask-image: url(../../../assets/icons/os-windows.svg); }
@@ -2429,6 +2434,10 @@ body.floating-bubble-collapsed-right .floating-bubble-tab {
 .limit-icon-mimo {
   -webkit-mask-image: url(../../../assets/icons/xiaomi.svg);
   mask-image: url(../../../assets/icons/xiaomi.svg);
+}
+.limit-icon-wecode {
+  -webkit-mask-image: url(../../../assets/icons/wecode.svg);
+  mask-image: url(../../../assets/icons/wecode.svg);
 }
 .row-label {
   display: grid;

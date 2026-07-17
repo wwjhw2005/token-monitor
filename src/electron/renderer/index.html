@@ -801,6 +801,32 @@
                 <div id="kimiErrorMessage" class="settings-note error hidden"></div>
               </div>
             </div>
+            <div id="wecodeAccountGroup" class="settings-group cursor-account-group">
+              <button id="wecodeSettingsToggle" class="settings-group-header cursor-settings-toggle" type="button" aria-expanded="false" aria-controls="wecodeSettingsDetails">
+                <span data-i18n="settings.wecode.title">WeCode Account</span>
+                <span class="cursor-settings-summary">
+                  <span id="wecodeAccountStatus" class="cursor-status-pill" data-i18n="settings.wecode.statusNotSet">Not configured</span>
+                  <span class="cursor-disclosure-icon" aria-hidden="true"></span>
+                </span>
+              </button>
+              <div id="wecodeSettingsDetails" class="cursor-settings-details hidden">
+                <div class="settings-actions">
+                  <button id="wecodeOpenBrowser" style="display:none" aria-hidden="true"></button>
+                  <button id="wecodeLogoutButton" class="hidden" data-i18n="settings.wecode.clearUsers">Clear users</button>
+                  <button id="wecodeRefreshButton" data-i18n="settings.common.refresh">Refresh</button>
+                </div>
+                <div id="wecodeManualPanel">
+                  <p class="settings-note" data-i18n="settings.wecode.note">Enter your WeCode username(s), comma-separated for multiple accounts. Stays on this device and is used only to check WeCode quota.</p>
+                  <input id="wecodeUsersInput" type="text" spellcheck="false" placeholder="username1,username2" data-i18n-placeholder="settings.wecode.usersPlaceholder" />
+                  <p class="settings-note" data-i18n="settings.wecode.proxyNote">Optional HTTP proxy when copilot.weibo.com is not directly reachable.</p>
+                  <input id="wecodeProxyInput" type="text" spellcheck="false" placeholder="http://localhost:9090" data-i18n-placeholder="settings.wecode.proxyPlaceholder" />
+                  <div class="settings-actions">
+                    <button id="wecodeUsersSubmit" data-i18n="settings.wecode.saveUsers">Save</button>
+                  </div>
+                </div>
+                <div id="wecodeErrorMessage" class="settings-note error hidden"></div>
+              </div>
+            </div>
             <div id="mimoAccountGroup" class="settings-group cursor-account-group">
               <button id="mimoSettingsToggle" class="settings-group-header cursor-settings-toggle" type="button" aria-expanded="false" aria-controls="mimoSettingsDetails">
                 <span data-i18n="settings.mimo.title">MiMo Account</span>
