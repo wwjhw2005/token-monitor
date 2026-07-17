@@ -3370,6 +3370,36 @@ function homeLimitWindowLabel(window) {
   return window.label;
 }
 
+// Three-tone health colour for a home limit window, keyed on remaining quota:
+// green (healthy) when > 30%, yellow (warning) 10–30%, red (critical) < 10%.
+// Mirrors the progress bar so the value text and the bar always agree.
+function homeLimitMeterColor(remainingPercent) {
+  const remaining = Math.max(0, Math.min(100, Number(remainingPercent) || 0));
+  if (remaining < 10) return 'var(--red)';
+  if (remaining < 30) return 'var(--yellow)';
+  return 'var(--green)';
+}
+
+// Home-only progress bar: fill width = used quota (fills as quota is consumed),
+// colour = health tone by remaining quota. Independent of limitMeterNode (which
+// is single-colour and shared by the Limits panel) so the home module can carry
+// its own three-tone logic without rippling into the Limits panel.
+function homeLimitMeterNode(window) {
+  const remaining = Number(window?.remainingPercent);
+  const used = Number(window?.usedPercent);
+  if (!Number.isFinite(remaining) && !Number.isFinite(used)) return null;
+  const showUsed = Boolean(state.settings?.showLimitUsed);
+  const fillPercent = limitFillPercent(remaining, used, showUsed);
+  const meter = document.createElement('div');
+  meter.className = 'home-limit-meter';
+  const fill = document.createElement('div');
+  fill.className = 'home-limit-meter-fill';
+  applyBarScale(fill, Math.max(0, Math.min(100, fillPercent)) / 100);
+  fill.style.background = homeLimitMeterColor(remaining);
+  meter.append(fill);
+  return meter;
+}
+
 function renderHomeLimitModule() {
   const { module, body } = homeModuleShell('limits', t('home.limits'), 'limits');
   const rows = homeLimitRows();
@@ -3405,17 +3435,19 @@ function renderHomeLimitModule() {
       value.className = 'home-list-value';
       const showUsed = Boolean(state.settings?.showLimitUsed);
       value.textContent = window.value || formatHomeLimitWindowValue(window, showUsed);
-      if (state.settings?.showHomeLimitBars === true && window.remainingPercent != null) {
+      if (window.remainingPercent != null) {
         const remainingPercent = Math.max(0, Math.min(100, Number(window.remainingPercent) || 0));
-        if (remainingPercent < 20) {
+        if (remainingPercent < 10) {
           value.classList.add('home-limit-value-critical');
-        } else if (remainingPercent < 50) {
+        } else if (remainingPercent < 30) {
           value.classList.add('home-limit-value-low');
           value.style.setProperty('--home-limit-accent', row.color);
         }
       }
       line.append(label, value);
       metric.append(line);
+      const meter = homeLimitMeterNode(window);
+      if (meter) metric.append(meter);
       const resetAt = formatReset(window.resetsAt);
       const resetDescription = window.resetDescription
         ? t('home.reset', { value: window.resetDescription })
@@ -5548,15 +5580,6 @@ function renderHomeLimitProviderList() {
     .orderedLimitProviders(LIMIT_PROVIDERS, homeLimitProviderOrderValue())
     .filter(({ id }) => enabled.has(id));
   const hasCustomOrder = Boolean(state.settings?.homeLimitProviderOrder);
-  const statusLabel = document.createElement('label');
-  statusLabel.className = 'checkbox-label home-limit-status-setting';
-  const statusInput = document.createElement('input');
-  statusInput.type = 'checkbox';
-  statusInput.checked = state.settings?.showHomeLimitBars === true;
-  const statusText = document.createElement('span');
-  statusText.textContent = t('settings.home.showLimitBars');
-  statusInput.addEventListener('change', () => void saveSettings({ showHomeLimitBars: statusInput.checked }));
-  statusLabel.append(statusInput, statusText);
   const header = document.createElement('div');
   header.className = 'settings-note-row home-limit-provider-header';
   const note = document.createElement('p');
@@ -5585,7 +5608,7 @@ function renderHomeLimitProviderList() {
   showAll.addEventListener('click', () => void showAllHomeLimitProviders());
   headerActions.append(reset, showAll);
   header.append(note, headerActions);
-  wrap.append(statusLabel, header);
+  wrap.append(header);
   for (const { id, label, settingsLabel } of providers) {
     const isHidden = hidden.has(id);
     const row = document.createElement('div');
