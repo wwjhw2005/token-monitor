@@ -99,16 +99,26 @@ jobs:
 
       # APPIMAGE_EXTRACT_AND_RUN lets electron-builder's bundled appimagetool
       # run without libfuse2 (absent on the runners).
-      - name: Build platform artifacts (mac/linux, or unsigned windows)
-        if: matrix.target != 'win' || steps.signing.outputs.win != 'true'
+      # Important: never set CSC_LINK/CSC_KEY_PASSWORD to empty strings — electron-builder
+      # treats an empty CSC_LINK as a certificate path and fails with "not a file".
+      - name: Build platform artifacts (unsigned)
+        if: >
+          (matrix.target == 'linux') ||
+          (matrix.target == 'mac' && steps.signing.outputs.mac != 'true') ||
+          (matrix.target == 'win' && steps.signing.outputs.win != 'true')
         run: npm run dist:${{ matrix.target }}
         env:
           APPIMAGE_EXTRACT_AND_RUN: '1'
-          CSC_IDENTITY_AUTO_DISCOVERY: ${{ matrix.target == 'mac' && steps.signing.outputs.mac != 'true' && 'false' || 'true' }}
-          CSC_LINK: ${{ matrix.target == 'mac' && steps.signing.outputs.mac == 'true' && secrets.MAC_CSC_LINK || '' }}
-          CSC_KEY_PASSWORD: ${{ matrix.target == 'mac' && steps.signing.outputs.mac == 'true' && secrets.MAC_CSC_KEY_PASSWORD || '' }}
-          APPLE_API_KEY_ID: ${{ matrix.target == 'mac' && steps.signing.outputs.mac == 'true' && secrets.APPLE_API_KEY_ID || '' }}
-          APPLE_API_ISSUER: ${{ matrix.target == 'mac' && steps.signing.outputs.mac == 'true' && secrets.APPLE_API_ISSUER || '' }}
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+      - name: Build platform artifacts (mac signed)
+        if: matrix.target == 'mac' && steps.signing.outputs.mac == 'true'
+        run: npm run dist:mac
+        env:
+          CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
 
       - name: Verify mac code signing and notarization
         if: matrix.target == 'mac' && steps.signing.outputs.mac == 'true'
