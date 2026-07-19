@@ -202,13 +202,16 @@ function normalizeInitialViewValue(value, allowed, fallback) {
   return allowed.has(raw) ? raw : fallback;
 }
 
-const state = { period: normalizeInitialViewValue(initialViewState.period, viewPeriodValues, 'today'), appUpdate: null, breakdown: normalizeInitialViewValue(initialViewState.breakdown, viewBreakdownValues, 'home'), viewSwitcherOpen: false, viewSwitcherHasOpened: false, resetCreditsTooltipHasOpened: false, resetCreditsTooltipActive: false, resetCreditsTooltipRenderPending: false, settings: null, stats: null, homeHistory: null, homeHistoryBusy: false, homeHistoryRequested: false, homeHistoryPreviewKey: '', homeActivityScrollLeft: null, homeActivityFollowEnd: true, homeActivityResizeObserver: null, serviceStatus: null, serviceStatusBusy: false, serviceProvidersExpanded: false, trendSettingsExpanded: false, trendsActivating: false, homeSettingsExpanded: false, homeLimitSettingsExpanded: false, serviceStatusTicker: null, refreshTimer: null, refreshBusy: false, refreshFeedbackTimer: null, currentTotal: 0, rowSignature: '', streamConnected: false, streamFailure: null, mode: 'idle', appInfo: null, tokscaleStatus: null, tokscaleCheck: null, tokscaleBusy: false, hubInfo: null, cursorAccount: { status: null, error: '' }, cursorAccountExpanded: false, codexAccountExpanded: false, codexAccountError: '', codexSignInBusy: false, codexSignInFlowId: '', codexLoginUrl: '', codexLoginStatus: '', codexLoginOutput: '', codexActiveAccount: null, codexPendingActiveAccount: null, codexPendingActiveAccountUntil: 0, codexPendingActiveAccountTimer: null, codexSystemSwitchingAccountId: '', codexSystemSwitchErrorAccountId: '', codexSystemSwitchError: '', codexSwitchPopoverHasOpened: false, codexSwitchPopoverActive: false, codexSwitchPopoverRenderPending: false, customPricingExpanded: false, opencodeProfileCount: 0, opencodeCookieExpanded: false, deepseekAccountExpanded: false, deepseekPendingCheckSince: 0, minimaxAccountExpanded: false, minimaxPendingCheckSince: 0, zaiAccountExpanded: false, zaiPendingCheckSince: 0, zaiteamAccountExpanded: false, zaiteamPendingCheckSince: 0, volcengineAccountExpanded: false, volcenginePendingCheckSince: 0, qoderAccountExpanded: false, qoderPendingCheckSince: 0, kimiAccountExpanded: false, kimiPendingCheckSince: 0, ollamaAccountExpanded: false, ollamaPendingCheckSince: 0, wecodeAccountExpanded: false, wecodePendingCheckSince: 0, mimoAccountExpanded: false, mimoAccountError: '', copilotAccountExpanded: false, copilotManualExpanded: false, copilotPendingCheckSince: 0, copilotSignInBusy: false, copilotSignInCancelable: false, copilotSignInFlowId: '', copilotAuthorizeMessage: '', copilotLoginStatus: '', copilotErrorMessage: '', floatingBubble: initialFloatingBubble, suppressInitialNumberAnimation: window.__TOKEN_MONITOR_SUPPRESS_INITIAL_NUMBER_ANIMATION__ === true, openSession: null, detailSort: 'time', recordingWindowShortcut: false, windowShortcutInvalid: false };
+const state = { period: normalizeInitialViewValue(initialViewState.period, viewPeriodValues, 'today'), appUpdate: null, breakdown: normalizeInitialViewValue(initialViewState.breakdown, viewBreakdownValues, 'home'), viewSwitcherOpen: false, viewSwitcherHasOpened: false, resetCreditsTooltipHasOpened: false, resetCreditsTooltipActive: false, resetCreditsTooltipRenderPending: false, settings: null, stats: null, homeHistory: null, homeHistoryBusy: false, homeHistoryRequested: false, homeHistorySignature: '', homeHistoryRetries: 0, homeHistoryRetryTimer: null, homeActivityScrollLeft: null, homeActivityFollowEnd: true, homeActivityResizeObserver: null, serviceStatus: null, serviceStatusBusy: false, serviceProvidersExpanded: false, trendSettingsExpanded: false, trendsActivating: false, homeSettingsExpanded: false, homeLimitSettingsExpanded: false, serviceStatusTicker: null, refreshTimer: null, refreshBusy: false, refreshFeedbackTimer: null, currentTotal: 0, rowSignature: '', streamConnected: false, streamFailure: null, mode: 'idle', appInfo: null, tokscaleStatus: null, tokscaleCheck: null, tokscaleBusy: false, hubInfo: null, cursorAccount: { status: null, error: '' }, cursorAccountExpanded: false, codexAccountExpanded: false, codexAccountError: '', codexSignInBusy: false, codexSignInFlowId: '', codexLoginUrl: '', codexLoginStatus: '', codexLoginOutput: '', codexActiveAccount: null, codexPendingActiveAccount: null, codexPendingActiveAccountUntil: 0, codexPendingActiveAccountTimer: null, codexSystemSwitchingAccountId: '', codexSystemSwitchErrorAccountId: '', codexSystemSwitchError: '', codexSwitchPopoverHasOpened: false, codexSwitchPopoverActive: false, codexSwitchPopoverRenderPending: false, customPricingExpanded: false, opencodeProfileCount: 0, opencodeCookieExpanded: false, deepseekAccountExpanded: false, deepseekPendingCheckSince: 0, minimaxAccountExpanded: false, minimaxPendingCheckSince: 0, zaiAccountExpanded: false, zaiPendingCheckSince: 0, zaiteamAccountExpanded: false, zaiteamPendingCheckSince: 0, volcengineAccountExpanded: false, volcenginePendingCheckSince: 0, qoderAccountExpanded: false, qoderPendingCheckSince: 0, kimiAccountExpanded: false, kimiPendingCheckSince: 0, ollamaAccountExpanded: false, ollamaPendingCheckSince: 0, wecodeAccountExpanded: false, wecodePendingCheckSince: 0, mimoAccountExpanded: false, mimoAccountError: '', copilotAccountExpanded: false, copilotManualExpanded: false, copilotPendingCheckSince: 0, copilotSignInBusy: false, copilotSignInCancelable: false, copilotSignInFlowId: '', copilotAuthorizeMessage: '', copilotLoginStatus: '', copilotErrorMessage: '', floatingBubble: initialFloatingBubble, suppressInitialNumberAnimation: window.__TOKEN_MONITOR_SUPPRESS_INITIAL_NUMBER_ANIMATION__ === true, openSession: null, detailSort: 'time', recordingWindowShortcut: false, windowShortcutInvalid: false };
+state.homeHistoryLoadedSignature = '';
+state.homeHistoryRetrySignature = '';
 state.appUpdateNotesPresentedVersion = '';
 state.periodMotionActive = false;
 state.animateBarsFromZero = false;
 state.animateChartsOnRender = true;
 let directBreakdownOverride = null;
 state.projectSettingsExpanded = false;
+state.homeActivitySettingsExpanded = false;
 state.settingsSections = Object.fromEntries(SETTINGS_SECTION_IDS.map((id) => [id, false]));
 const defaultAppearance = { glassOpacity: 68, glassBlur: 32, zoomFactor: 1, systemGlass: true, reduceMotion: 'system', showLiveDot: true, showToolIcons: true, titleIconOnly: true, showCompactTotalTokens: false, settingsInTitlebar: false };
 let preferenceDrag = null;
@@ -1419,8 +1422,8 @@ function applyHomeListMark(mark, iconKind, color) {
   mark.style.background = color;
 }
 
-function renderRows(rows, { showProjectIncompleteHint = false } = {}) {
-  if (rows.length === 0 && !showProjectIncompleteHint) {
+function renderRows(rows, { incompleteHint = '' } = {}) {
+  if (rows.length === 0 && !incompleteHint) {
     els.breakdown.replaceChildren();
     state.rowSignature = '';
     return;
@@ -1429,16 +1432,16 @@ function renderRows(rows, { showProjectIncompleteHint = false } = {}) {
   const liveMotionSnapshot = !state.periodMotionActive && !state.animateBarsFromZero
     ? captureBreakdownMotion()
     : null;
-  const hintText = showProjectIncompleteHint ? t('projects.incomplete') : '';
+  const hintText = incompleteHint ? t(incompleteHint) : '';
   const signature = JSON.stringify([state.breakdown, hintText, rows.map((row) => row.key)]);
   const children = Array.from(els.breakdown.children);
-  const existingHint = children.find((child) => child.classList.contains('project-incomplete-hint'));
+  const existingHint = children.find((child) => child.classList.contains('breakdown-incomplete-hint'));
   const existing = new Map(children.filter((child) => child !== existingHint).map((child) => [child.dataset.key, child]));
   if (signature !== state.rowSignature) {
     const nodes = rows.map((row) => existing.get(row.key) || rowTemplate(row));
-    if (showProjectIncompleteHint) {
+    if (incompleteHint) {
       const hint = existingHint || document.createElement('p');
-      hint.className = 'project-incomplete-hint';
+      hint.className = 'breakdown-incomplete-hint';
       hint.setAttribute('role', 'status');
       hint.textContent = hintText;
       nodes.unshift(hint);
@@ -1447,7 +1450,7 @@ function renderRows(rows, { showProjectIncompleteHint = false } = {}) {
     state.rowSignature = signature;
   }
   const current = new Map(Array.from(els.breakdown.children)
-    .filter((child) => !child.classList.contains('project-incomplete-hint'))
+    .filter((child) => !child.classList.contains('breakdown-incomplete-hint'))
     .map((child) => [child.dataset.key, child]));
   for (const rowData of rows) {
     const row = current.get(rowData.key);
@@ -3135,23 +3138,75 @@ function openViewFromTray(viewId) {
   renderBreakdownChange(viewId, { allowHidden: true });
 }
 
+const HOME_HISTORY_MAX_RETRIES = 3;
+const HOME_HISTORY_RETRY_MS = 4000;
+
 async function loadHomeHistory() {
   if (state.homeHistoryBusy || !window.tokenMonitor.getDashboardHistory) return;
   if (!homeOverviewApi.shouldFetchHomeHistory({
-    homeHistory: state.homeHistory,
     requested: state.homeHistoryRequested,
-    preview: state.stats?.historyPreview,
-    lastPreviewKey: state.homeHistoryPreviewKey
+    stats: state.stats,
+    lastSignature: state.homeHistorySignature
   })) return;
+  // The signature is recorded before the await on purpose: it stops a failed or empty
+  // fetch from re-firing on the very next render (renderHome runs loadHomeHistory every
+  // render), which is the #39 spin loop. A transient failure or a raced empty result is
+  // recovered by the bounded timer-driven retry in the finally block instead, not by
+  // render — so Home is not stranded on the 30-day preview until the history genuinely
+  // changes, which for an account with history but no current activity might be never.
+  const requestSignature = homeOverviewApi.homeHistorySignature(state.stats);
+  const previewHadDays = homeOverviewApi.historyHasDays(state.stats?.historyPreview);
+  if (state.homeHistoryRetrySignature !== requestSignature) {
+    clearTimeout(state.homeHistoryRetryTimer);
+    state.homeHistoryRetryTimer = null;
+    state.homeHistoryRetrySignature = requestSignature;
+    state.homeHistoryRetries = 0;
+  }
   state.homeHistoryRequested = true;
-  state.homeHistoryPreviewKey = homeOverviewApi.historyPreviewKey(state.stats?.historyPreview);
+  state.homeHistorySignature = requestSignature;
   state.homeHistoryBusy = true;
+  let resolved = false;
+  let fetchedHistory = null;
   try {
-    state.homeHistory = await window.tokenMonitor.getDashboardHistory();
+    // Only ever one fetch in flight (homeHistoryBusy), so the response is the freshest
+    // history at invoke time and can be taken as-is — no older reply can land on top of
+    // a newer one.
+    fetchedHistory = await window.tokenMonitor.getDashboardHistory();
+    resolved = true;
   } catch (error) {
     console.log(`[home] history failed: ${error.message}`);
   } finally {
     state.homeHistoryBusy = false;
+    const outcome = homeOverviewApi.homeHistoryFetchOutcome({
+      resolved,
+      history: fetchedHistory,
+      previewHasDays: previewHadDays
+    });
+    if (outcome.accepted) {
+      state.homeHistory = fetchedHistory;
+      state.homeHistoryLoadedSignature = requestSignature;
+      state.homeHistoryRetries = 0;
+      state.homeHistoryRetrySignature = '';
+      clearTimeout(state.homeHistoryRetryTimer);
+      state.homeHistoryRetryTimer = null;
+    } else if (homeOverviewApi.shouldRetryHomeHistory({
+      loadedDays: outcome.loadedDays,
+      previewHasDays: previewHadDays,
+      retries: state.homeHistoryRetries,
+      maxRetries: HOME_HISTORY_MAX_RETRIES
+    })) {
+      state.homeHistoryRetries += 1;
+      clearTimeout(state.homeHistoryRetryTimer);
+      state.homeHistoryRetryTimer = setTimeout(() => {
+        state.homeHistoryRetryTimer = null;
+        // Stale display data is not proof that this signature loaded. Retry only
+        // while the target is still current and no later request accepted it.
+        if (state.homeHistoryLoadedSignature === requestSignature) return;
+        if (homeOverviewApi.homeHistorySignature(state.stats) !== requestSignature) return;
+        state.homeHistorySignature = '';
+        void loadHomeHistory();
+      }, HOME_HISTORY_RETRY_MS);
+    }
     if (state.breakdown === 'home') render();
   }
 }
@@ -3396,7 +3451,7 @@ function homeLimitRows() {
     enabledProviderIds: Array.from(enabled),
     hiddenProviderIds: Array.from(hiddenHomeLimitProviderSet()),
     colors: clientColors,
-    limit: 3,
+    limit: state.settings?.homeLimitAccountCount ?? 3,
     sort: hasConfiguredOrder ? 'configured' : 'remaining',
     accountName: (provider, index, providerEntries) => {
       const id = String(provider?.provider || '').trim().toLowerCase();
@@ -3640,15 +3695,7 @@ function renderHomeDeviceModule() {
 }
 
 function dailyWithHeatIntensity(daily) {
-  const points = Array.isArray(daily) ? daily : [];
-  if (points.some((point) => Number.isFinite(Number(point?.intensity)))) return points;
-  const metric = points.some((point) => Number(point?.cost || 0) > 0) ? 'cost' : 'tokens';
-  const max = Math.max(1, ...points.map((point) => Number(point?.[metric] || 0)));
-  return points.map((point) => {
-    const ratio = Number(point?.[metric] || 0) / max;
-    const intensity = ratio >= 0.75 ? 4 : ratio >= 0.5 ? 3 : ratio >= 0.25 ? 2 : ratio > 0 ? 1 : 0;
-    return { ...point, intensity };
-  });
+  return window.TokenMonitorUsageCharts.computeHeatmapIntensities(daily);
 }
 
 function applyHomeActivityScroll(scroller) {
@@ -3735,6 +3782,7 @@ function homeActivityTooltipEl() {
 
   const label = document.createElement('span');
   label.className = 'home-activity-tooltip-label';
+  label.dataset.homeActivityTooltipLabel = 'true';
   label.textContent = 'tokens';
 
   const date = document.createElement('span');
@@ -3847,6 +3895,7 @@ function setupHomeActivityHover(scroller) {
       activeCell = cell;
       activeCell.setAttribute('data-active', 'true');
       tooltip.querySelector('[data-home-activity-tooltip-count]').textContent = formatCompact(Number(cell.dataset.t || 0));
+      tooltip.querySelector('[data-home-activity-tooltip-label]').textContent = 'tokens';
       tooltip.querySelector('[data-home-activity-tooltip-date]').textContent = cell.dataset.d || '';
     }
     tooltip.dataset.visible = 'true';
@@ -3899,19 +3948,26 @@ function renderHomeTrendsModule() {
     body.append(empty);
     return module;
   }
-  // homeHistory is fetched once and frozen, so its today bucket lags the live headline
-  // total; patch today's tokens with the live period total (like the trends sparkline's
+  // The snapshot's today bucket lags the live headline total between history ticks;
+  // patch today's tokens with the live period total (like the trends sparkline's
   // patchTodayBar) so the heatmap and trend line match the number shown above them.
-  const today = new Date().toISOString().slice(0, 10);
+  // The key must be the LOCAL day: the period being patched in is local-day scoped.
+  const today = charts.localDayKey();
   const todayPeriod = state.stats?.periods?.today;
   const points = homeOverviewApi.patchDailyToday(rawDaily, today, Number(todayPeriod?.totalTokens || 0), Number(todayPeriod?.costUsd || 0));
   const activityLayout = homeOverviewApi.homeActivityHeatmapLayout();
-  const activity = charts.rollingYearHeatmap(dailyWithHeatIntensity(points), {
+  const heatMetric = state.settings?.heatmapMetric || 'cost';
+  const intensityField = heatMetric === 'cost' ? 'costIntensity' : 'tokenIntensity';
+  const intensityPoints = dailyWithHeatIntensity(points).map((p) => ({
+    ...p,
+    intensity: Number(p[intensityField] ?? p.intensity ?? 0)
+  }));
+  const activity = charts.rollingYearHeatmap(intensityPoints, {
     endDate: today,
     cell: activityLayout.cell,
     gap: activityLayout.gap
   });
-  const activeDays = activity.cells.filter((cell) => cell.intensity > 0).length;
+  const activeDays = activity.cells.filter((cell) => cell.tokens > 0).length;
   const { module, body } = homeModuleShell('trends', t('home.activity'), 'trends', t('home.activeDays', { count: activeDays }));
   const activityScroll = document.createElement('div');
   activityScroll.className = 'home-activity-scroll';
@@ -4082,10 +4138,13 @@ function render() {
     els.trendsPanel.classList.add('hidden');
     els.breakdown.classList.remove('hidden');
     const rows = rowsForPeriod(period);
-    renderRows(rows, {
-      showProjectIncompleteHint: state.breakdown === 'project'
-        && projectRowsApi.projectBreakdownIncomplete(state.stats, state.period)
-    });
+    let incompleteHint = '';
+    if (state.breakdown === 'project' && projectRowsApi.projectBreakdownIncomplete(state.stats, state.period)) {
+      incompleteHint = 'projects.incomplete';
+    } else if (state.breakdown === 'session' && sessionRowsApi.sessionBreakdownIncomplete(state.stats, state.period)) {
+      incompleteHint = 'sessions.incomplete';
+    }
+    renderRows(rows, { incompleteHint });
   }
   
   renderFloatingBubbleContent();
@@ -4222,6 +4281,17 @@ async function refreshStats(options = {}) {
   }
   try {
     state.stats = overlayAllTimeSessions(await window.tokenMonitor.getStats(options));
+    if (options.forceHistory === true) {
+      // A manual history rescan is an explicit retry boundary. Let Home request the
+      // corresponding full payload even when its revision is unchanged, and restore
+      // a retry budget that an earlier outage may have exhausted.
+      clearTimeout(state.homeHistoryRetryTimer);
+      state.homeHistoryRetryTimer = null;
+      state.homeHistoryLoadedSignature = '';
+      state.homeHistoryRetrySignature = '';
+      state.homeHistoryRetries = 0;
+      state.homeHistorySignature = '';
+    }
     applyCodexActiveAccountFromStats();
     setStatus(statusTextFor(state.mode, state.streamConnected));
     render();
@@ -4342,11 +4412,13 @@ function applyControlLayout(settingsInTitlebar) {
 function applyAppearanceSettings(settings) {
   const opacity = clamp(settings?.glassOpacity ?? 68, 0, 100) / 100;
   const depth = clamp(settings?.glassBlur ?? 32, 0, 100) / 100;
+  const systemGlassDisabled = settings?.systemGlass === false;
   document.documentElement.style.setProperty('--glass-alpha', opacity.toFixed(2));
   document.documentElement.style.setProperty('--line-alpha', (0.1 + depth * 0.09).toFixed(3));
   document.documentElement.style.setProperty('--line-strong-alpha', (0.18 + depth * 0.14).toFixed(3));
   document.documentElement.style.setProperty('--control-alpha', (0.03 + depth * 0.045).toFixed(3));
   document.documentElement.style.setProperty('--highlight-alpha', (0.045 + depth * 0.06).toFixed(3));
+  document.documentElement.classList.toggle('system-glass-disabled', systemGlassDisabled);
   applyReduceMotionPreference(settings?.reduceMotion);
   // Only full settings objects carry themeColors; glass/zoom preview patches
   // omit it, so we must not wipe theme overrides mid-slider-drag.
@@ -4377,6 +4449,7 @@ function applyAppearanceSettings(settings) {
 
 const themePresetsApi = window.TokenMonitorThemePresets;
 let themeCodeFeedbackGeneration = 0;
+let appliedThemeOverrides = {};
 // Snapshot of the canonical brand colours, taken before any override is
 // applied. clientColors is mutated in place (other modules hold the same
 // reference), so this is the source of truth for "reset to brand".
@@ -4405,11 +4478,13 @@ function matchingThemePresetId(overrides) {
 }
 
 function applyThemeColors(overrides) {
+  appliedThemeOverrides = themePresetsApi.normalizeOverrides(overrides, themePresetsApi.INTERFACE_COLOR_KEYS);
   const root = document.documentElement.style;
-  for (const { name, value } of themePresetsApi.themeCssVarEntries(overrides)) {
+  for (const { name, value } of themePresetsApi.themeCssVarEntries(appliedThemeOverrides)) {
     if (value) root.setProperty(name, value);
     else root.removeProperty(name);
   }
+  renderFloatingBubbleContent();
 }
 
 function applyVendorColorOverrides(overrides) {
@@ -4419,8 +4494,7 @@ function applyVendorColorOverrides(overrides) {
 
 // Current resolved palette value for an interface colour key.
 function resolvedThemeColor(key) {
-  const clean = themePresetsApi.normalizeOverrides(state.settings?.themeColors, themePresetsApi.INTERFACE_COLOR_KEYS);
-  return clean[key] || themePresetsApi.DEFAULT_THEME[key];
+  return appliedThemeOverrides[key] || themePresetsApi.DEFAULT_THEME[key];
 }
 
 function buildAppearanceColorControls() {
@@ -4772,11 +4846,19 @@ function normalizeWindowToggleShortcutValue(value) {
   return windowShortcutApi.normalizeWindowToggleShortcut(value);
 }
 
-const BUBBLE_CONTENT_MIN_W = 18;
+const BUBBLE_CONTENT_MIN_W = 34;
 const BUBBLE_CONTENT_HEIGHT = 34;
 const BUBBLE_CONTENT_PAD_X = 10;
-// The tray bars are black (a macOS menu-bar template); on the bubble's dark glass they need light ink.
-const BUBBLE_BARS_COLORS = { track: 'rgba(255, 255, 255, 0.22)', fill: 'rgba(255, 255, 255, 0.92)' };
+
+function floatingBubbleGeneratedColors() {
+  const text = resolvedThemeColor('text');
+  const rgb = themePresetsApi.hexToRgbTriplet(text);
+  return {
+    track: `rgba(${rgb}, 0.22)`,
+    fill: `rgba(${rgb}, 0.92)`,
+    text: `rgba(${rgb}, 0.92)`
+  };
+}
 
 function renderFloatingBubbleContent() {
   const el = els.floatingBubbleContent;
@@ -4784,7 +4866,10 @@ function renderFloatingBubbleContent() {
   const mode = state.settings?.floatingBubbleContent || 'icon';
   if (window.TokenMonitorTrayText.isGeneratedTrayIconMode(mode)) {
     const dataUrl = state.stats
-      ? trayDataUrlForMode(mode, 44, BUBBLE_BARS_COLORS, { contentOnly: mode === 'barsAllSessions' || mode === 'limitsAllSessions' })
+      ? trayDataUrlForMode(mode, 44, floatingBubbleGeneratedColors(), {
+          contentOnly: mode === 'barsAllSessions' || mode === 'limitsAllSessions',
+          providerContrastHalo: true
+        })
       : null;
     if (dataUrl) {
       el.classList.add('bars');
@@ -5637,6 +5722,35 @@ function renderHomeLimitProviderList() {
     .orderedLimitProviders(LIMIT_PROVIDERS, homeLimitProviderOrderValue())
     .filter(({ id }) => enabled.has(id));
   const hasCustomOrder = Boolean(state.settings?.homeLimitProviderOrder);
+  const statusLabel = document.createElement('label');
+  statusLabel.className = 'checkbox-label home-limit-status-setting';
+  const statusInput = document.createElement('input');
+  statusInput.type = 'checkbox';
+  statusInput.checked = state.settings?.showHomeLimitBars === true;
+  const statusText = document.createElement('span');
+  statusText.textContent = t('settings.home.showLimitBars');
+  statusInput.addEventListener('change', () => void saveSettings({ showHomeLimitBars: statusInput.checked }));
+  statusLabel.append(statusInput, statusText);
+  const countLabel = document.createElement('label');
+  countLabel.className = 'settings-item home-limit-account-count-setting';
+  const countText = document.createElement('span');
+  countText.className = 'settings-item-text';
+  const countTitle = document.createElement('span');
+  countTitle.className = 'settings-item-title';
+  countTitle.textContent = t('settings.home.limitAccountCount');
+  countText.append(countTitle);
+  const countInput = document.createElement('input');
+  countInput.type = 'number';
+  countInput.min = '1';
+  countInput.max = '12';
+  countInput.step = '1';
+  countInput.inputMode = 'numeric';
+  countInput.value = String(state.settings?.homeLimitAccountCount ?? 3);
+  countInput.addEventListener('change', async () => {
+    await saveSettings({ homeLimitAccountCount: Number(countInput.value) });
+    renderHomeIfVisible();
+  });
+  countLabel.append(countText, countInput);
   const header = document.createElement('div');
   header.className = 'settings-note-row home-limit-provider-header';
   const note = document.createElement('p');
@@ -5665,7 +5779,7 @@ function renderHomeLimitProviderList() {
   showAll.addEventListener('click', () => void showAllHomeLimitProviders());
   headerActions.append(reset, showAll);
   header.append(note, headerActions);
-  wrap.append(header);
+  wrap.append(statusLabel, countLabel, header);
   for (const { id, label, settingsLabel } of providers) {
     const isHidden = hidden.has(id);
     const row = document.createElement('div');
@@ -5745,23 +5859,32 @@ function renderHomeSettingsList() {
     name.textContent = label;
     const actions = document.createElement('div');
     actions.className = 'tool-preference-actions';
-    if (id === 'limits') {
+    if (id === 'limits' || id === 'trends') {
       const configure = document.createElement('button');
       configure.type = 'button';
-      configure.className = `view-subgroup-toggle${state.homeLimitSettingsExpanded ? ' is-expanded' : ''}`;
-      configure.title = t('settings.home.configureLimits');
+      const expanded = id === 'limits' ? state.homeLimitSettingsExpanded : state.homeActivitySettingsExpanded;
+      configure.className = `view-subgroup-toggle${expanded ? ' is-expanded' : ''}`;
+      configure.title = t(id === 'limits' ? 'settings.home.configureLimits' : 'settings.home.configureActivity');
       configure.setAttribute('aria-label', configure.title);
-      configure.setAttribute('aria-expanded', String(Boolean(state.homeLimitSettingsExpanded)));
+      configure.setAttribute('aria-expanded', String(Boolean(expanded)));
       const toggleIcon = document.createElement('span');
       toggleIcon.className = 'view-subgroup-icon';
       toggleIcon.setAttribute('aria-hidden', 'true');
       configure.append(toggleIcon);
       configure.addEventListener('click', () => {
-        state.homeLimitSettingsExpanded = !state.homeLimitSettingsExpanded;
-        configure.classList.toggle('is-expanded', state.homeLimitSettingsExpanded);
-        configure.setAttribute('aria-expanded', String(Boolean(state.homeLimitSettingsExpanded)));
-        const container = document.getElementById('homeLimitProviderContainer');
-        if (container) container.classList.toggle('hidden', !state.homeLimitSettingsExpanded);
+        if (id === 'limits') {
+          state.homeLimitSettingsExpanded = !state.homeLimitSettingsExpanded;
+          configure.classList.toggle('is-expanded', state.homeLimitSettingsExpanded);
+          configure.setAttribute('aria-expanded', String(Boolean(state.homeLimitSettingsExpanded)));
+          const container = document.getElementById('homeLimitProviderContainer');
+          if (container) container.classList.toggle('hidden', !state.homeLimitSettingsExpanded);
+          return;
+        }
+        state.homeActivitySettingsExpanded = !state.homeActivitySettingsExpanded;
+        configure.classList.toggle('is-expanded', state.homeActivitySettingsExpanded);
+        configure.setAttribute('aria-expanded', String(Boolean(state.homeActivitySettingsExpanded)));
+        const container = document.getElementById('homeActivitySettingsContainer');
+        if (container) container.classList.toggle('hidden', !state.homeActivitySettingsExpanded);
       });
       actions.append(configure);
     }
@@ -5787,8 +5910,48 @@ function renderHomeSettingsList() {
       listContainer.appendChild(inner);
       wrap.append(listContainer);
     }
+    if (id === 'trends') {
+      const listContainer = document.createElement('div');
+      listContainer.id = 'homeActivitySettingsContainer';
+      listContainer.className = `accordion-animated-container${state.homeActivitySettingsExpanded ? '' : ' hidden'}`;
+      const inner = document.createElement('div');
+      inner.className = 'accordion-animation-inner';
+      inner.appendChild(renderHomeActivitySettings());
+      listContainer.appendChild(inner);
+      wrap.append(listContainer);
+    }
   }
   return wrap;
+}
+
+function renderHomeActivitySettings() {
+  const row = document.createElement('div');
+  row.className = 'home-activity-settings';
+  const label = document.createElement('span');
+  label.textContent = t('settings.home.heatmapColor');
+  const options = document.createElement('div');
+  options.className = 'inline-options';
+  options.setAttribute('role', 'radiogroup');
+  options.setAttribute('aria-label', label.textContent);
+  const currentMetric = state.settings?.heatmapMetric || 'cost';
+  for (const metric of ['tokens', 'cost']) {
+    const option = document.createElement('label');
+    option.className = 'inline-option';
+    const input = document.createElement('input');
+    input.type = 'radio';
+    input.name = 'homeHeatmapMetric';
+    input.value = metric;
+    input.checked = currentMetric === metric;
+    input.addEventListener('change', () => {
+      if (input.checked) void saveSettings({ heatmapMetric: metric }).then(renderHomeIfVisible);
+    });
+    const text = document.createElement('span');
+    text.textContent = t(metric === 'tokens' ? 'dashboard.heatmap.tokens' : 'dashboard.heatmap.cost');
+    option.append(input, text);
+    options.append(option);
+  }
+  row.append(label, options);
+  return row;
 }
 
 function renderTrendSettingsList() {
@@ -6448,7 +6611,17 @@ function preserveSettingsPanelScroll(callback) {
 }
 
 async function saveSettings(patch) {
-  state.settings = await window.tokenMonitor.updateSettings(patch);
+  try {
+    state.settings = await window.tokenMonitor.updateSettings(patch);
+  } catch (error) {
+    console.error('Could not persist settings:', error);
+    try { state.settings = await window.tokenMonitor.getSettings(); } catch (_) {}
+    applyEffectiveCurrencyRates();
+    preserveSettingsPanelScroll(syncSettingsForm);
+    restartTimer();
+    maybeUpdateBarsIcon();
+    throw error;
+  }
   applyEffectiveCurrencyRates();
   preserveSettingsPanelScroll(syncSettingsForm);
   restartTimer();
@@ -6456,6 +6629,7 @@ async function saveSettings(patch) {
   if (patch.showTrayProviderBadge !== undefined) {
     await deliverTrayProviderIcons(patch.showTrayProviderBadge === true);
   }
+  return true;
 }
 
 function renderHomeIfVisible() {
@@ -6832,7 +7006,10 @@ els.openRepositoryButton?.addEventListener('click', () => window.tokenMonitor.op
 els.reportIssueButton?.addEventListener('click', () => window.tokenMonitor.openExternal?.(TOKEN_MONITOR_ISSUES_URL));
 els.refreshButton.addEventListener('click', () => {
   if (state.breakdown === 'status') refreshStatusViewManually().catch(() => {});
-  else refreshStats({ force: true, feedback: true });
+  // Only this button asks for a history rescan: `{ force: true }` is used all over the
+  // settings/account flows, and folding history into it would re-run the expensive
+  // `tokscale graph` on every one of them.
+  else refreshStats({ force: true, forceHistory: true, feedback: true });
 });
 els.minButton.addEventListener('click', () => window.tokenMonitor.minimize());
 els.closeButton.addEventListener('click', () => window.tokenMonitor.close());
@@ -6946,10 +7123,14 @@ els.appUpdateReleaseNotesButton.addEventListener('click', async () => {
 
 window.tokenMonitor.onSettingsPush?.((next) => {
   if (!next) return;
+  const prevMetric = state.settings?.heatmapMetric;
   state.settings = next;
   applyEffectiveCurrencyRates();
   syncSettingsForm();
   maybeUpdateBarsIcon();
+  if ((prevMetric || 'cost') !== (next.heatmapMetric || 'cost')) {
+    render();
+  }
 });
 
 reducedMotionMedia?.addEventListener?.('change', () => {
@@ -7058,7 +7239,19 @@ function roundedRectPath(ctx, x, y, w, h, r) {
 const trayProviderImages = {};
 const trayProviderIconDeliveryGuard = window.TokenMonitorTrayProviderIcons.createTrayProviderIconDeliveryGuard();
 
-function renderBarsIcon(stats, height = 44, picker = pickWorstProvider, colors = {}) {
+function drawProviderImage(ctx, image, x, y, size, contrastHalo = false) {
+  if (contrastHalo) {
+    const lightSurface = themePresetsApi.isLightHex(resolvedThemeColor('bg'));
+    ctx.save();
+    ctx.shadowColor = lightSurface ? 'rgba(0, 0, 0, 0.58)' : 'rgba(255, 255, 255, 0.82)';
+    ctx.shadowBlur = Math.max(2, Math.round(size * 0.1));
+    ctx.drawImage(image, x, y, size, size);
+    ctx.restore();
+  }
+  ctx.drawImage(image, x, y, size, size);
+}
+
+function renderBarsIcon(stats, height = 44, picker = pickWorstProvider, colors = {}, options = {}) {
   const trackColor = colors.track || 'rgba(0, 0, 0, 0.32)';
   const fillColor = colors.fill || 'rgba(0, 0, 0, 1)';
   const selection = picker(stats);
@@ -7075,7 +7268,7 @@ function renderBarsIcon(stats, height = 44, picker = pickWorstProvider, colors =
   ctx.clearRect(0, 0, layout.width, layout.height);
 
   if (providerImage) {
-    ctx.drawImage(providerImage, layout.padX, layout.iconY, layout.iconSize, layout.iconSize);
+    drawProviderImage(ctx, providerImage, layout.padX, layout.iconY, layout.iconSize, options.providerContrastHalo === true);
   }
 
   function drawBar(y, percent) {
@@ -7106,14 +7299,14 @@ function pickConfiguredSessionProviders(stats, configOrder) {
   });
 }
 
-function renderAllSessionsIcon(stats, height = 44, configOrder, colors = {}) {
+function renderAllSessionsIcon(stats, height = 44, configOrder, colors = {}, options = {}) {
   const trackColor = colors.track || 'rgba(0, 0, 0, 0.32)';
   const fillColor = colors.fill || 'rgba(0, 0, 0, 1)';
   const picks = pickConfiguredSessionProviders(stats, configOrder);
   if (picks.length === 0) return null;
   // With one tool, preserve its canonical pair; a lone weekly/billing window is
   // promoted to the top lane and the lower lane remains an empty track.
-  if (picks.length === 1) return renderBarsIcon(stats, height, () => picks[0], colors);
+  if (picks.length === 1) return renderBarsIcon(stats, height, () => picks[0], colors, options);
 
   const { trayBarFillWidth, trayBarsLayout } = window.TokenMonitorTrayBars;
   const layout = trayBarsLayout(height, { contentOnly: true });
@@ -7202,7 +7395,7 @@ function renderLimitSessionsIcon(stats, height = 44, configOrder, colors = {}, o
   const centerY = height / 2;
   entries.forEach((entry, index) => {
     if (entry.image) {
-      ctx.drawImage(entry.image, x, layout.iconY, iconSize, iconSize);
+      drawProviderImage(ctx, entry.image, x, layout.iconY, iconSize, options.providerContrastHalo === true);
       x += iconSize + gap;
     }
     ctx.fillText(entry.text, x, centerY + 1);
@@ -7218,7 +7411,7 @@ function renderLimitSessionsIcon(stats, height = 44, configOrder, colors = {}, o
 function barsDataUrlForMode(mode, size = 44, colors, options = {}) {
   if (mode === 'barsAllSessions') return renderAllSessionsIcon(state.stats, size, configuredLimitProviderOrder(), colors, options);
   const pickers = { barsSession: pickWorstSessionProvider, barsWeekly: pickWorstWeeklyProvider };
-  return renderBarsIcon(state.stats, size, pickers[mode] || pickWorstProvider, colors);
+  return renderBarsIcon(state.stats, size, pickers[mode] || pickWorstProvider, colors, options);
 }
 
 function trayDataUrlForMode(mode, size = 44, colors, options = {}) {
