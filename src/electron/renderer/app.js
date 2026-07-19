@@ -5722,15 +5722,6 @@ function renderHomeLimitProviderList() {
     .orderedLimitProviders(LIMIT_PROVIDERS, homeLimitProviderOrderValue())
     .filter(({ id }) => enabled.has(id));
   const hasCustomOrder = Boolean(state.settings?.homeLimitProviderOrder);
-  const statusLabel = document.createElement('label');
-  statusLabel.className = 'checkbox-label home-limit-status-setting';
-  const statusInput = document.createElement('input');
-  statusInput.type = 'checkbox';
-  statusInput.checked = state.settings?.showHomeLimitBars === true;
-  const statusText = document.createElement('span');
-  statusText.textContent = t('settings.home.showLimitBars');
-  statusInput.addEventListener('change', () => void saveSettings({ showHomeLimitBars: statusInput.checked }));
-  statusLabel.append(statusInput, statusText);
   const countLabel = document.createElement('label');
   countLabel.className = 'settings-item home-limit-account-count-setting';
   const countText = document.createElement('span');
@@ -5779,7 +5770,7 @@ function renderHomeLimitProviderList() {
   showAll.addEventListener('click', () => void showAllHomeLimitProviders());
   headerActions.append(reset, showAll);
   header.append(note, headerActions);
-  wrap.append(statusLabel, countLabel, header);
+  wrap.append(countLabel, header);
   for (const { id, label, settingsLabel } of providers) {
     const isHidden = hidden.has(id);
     const row = document.createElement('div');
