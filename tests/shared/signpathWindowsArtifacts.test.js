@@ -86,8 +86,12 @@ test('SignPath configurations restrict every signed PE to the release product me
       'product-version': '${version}'
     }
   ]);
-  assert.equal(pkg.build.win.verifyUpdateCodeSignature, true);
-  assert.equal(pkg.build.win.signtoolOptions.publisherName, 'SignPath Foundation');
+  // Fork releases publish unsigned by default so auto-update works without
+  // upstream SignPath / Apple certs. Optional signed path still lives in CI
+  // when SIGNPATH_API_TOKEN (etc.) is present.
+  assert.equal(pkg.build.win.verifyUpdateCodeSignature, false);
+  assert.equal(pkg.build.publish[0].owner, 'wwjhw2005');
+  assert.equal(pkg.build.publish[0].repo, 'token-monitor');
 });
 
 test('release workflow signs the application before packaging and signs public artifacts last', () => {
@@ -130,7 +134,7 @@ function makeFixture(t) {
         },
         nsis: { artifactName: 'Token-Monitor-Setup-${version}.${ext}' },
         portable: { artifactName: 'Token-Monitor-${version}.${ext}' },
-        publish: [{ provider: 'github', owner: 'Javis603', repo: 'token-monitor' }]
+        publish: [{ provider: 'github', owner: 'wwjhw2005', repo: 'token-monitor' }]
       }
     })
   );
@@ -186,7 +190,7 @@ test('writes the updater config skipped by electron-builder prepackaged mode', (
   const fixture = makeFixture(t);
   writeUnsignedApplication(fixture);
   const expected = [
-    'owner: "Javis603"',
+    'owner: "wwjhw2005"',
     'repo: "token-monitor"',
     'provider: "github"',
     'updaterCacheDirName: "token-monitor-updater"',
@@ -200,10 +204,27 @@ test('writes the updater config skipped by electron-builder prepackaged mode', (
   assert.equal(fs.readFileSync(result.updateConfigPath, 'utf8'), expected);
 });
 
-test('refuses to write an updater config without publisher verification', (t) => {
+test('writes an updater config without publisherName when signature verification is off', (t) => {
   const fixture = makeFixture(t);
   const pkg = JSON.parse(fs.readFileSync(fixture.packageJsonPath, 'utf8'));
   pkg.build.win.verifyUpdateCodeSignature = false;
+  delete pkg.build.win.signtoolOptions;
+  fs.writeFileSync(fixture.packageJsonPath, JSON.stringify(pkg));
+
+  const expected = [
+    'owner: "wwjhw2005"',
+    'repo: "token-monitor"',
+    'provider: "github"',
+    'updaterCacheDirName: "token-monitor-updater"',
+    ''
+  ].join('\n');
+  assert.equal(windowsAppUpdateConfig(fixture.packageJsonPath), expected);
+});
+
+test('refuses to write a verified updater config without publisherName', (t) => {
+  const fixture = makeFixture(t);
+  const pkg = JSON.parse(fs.readFileSync(fixture.packageJsonPath, 'utf8'));
+  delete pkg.build.win.signtoolOptions;
   fs.writeFileSync(fixture.packageJsonPath, JSON.stringify(pkg));
 
   assert.throws(

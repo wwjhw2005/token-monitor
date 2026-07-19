@@ -117,23 +117,33 @@ function windowsAppUpdateConfig(packageJsonPath) {
   if (typeof packageName !== 'string' || !/^[A-Za-z0-9._-]+$/.test(packageName)) {
     throw new Error(`Unsupported package name for updater cache: ${String(packageName)}`);
   }
-  const publisherName = win?.signtoolOptions?.publisherName;
-  if (win?.verifyUpdateCodeSignature !== true || typeof publisherName !== 'string' || !publisherName) {
-    throw new Error(
-      'Windows prepackaged builds must explicitly verify the expected code-signing publisher'
-    );
-  }
-
   const yamlString = (value) => JSON.stringify(value);
-  return [
+  const lines = [
     `owner: ${yamlString(publish.owner)}`,
     `repo: ${yamlString(publish.repo)}`,
     `provider: ${yamlString(publish.provider)}`,
-    `updaterCacheDirName: ${yamlString(`${packageName.toLowerCase()}-updater`)}`,
-    'publisherName:',
-    `  - ${yamlString(publisherName)}`,
-    ''
-  ].join('\n');
+    `updaterCacheDirName: ${yamlString(`${packageName.toLowerCase()}-updater`)}`
+  ];
+
+  // Signed releases pin the expected Authenticode publisher so electron-updater
+  // rejects tampered installers. Unsigned fork builds set verifyUpdateCodeSignature
+  // to false and omit publisherName entirely.
+  if (win?.verifyUpdateCodeSignature === true) {
+    const publisherName = win?.signtoolOptions?.publisherName;
+    if (typeof publisherName !== 'string' || !publisherName) {
+      throw new Error(
+        'Windows prepackaged builds must explicitly verify the expected code-signing publisher'
+      );
+    }
+    lines.push('publisherName:', `  - ${yamlString(publisherName)}`);
+  } else if (win?.verifyUpdateCodeSignature !== false) {
+    throw new Error(
+      'Windows prepackaged builds require an explicit build.win.verifyUpdateCodeSignature boolean'
+    );
+  }
+
+  lines.push('');
+  return lines.join('\n');
 }
 
 function writeWindowsAppUpdateConfig({ appDir, packageJsonPath }) {
