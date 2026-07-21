@@ -326,15 +326,15 @@ test('home limit windows carry WeCode spend/remaining amounts for the detail lin
   assert.ok(Math.abs(window.remaining - 712.61323035) < 1e-9);
 });
 
-test('homeModelRows returns one-line token shares without cost fields', () => {
+test('homeModelRows returns token shares and the four model token components', () => {
   const rows = homeModelRows([
-    { name: 'claude-opus-4-8', value: 34_000_000, cost: 21.96, color: '#cc7c5e' },
-    { name: 'gpt-5.5', value: 29_800_000, cost: 25.88, color: '#49a3b0' }
+    { name: 'claude-opus-4-8', value: 34_000_000, inputTokens: 3_000_000, outputTokens: 1_000_000, cacheReadTokens: 29_000_000, cacheWriteTokens: 1_000_000, cost: 21.96, color: '#cc7c5e' },
+    { name: 'gpt-5.5', value: 29_800_000, outputTokens: 800_000, cacheReadTokens: 20_000_000, cacheWriteTokens: 1_000_000, cost: 25.88, color: '#49a3b0' }
   ], 63_800_000);
 
   assert.deepEqual(rows, [
-    { key: 'claude-opus-4-8', name: 'claude-opus-4-8', value: 34_000_000, share: 34_000_000 / 63_800_000, color: '#cc7c5e' },
-    { key: 'gpt-5.5', name: 'gpt-5.5', value: 29_800_000, share: 29_800_000 / 63_800_000, color: '#49a3b0' }
+    { key: 'claude-opus-4-8', name: 'claude-opus-4-8', value: 34_000_000, share: 34_000_000 / 63_800_000, color: '#cc7c5e', inputTokens: 3_000_000, outputTokens: 1_000_000, cacheReadTokens: 29_000_000, cacheWriteTokens: 1_000_000 },
+    { key: 'gpt-5.5', name: 'gpt-5.5', value: 29_800_000, share: 29_800_000 / 63_800_000, color: '#49a3b0', inputTokens: 8_000_000, outputTokens: 800_000, cacheReadTokens: 20_000_000, cacheWriteTokens: 1_000_000 }
   ]);
   assert.equal(Object.hasOwn(rows[0], 'cost'), false);
 });

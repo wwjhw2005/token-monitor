@@ -147,13 +147,27 @@
     const total = suppliedTotal != null && suppliedTotal > 0
       ? suppliedTotal
       : visible.reduce((sum, row) => sum + Math.max(0, Number(row?.value || 0)), 0);
-    return visible.map((row) => ({
-      key: row.key || row.name || '',
-      name: row.name || '',
-      value: Math.max(0, Number(row.value || 0)),
-      share: total > 0 ? Math.max(0, Number(row.value || 0)) / total : 0,
-      color: row.color || ''
-    }));
+    return visible.map((row) => {
+      const value = Math.max(0, Number(row.value || 0));
+      const outputTokens = Math.max(0, Number(row.outputTokens || 0));
+      const cacheReadTokens = Math.max(0, Number(row.cacheReadTokens || 0));
+      const cacheWriteTokens = Math.max(0, Number(row.cacheWriteTokens || 0));
+      const suppliedInput = finiteNumber(row.inputTokens);
+      const inputTokens = suppliedInput != null
+        ? Math.max(0, suppliedInput)
+        : Math.max(0, value - outputTokens - cacheReadTokens - cacheWriteTokens);
+      return {
+        key: row.key || row.name || '',
+        name: row.name || '',
+        value,
+        share: total > 0 ? value / total : 0,
+        color: row.color || '',
+        inputTokens,
+        outputTokens,
+        cacheReadTokens,
+        cacheWriteTokens
+      };
+    });
   }
 
   function homeToolRows(rows, totalTokens, limit = 5) {

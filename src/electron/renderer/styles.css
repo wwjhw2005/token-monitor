@@ -2228,8 +2228,89 @@ html.is-windows .settings-panel select option {
   text-align: right;
 }
 .home-model-row {
-  grid-template-columns: 10px minmax(0, 1fr) minmax(42px, auto) minmax(31px, auto);
+  grid-template-columns: 10px minmax(0, 1fr);
   column-gap: 8px;
+  align-items: start;
+  padding: 2px 0 4px;
+}
+.home-model-row + .home-model-row {
+  padding-top: 7px;
+}
+.home-module-model {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+.home-model-row .home-list-mark {
+  margin-top: 2px;
+}
+.home-model-main {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+}
+.home-model-summary {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) minmax(42px, auto) minmax(31px, auto);
+  column-gap: 8px;
+  align-items: center;
+}
+.home-model-breakdown {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+  padding-left: 10px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.home-model-breakdown::before {
+  position: absolute;
+  top: 1px;
+  bottom: 1px;
+  left: 0;
+  width: 3px;
+  border-radius: 999px;
+  background: var(--model-accent, var(--blue));
+  content: '';
+  opacity: 0.72;
+}
+.home-model-token-line {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.home-model-token {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: baseline;
+  padding-right: 9px;
+}
+.home-model-token + .home-model-token {
+  padding-right: 0;
+  padding-left: 9px;
+  border-left: 1px solid rgba(var(--overlay-rgb), 0.07);
+}
+.home-model-token-label {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 8px;
+  letter-spacing: 0.015em;
+  opacity: 0.72;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.home-model-token-value {
+  color: var(--text);
+  font-size: 9px;
+  font-weight: 560;
+  opacity: 0.78;
+  white-space: nowrap;
+}
+.home-model-token-line:last-child {
+  opacity: 0.82;
 }
 .home-tool-row {
   grid-template-columns: 10px minmax(0, 1fr) minmax(42px, auto) minmax(31px, auto);

@@ -191,6 +191,28 @@ test('Home model rows align icon spacing with the limit account rows', () => {
   assert.match(cssRule(css, '.home-model-row'), /column-gap:\s*8px/);
 });
 
+test('Home model rows use compact two-line token component details', () => {
+  const app = readRendererFile('app.js');
+  const css = readRendererFile('styles.css');
+  const renderBody = functionBody(app, 'renderHomeModelModule', 'homeToolSourceRows');
+  assert.match(renderBody, /home-model-token-line/);
+  assert.match(renderBody, /home\.token\.input/);
+  assert.match(renderBody, /home\.token\.output/);
+  assert.match(renderBody, /home\.token\.cacheRead/);
+  assert.match(renderBody, /home\.token\.cacheWrite/);
+  assert.match(renderBody, /--model-accent/);
+  assert.match(cssRule(css, '.home-model-breakdown::before'), /background:\s*var\(--model-accent/);
+  assert.match(cssRule(css, '.home-model-token-label'), /font-size:\s*8px/);
+  assert.match(cssRule(css, '.home-model-token-value'), /font-size:\s*9px/);
+  assert.match(cssRule(css, '.home-model-token-line'), /grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/);
+});
+
+test('Home model rows separate with whitespace and omit the module footer rule', () => {
+  const css = readRendererFile('styles.css');
+  assert.doesNotMatch(cssRule(css, '.home-model-row + .home-model-row'), /border/);
+  assert.match(cssRule(css, '.home-module-model'), /border-bottom:\s*0/);
+});
+
 test('Home tool and device metric columns align with the model summary rows', () => {
   const css = readRendererFile('styles.css');
   assert.match(cssRule(css, '.home-tool-row'), /grid-template-columns:\s*10px minmax\(0, 1fr\) minmax\(42px, auto\) minmax\(31px, auto\)/);

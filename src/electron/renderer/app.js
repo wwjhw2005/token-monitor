@@ -1655,17 +1655,24 @@ function toolRowsForPeriod(period) {
 }
 
 function modelRowsForPeriod(period) {
-  const modelRows = Object.entries(period?.models || {}).filter(([, value]) => Number(value) > 0).map(([model, value]) => ({
-    key: model,
-    name: model,
-    value: Number(value),
-    cost: Number(period?.modelCosts?.[model] || 0),
-    color: modelColor(model),
-    stale: false,
-    cacheReadTokens: Number(period?.modelCacheReads?.[model] || 0),
-    cacheWriteTokens: Number(period?.modelCacheWrites?.[model] || 0),
-    outputTokens: Number(period?.modelOutputs?.[model] || 0)
-  }));
+  const modelRows = Object.entries(period?.models || {}).filter(([, value]) => Number(value) > 0).map(([model, value]) => {
+    const totalTokens = Number(value);
+    const cacheReadTokens = Number(period?.modelCacheReads?.[model] || 0);
+    const cacheWriteTokens = Number(period?.modelCacheWrites?.[model] || 0);
+    const outputTokens = Number(period?.modelOutputs?.[model] || 0);
+    return {
+      key: model,
+      name: model,
+      value: totalTokens,
+      cost: Number(period?.modelCosts?.[model] || 0),
+      color: modelColor(model),
+      stale: false,
+      inputTokens: Math.max(0, totalTokens - outputTokens - cacheReadTokens - cacheWriteTokens),
+      cacheReadTokens,
+      cacheWriteTokens,
+      outputTokens
+    };
+  });
   if (modelRows.length > 0) return modelRows.sort((a, b) => b.value - a.value);
   if (Number(period?.totalTokens || 0) === 0) return [];
   return toolRowsForPeriod(period);
@@ -3844,8 +3851,13 @@ function renderHomeModelModule(period) {
   for (const row of rows) {
     const item = document.createElement('div');
     item.className = 'home-list-row home-model-row';
+    item.style.setProperty('--model-accent', row.color || 'var(--blue)');
     const mark = document.createElement('span');
     applyHomeListMark(mark, iconKindFor({ key: row.key || row.name }, 'model'), row.color);
+    const main = document.createElement('div');
+    main.className = 'home-model-main';
+    const summary = document.createElement('div');
+    summary.className = 'home-model-summary';
     const name = document.createElement('span');
     name.className = 'home-list-name';
     name.textContent = row.name;
@@ -3855,7 +3867,32 @@ function renderHomeModelModule(period) {
     const share = document.createElement('span');
     share.className = 'home-list-aux';
     share.textContent = formatPercent(row.share * 100);
-    item.append(mark, name, value, share);
+    summary.append(name, value, share);
+    const breakdown = document.createElement('div');
+    breakdown.className = 'home-model-breakdown';
+    const tokenLine = (entries) => {
+      const line = document.createElement('div');
+      line.className = 'home-model-token-line';
+      for (const [label, tokens] of entries) {
+        const metric = document.createElement('span');
+        metric.className = 'home-model-token';
+        const metricLabel = document.createElement('span');
+        metricLabel.className = 'home-model-token-label';
+        metricLabel.textContent = label;
+        const metricValue = document.createElement('span');
+        metricValue.className = 'home-model-token-value';
+        metricValue.textContent = formatCompact(tokens);
+        metric.append(metricLabel, metricValue);
+        line.append(metric);
+      }
+      return line;
+    };
+    breakdown.append(
+      tokenLine([[t('home.token.input'), row.inputTokens], [t('home.token.output'), row.outputTokens]]),
+      tokenLine([[t('home.token.cacheRead'), row.cacheReadTokens], [t('home.token.cacheWrite'), row.cacheWriteTokens]])
+    );
+    main.append(summary, breakdown);
+    item.append(mark, main);
     body.append(item);
   }
   return module;
