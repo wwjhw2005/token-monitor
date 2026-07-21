@@ -3,6 +3,7 @@
 const clientLabels = { claude: 'Claude Code', codex: 'Codex', hermes: 'Hermes', gemini: 'Gemini', cursor: 'Cursor', opencode: 'OpenCode', openclaw: 'OpenClaw', antigravity: 'Antigravity', cline: 'Cline', kimi: 'Kimi', qwen: 'Qwen', grok: 'Grok Build', copilot: 'GitHub Copilot', pi: 'Pi', zed: 'Zed', kilocode: 'Kilo Code', micode: 'MiMo Code', zcode: 'ZCode', kiro: 'Kiro', codebuddy: 'CodeBuddy', workbuddy: 'WorkBuddy', proma: 'Proma' };
 const { clientColors, fallbackModelColors, modelVendorFor, modelColor } = window.TokenMonitorUsageCharts;
 const motionPreferenceApi = window.TokenMonitorMotionPreference;
+const wslStatusPresentationApi = window.TokenMonitorWslStatusPresentation;
 const reducedMotionMedia = window.matchMedia?.('(prefers-reduced-motion: reduce)');
 const clientsWithIcon = new Set([
   'claude', 'codex', 'gemini', 'cursor', 'opencode', 'openclaw', 'hermes', 'antigravity', 'cline', 'kimi', 'qwen', 'grok', 'copilot', 'pi', 'zed', 'kilocode', 'micode', 'zcode', 'kiro', 'codebuddy', 'workbuddy', 'proma',
@@ -99,6 +100,7 @@ const { limitFillPercent, limitModeSuffix } = window.TokenMonitorLimitDisplayMod
 const i18n = window.TokenMonitorI18n;
 const currencyApi = window.TokenMonitorCurrency;
 const sessionRowsApi = window.TokenMonitorSessionRows;
+const deviceBreakdownApi = window.TokenMonitorDeviceBreakdown;
 const projectRowsApi = window.TokenMonitorProjectRows;
 const sessionDetailApi = window.TokenMonitorSessionDetail;
 const windowShortcutApi = window.TokenMonitorWindowShortcut;
@@ -189,6 +191,7 @@ const SERVICE_STATUS_PLACEHOLDERS = [
 const SERVICE_PROVIDER_OPTIONS = SERVICE_STATUS_PLACEHOLDERS.map((entry) => ({ id: entry.id, label: entry.label }));
 const TOKEN_MONITOR_REPOSITORY_URL = 'https://github.com/wwjhw2005/token-monitor';
 const TOKEN_MONITOR_ISSUES_URL = `${TOKEN_MONITOR_REPOSITORY_URL}/issues/new/choose`;
+const TOKEN_MONITOR_WSL_SQLITE_GUIDE_URL = `${TOKEN_MONITOR_REPOSITORY_URL}/blob/main/docs/wsl-sqlite-setup.md`;
 const serviceStatusProviderPreferencesApi = window.TokenMonitorServiceStatusProviderPreferences;
 const SETTINGS_SECTION_IDS = ['general', 'main', 'window', 'appearance', 'tools', 'limits', 'accounts', 'sync'];
 const REFRESH_BUTTON_FEEDBACK_MS = 700;
@@ -219,7 +222,7 @@ let viewSwitcherLongPressTimer = null;
 let viewSwitcherLongPressTriggered = false;
 let viewSwitcherHoverCloseTimer = null;
 const els = {
-  shell: document.querySelector('.shell'), status: document.getElementById('status'), liveDot: document.getElementById('liveDot'), totalTokens: document.getElementById('totalTokens'), totalTokensCompact: document.getElementById('totalTokensCompact'), cost: document.getElementById('cost'), homePanel: document.getElementById('homePanel'), breakdown: document.getElementById('breakdown'), serviceStatusPanel: document.getElementById('serviceStatusPanel'), limitsPanel: document.getElementById('limitsPanel'), trendsPanel: document.getElementById('trendsPanel'), viewSwitcher: document.getElementById('viewSwitcher'), pinButton: document.getElementById('pinButton'), settingsButton: document.getElementById('settingsButton'), settingsPanel: document.getElementById('settingsPanel'), languageInput: document.getElementById('languageInput'), currencyInput: document.getElementById('currencyInput'), currencyRateRow: document.getElementById('currencyRateRow'), currencyRateModeAuto: document.getElementById('currencyRateModeAuto'), currencyRateModeManual: document.getElementById('currencyRateModeManual'), currencyRateManualField: document.getElementById('currencyRateManualField'), currencyRateOverrideInput: document.getElementById('currencyRateOverrideInput'), currencyRateStatus: document.getElementById('currencyRateStatus'), hubUrlInput: document.getElementById('hubUrlInput'), secretInput: document.getElementById('secretInput'), deviceIdInput: document.getElementById('deviceIdInput'), limitProviderCheckboxes: document.getElementById('limitProviderCheckboxes'), limitsRefreshInput: document.getElementById('limitsRefreshInput'), showLimitSourceInput: document.getElementById('showLimitSourceInput'), maskLimitAccountEmailsInput: document.getElementById('maskLimitAccountEmailsInput'), showLimitUsedInput: document.getElementById('showLimitUsedInput'), systemGlassInput: document.getElementById('systemGlassInput'), liveDotInput: document.getElementById('liveDotInput'), toolIconsInput: document.getElementById('toolIconsInput'), floatingBubbleInput: document.getElementById('floatingBubbleInput'), floatingBubbleTriggerInput: document.getElementById('floatingBubbleTriggerInput'), floatingBubbleTriggerRow: document.getElementById('floatingBubbleTriggerRow'), floatingBubbleContentInput: document.getElementById('floatingBubbleContentInput'), floatingBubbleContentRow: document.getElementById('floatingBubbleContentRow'), floatingBubbleContent: document.getElementById('floatingBubbleContent'), discordRpcInput: document.getElementById('discordRpcInput'), windowBehaviorInput: document.getElementById('windowBehaviorInput'), showTrayIconInput: document.getElementById('showTrayIconInput'), showTrayProviderBadgeInput: document.getElementById('showTrayProviderBadgeInput'), trayModeInput: document.getElementById('trayModeInput'), trayContentInput: document.getElementById('trayContentInput'), windowToggleShortcutValue: document.getElementById('windowToggleShortcutValue'), windowToggleShortcutClearButton: document.getElementById('windowToggleShortcutClearButton'), windowToggleShortcutNote: document.getElementById('windowToggleShortcutNote'), glassInput: document.getElementById('glassInput'), blurInput: document.getElementById('blurInput'), zoomInput: document.getElementById('zoomInput'), resetGlassButton: document.getElementById('resetGlassButton'), resetDepthButton: document.getElementById('resetDepthButton'), resetZoomButton: document.getElementById('resetZoomButton'), saveSettingsButton: document.getElementById('saveSettingsButton'), clientDisplayList: document.getElementById('clientDisplayList'), wslScanInput: document.getElementById('wslScanInput'), wslScanRow: document.getElementById('wslScanRow'), wslPanel: document.getElementById('wslPanel'), openConfigButton: document.getElementById('openConfigButton'), exportAutoInput: document.getElementById('exportAutoInput'), exportAutoDetails: document.getElementById('exportAutoDetails'), exportAutoStatus: document.getElementById('exportAutoStatus'), exportDirLabel: document.getElementById('exportDirLabel'), exportPickDirButton: document.getElementById('exportPickDirButton'), exportIntervalInput: document.getElementById('exportIntervalInput'), exportNowButton: document.getElementById('exportNowButton'), refreshButton: document.getElementById('refreshButton'), minButton: document.getElementById('minButton'), closeButton: document.getElementById('closeButton'), floatingBubbleTab: document.getElementById('floatingBubbleTab')
+  shell: document.querySelector('.shell'), status: document.getElementById('status'), liveDot: document.getElementById('liveDot'), totalTokens: document.getElementById('totalTokens'), totalTokensCompact: document.getElementById('totalTokensCompact'), cost: document.getElementById('cost'), homePanel: document.getElementById('homePanel'), breakdown: document.getElementById('breakdown'), serviceStatusPanel: document.getElementById('serviceStatusPanel'), limitsPanel: document.getElementById('limitsPanel'), trendsPanel: document.getElementById('trendsPanel'), viewSwitcher: document.getElementById('viewSwitcher'), pinButton: document.getElementById('pinButton'), utilityActions: document.getElementById('utilityActions'), settingsButton: document.getElementById('settingsButton'), settingsPanel: document.getElementById('settingsPanel'), languageInput: document.getElementById('languageInput'), currencyInput: document.getElementById('currencyInput'), currencyRateRow: document.getElementById('currencyRateRow'), currencyRateModeAuto: document.getElementById('currencyRateModeAuto'), currencyRateModeManual: document.getElementById('currencyRateModeManual'), currencyRateManualField: document.getElementById('currencyRateManualField'), currencyRateOverrideInput: document.getElementById('currencyRateOverrideInput'), currencyRateStatus: document.getElementById('currencyRateStatus'), hubUrlInput: document.getElementById('hubUrlInput'), secretInput: document.getElementById('secretInput'), deviceIdInput: document.getElementById('deviceIdInput'), limitProviderCheckboxes: document.getElementById('limitProviderCheckboxes'), limitsRefreshInput: document.getElementById('limitsRefreshInput'), showLimitSourceInput: document.getElementById('showLimitSourceInput'), maskLimitAccountEmailsInput: document.getElementById('maskLimitAccountEmailsInput'), showLimitUsedInput: document.getElementById('showLimitUsedInput'), systemGlassInput: document.getElementById('systemGlassInput'), liveDotInput: document.getElementById('liveDotInput'), toolIconsInput: document.getElementById('toolIconsInput'), floatingBubbleInput: document.getElementById('floatingBubbleInput'), floatingBubbleTriggerInput: document.getElementById('floatingBubbleTriggerInput'), floatingBubbleTriggerRow: document.getElementById('floatingBubbleTriggerRow'), floatingBubbleContentInput: document.getElementById('floatingBubbleContentInput'), floatingBubbleContentRow: document.getElementById('floatingBubbleContentRow'), floatingBubbleContent: document.getElementById('floatingBubbleContent'), discordRpcInput: document.getElementById('discordRpcInput'), windowBehaviorInput: document.getElementById('windowBehaviorInput'), showTrayIconInput: document.getElementById('showTrayIconInput'), showTrayProviderBadgeInput: document.getElementById('showTrayProviderBadgeInput'), trayModeInput: document.getElementById('trayModeInput'), trayContentInput: document.getElementById('trayContentInput'), windowToggleShortcutValue: document.getElementById('windowToggleShortcutValue'), windowToggleShortcutClearButton: document.getElementById('windowToggleShortcutClearButton'), windowToggleShortcutNote: document.getElementById('windowToggleShortcutNote'), glassInput: document.getElementById('glassInput'), blurInput: document.getElementById('blurInput'), zoomInput: document.getElementById('zoomInput'), resetGlassButton: document.getElementById('resetGlassButton'), resetDepthButton: document.getElementById('resetDepthButton'), resetZoomButton: document.getElementById('resetZoomButton'), saveSettingsButton: document.getElementById('saveSettingsButton'), clientDisplayList: document.getElementById('clientDisplayList'), wslScanInput: document.getElementById('wslScanInput'), wslScanRow: document.getElementById('wslScanRow'), wslPanel: document.getElementById('wslPanel'), openConfigButton: document.getElementById('openConfigButton'), exportAutoInput: document.getElementById('exportAutoInput'), exportAutoDetails: document.getElementById('exportAutoDetails'), exportAutoStatus: document.getElementById('exportAutoStatus'), exportDirLabel: document.getElementById('exportDirLabel'), exportPickDirButton: document.getElementById('exportPickDirButton'), exportIntervalInput: document.getElementById('exportIntervalInput'), exportNowButton: document.getElementById('exportNowButton'), refreshButton: document.getElementById('refreshButton'), minButton: document.getElementById('minButton'), closeButton: document.getElementById('closeButton'), floatingBubbleTab: document.getElementById('floatingBubbleTab')
 };
 Object.assign(els, {
   floatingBubbleOptions: document.getElementById('floatingBubbleOptions'),
@@ -280,7 +283,7 @@ Object.assign(els, {
   appUpdateMessage: document.getElementById('appUpdateMessage'),
   titleIconInput: document.getElementById('titleIconInput'),
   showCompactTotalTokensInput: document.getElementById('showCompactTotalTokensInput'),
-  settingsInTitlebarInput: document.getElementById('settingsInTitlebarInput'),
+  swapSettingsRefreshInput: document.getElementById('swapSettingsRefreshInput'),
   resetClientDisplayOrderButton: document.getElementById('resetClientDisplayOrderButton'),
   showAllClientsButton: document.getElementById('showAllClientsButton'),
   resetViewDisplayOrderButton: document.getElementById('resetViewDisplayOrderButton'),
@@ -663,10 +666,9 @@ function syncCurrencyRateControls() {
 function formatTime(value) { const date = value ? new Date(value) : new Date(); return Number.isNaN(date.getTime()) ? '--:--:--' : date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }); }
 function formatPercent(value) { return Number.isFinite(Number(value)) ? `${Math.round(Number(value))}%` : '--'; }
 function formatReset(value) {
-  const date = value ? new Date(value) : null;
-  if (!date || Number.isNaN(date.getTime())) return '';
-  const diffMs = date.getTime() - Date.now();
-  if (diffMs <= 0) return 'Reset now';
+  const diffMs = limitProviderPresentationApi.limitResetRemainingMs(value);
+  if (diffMs === null) return '';
+  if (diffMs === 0) return 'Reset now';
   return `Reset ${formatDuration(diffMs)}`;
 }
 function formatDuration(ms) {
@@ -1028,33 +1030,48 @@ function easeOutQuart(t) { return 1 - Math.pow(1 - t, 4); }
 // frame and overwrites a later static update (e.g. switching to a zero period
 // mid-animation).
 let numberAnimHandle = 0;
+let numberAnimTarget = null;
+let numberAnimValue = 0;
 function cancelNumberAnimation() {
-  if (numberAnimHandle) { cancelAnimationFrame(numberAnimHandle); numberAnimHandle = 0; }
+  if (numberAnimHandle) cancelAnimationFrame(numberAnimHandle);
+  numberAnimHandle = 0;
+  numberAnimTarget = null;
+}
+
+function headlineNumberIsAnimatingTo(value) {
+  return Boolean(numberAnimHandle) && numberAnimTarget === value;
 }
 
 function animateNumber(el, from, to, duration = 1000, onDone = null) {
   cancelNumberAnimation();
   if (prefersReducedMotion()) {
     el.textContent = formatNumber(to);
+    numberAnimValue = to;
     if (typeof onDone === 'function') onDone();
     return;
   }
   const start = performance.now();
   const delta = to - from;
+  numberAnimTarget = to;
+  numberAnimValue = from;
   function frame(now) {
     const progress = Math.min(1, (now - start) / duration);
-    el.textContent = formatNumber(from + delta * easeOutQuart(progress));
+    numberAnimValue = from + delta * easeOutQuart(progress);
+    el.textContent = formatNumber(numberAnimValue);
     if (progress < 1) {
       numberAnimHandle = requestAnimationFrame(frame);
     } else {
       numberAnimHandle = 0;
+      numberAnimTarget = null;
+      numberAnimValue = to;
       if (typeof onDone === 'function') onDone();
     }
   }
   numberAnimHandle = requestAnimationFrame(frame);
 }
 
-const rowNumberAnimationHandles = new Map();
+const rowNumberAnimations = new Map();
+const rowBarAnimations = new Map();
 
 function prefersReducedMotion() {
   return motionPreferenceApi.shouldReduceMotion(state.settings?.reduceMotion, reducedMotionMedia?.matches);
@@ -1062,19 +1079,21 @@ function prefersReducedMotion() {
 
 function settleMotionAnimations() {
   cancelNumberAnimation();
+  numberAnimValue = state.currentTotal;
   els.totalTokens.textContent = formatNumber(state.currentTotal);
   updateTotalCompact(state.currentTotal);
-  for (const [el, handle] of rowNumberAnimationHandles) {
-    cancelAnimationFrame(handle);
-    const target = Number(el.dataset.motionTarget || el.dataset.motionValue || 0);
+  for (const [el, motion] of rowNumberAnimations) {
+    cancelAnimationFrame(motion.handle);
+    const target = Number(motion.target ?? el.dataset.motionTarget ?? el.dataset.motionValue ?? 0);
     el.textContent = formatNumber(target);
     el.dataset.motionValue = String(target);
     delete el.dataset.motionTarget;
   }
-  rowNumberAnimationHandles.clear();
+  rowNumberAnimations.clear();
   for (const animation of document.getAnimations?.() || []) {
     try { animation.finish(); } catch (_) { animation.cancel(); }
   }
+  rowBarAnimations.clear();
 }
 
 function applyReduceMotionPreference(value) {
@@ -1101,40 +1120,44 @@ function captureBreakdownMotion() {
 }
 
 function animateRowNumber(el, from, to, duration = 420) {
-  const previousHandle = rowNumberAnimationHandles.get(el);
-  if (previousHandle) cancelAnimationFrame(previousHandle);
-  if (!Number.isFinite(from) || !Number.isFinite(to) || from === to || prefersReducedMotion()) {
+  const previous = rowNumberAnimations.get(el);
+  if (previous?.target === to) return;
+  if (previous) cancelAnimationFrame(previous.handle);
+  const startValue = Number.isFinite(previous?.value) ? previous.value : from;
+  if (!Number.isFinite(startValue) || !Number.isFinite(to) || startValue === to || prefersReducedMotion()) {
     el.textContent = formatNumber(to);
     el.dataset.motionValue = String(Number(to) || 0);
     delete el.dataset.motionTarget;
-    rowNumberAnimationHandles.delete(el);
+    rowNumberAnimations.delete(el);
     return;
   }
   const startedAt = performance.now();
-  const delta = to - from;
-  el.textContent = formatNumber(from);
-  el.dataset.motionValue = String(from);
+  const delta = to - startValue;
+  const motion = { handle: 0, target: to, value: startValue };
+  el.textContent = formatNumber(startValue);
+  el.dataset.motionValue = String(startValue);
   el.dataset.motionTarget = String(to);
   function frame(now) {
     if (prefersReducedMotion()) {
       el.textContent = formatNumber(to);
       el.dataset.motionValue = String(Number(to) || 0);
       delete el.dataset.motionTarget;
-      rowNumberAnimationHandles.delete(el);
+      if (rowNumberAnimations.get(el) === motion) rowNumberAnimations.delete(el);
       return;
     }
     const progress = Math.min(1, (now - startedAt) / duration);
-    const current = from + delta * easeOutQuart(progress);
-    el.textContent = formatNumber(current);
-    el.dataset.motionValue = String(current);
+    motion.value = startValue + delta * easeOutQuart(progress);
+    el.textContent = formatNumber(motion.value);
+    el.dataset.motionValue = String(motion.value);
     if (progress < 1) {
-      rowNumberAnimationHandles.set(el, requestAnimationFrame(frame));
+      motion.handle = requestAnimationFrame(frame);
     } else {
       delete el.dataset.motionTarget;
-      rowNumberAnimationHandles.delete(el);
+      if (rowNumberAnimations.get(el) === motion) rowNumberAnimations.delete(el);
     }
   }
-  rowNumberAnimationHandles.set(el, requestAnimationFrame(frame));
+  motion.handle = requestAnimationFrame(frame);
+  rowNumberAnimations.set(el, motion);
 }
 
 function animateBreakdownFrom(snapshot, { duration = 420 } = {}) {
@@ -1174,9 +1197,14 @@ function animateBreakdownFrom(snapshot, { duration = 420 } = {}) {
 }
 
 function animateBarBetween(fill, fromScale, toScale, delay = 0, duration = 420) {
-  if (!fill?.animate || Math.abs(toScale - fromScale) < 0.001) return;
+  if (!fill?.animate) return;
+  const previous = rowBarAnimations.get(fill);
+  const previousIsActive = previous?.animation.pending || previous?.animation.playState === 'running';
+  if (previousIsActive && Math.abs(previous.target - toScale) < 0.001) return;
   for (const animation of fill.getAnimations()) animation.cancel();
-  fill.animate([
+  rowBarAnimations.delete(fill);
+  if (Math.abs(toScale - fromScale) < 0.001) return;
+  const animation = fill.animate([
     { transform: `scaleX(${fromScale})` },
     { transform: `scaleX(${toScale})` }
   ], {
@@ -1185,6 +1213,13 @@ function animateBarBetween(fill, fromScale, toScale, delay = 0, duration = 420) 
     easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
     fill: 'backwards'
   });
+  const motion = { animation, target: toScale };
+  const forget = () => {
+    if (rowBarAnimations.get(fill) === motion) rowBarAnimations.delete(fill);
+  };
+  animation.onfinish = forget;
+  animation.oncancel = forget;
+  rowBarAnimations.set(fill, motion);
 }
 
 function captureTrendBarMotion() {
@@ -1269,14 +1304,11 @@ function applyBarScale(fill, scale) {
   const safeScale = Math.max(0, Math.min(1, Number(scale) || 0));
   fill.style.setProperty('--bar-scale', String(safeScale));
   if (!state.animateBarsFromZero || prefersReducedMotion() || !fill.animate) return;
-  for (const animation of fill.getAnimations()) animation.cancel();
-  fill.animate([
-    { transform: 'scaleX(0)' },
-    { transform: `scaleX(${safeScale})` }
-  ], { duration: 420, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' });
+  animateBarBetween(fill, 0, safeScale, 0, 420);
 }
 
 function rowWidth(value, max) {
+  if (Number(value) <= 0) return 0;
   return max > 0 ? Math.max(2, Math.min(100, (value / max) * 100)) : 0;
 }
 
@@ -1294,11 +1326,91 @@ function rowTemplate(rowData) {
   return row;
 }
 
-function updateRow(row, { name, subtitle, detail, value, cost, max, color, barBackground, accordionRows, stale, platform, local, client, kind, cacheReadTokens, outputTokens }) {
+function renderDeviceAccordion(accordionInner, deviceDetail) {
+  const signature = JSON.stringify([
+    state.settings?.showToolIcons === true,
+    deviceDetail.emptyText,
+    deviceDetail.metaParts,
+    deviceDetail.tools.map((tool) => [
+      tool.key,
+      tool.value,
+      Math.round(tool.percent),
+      tool.color,
+      tool.models.map((model) => [model.key, model.value])
+    ])
+  ]);
+  if (accordionInner.dataset.signature === signature) return;
+
+  const content = document.createElement('div');
+  content.className = 'accordion-content device-breakdown';
+  if (deviceDetail.tools.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'device-breakdown-empty';
+    empty.textContent = deviceDetail.emptyText;
+    content.append(empty);
+  } else {
+    for (const tool of deviceDetail.tools) {
+      const toolGroup = document.createElement('div');
+      toolGroup.className = 'device-tool';
+      const head = document.createElement('div');
+      head.className = 'device-tool-head';
+      const label = document.createElement('div');
+      label.className = 'device-tool-label';
+      const mark = document.createElement('span');
+      if (state.settings?.showToolIcons && clientsWithIcon.has(tool.client)) {
+        mark.className = `device-tool-mark row-icon row-icon-${tool.client}`;
+      } else {
+        mark.className = 'device-tool-mark dot';
+        mark.style.background = tool.color;
+      }
+      const name = document.createElement('span');
+      name.className = 'device-tool-name';
+      name.textContent = tool.name;
+      const percent = document.createElement('span');
+      percent.className = 'accordion-pct';
+      percent.textContent = `${Math.round(tool.percent)}%`;
+      label.append(mark, name, percent);
+      const metrics = document.createElement('span');
+      metrics.className = 'device-tool-metrics';
+      metrics.textContent = formatNumber(tool.value);
+      head.append(label, metrics);
+      toolGroup.append(head);
+
+      if (tool.models.length > 0) {
+        const modelList = document.createElement('div');
+        modelList.className = 'device-model-list';
+        for (const model of tool.models) {
+          const modelRow = document.createElement('div');
+          modelRow.className = 'device-model-row';
+          const modelName = document.createElement('span');
+          modelName.className = 'device-model-name';
+          modelName.textContent = model.name;
+          const modelValue = document.createElement('span');
+          modelValue.className = 'device-model-value';
+          modelValue.textContent = formatCompact(model.value);
+          modelRow.append(modelName, modelValue);
+          modelList.append(modelRow);
+        }
+        toolGroup.append(modelList);
+      }
+      content.append(toolGroup);
+    }
+  }
+  if (deviceDetail.metaParts.length > 0) {
+    const meta = document.createElement('div');
+    meta.className = 'device-meta';
+    meta.textContent = deviceDetail.metaParts.join(' · ');
+    content.append(meta);
+  }
+  accordionInner.replaceChildren(content);
+  accordionInner.dataset.signature = signature;
+}
+
+function updateRow(row, { name, subtitle, detail, value, cost, max, color, barBackground, accordionRows, deviceDetail, stale, platform, local, client, kind, cacheReadTokens, outputTokens }) {
   const width = rowWidth(value, max);
   const isExpanded = row.classList.contains('expanded');
   row.className = `row${kind ? ` ${kind}-row` : ''}${stale ? ' stale' : ''}${local ? ' local' : ''}`;
-  if (local) row.title = 'This device';
+  row.title = local ? 'This device' : '';
   
   if (cacheReadTokens !== undefined || outputTokens !== undefined) {
     row.dataset.cacheRead = cacheReadTokens || 0;
@@ -1335,7 +1447,11 @@ function updateRow(row, { name, subtitle, detail, value, cost, max, color, barBa
   applyBarScale(fill, width / 100);
 
   const accordionInner = row.querySelector('.row-accordion-inner');
-  if (Array.isArray(accordionRows) && accordionRows.length > 0) {
+  if (deviceDetail) {
+    renderDeviceAccordion(accordionInner, deviceDetail);
+    row.classList.add('has-accordion');
+    if (isExpanded) row.classList.add('expanded');
+  } else if (Array.isArray(accordionRows) && accordionRows.length > 0) {
     const accordionSignature = JSON.stringify(accordionRows.map((tool) => [tool.name, tool.value, Math.round(tool.percent), tool.color]));
     if (accordionInner.dataset.signature !== accordionSignature) {
       const content = document.createElement('div');
@@ -1467,6 +1583,31 @@ function deviceColor(stale) {
   return stale ? deviceStaleColor : deviceAccent;
 }
 
+function deviceRuntimeLabel(value) {
+  if (value === 'electron-widget') return t('devices.runtime.widget');
+  if (value === 'headless-agent') return t('devices.runtime.agent');
+  return String(value || '');
+}
+
+function deviceSyncedLabel(value) {
+  const date = value ? new Date(value) : null;
+  if (!date || Number.isNaN(date.getTime())) return '';
+  const diffMs = Math.max(0, Date.now() - date.getTime());
+  let age;
+  if (diffMs < 45_000) age = t('settings.age.justNow');
+  else {
+    const minutes = Math.round(diffMs / 60000);
+    if (minutes < 60) age = t('settings.age.minutesAgo', { minutes });
+    else {
+      const hours = Math.round(minutes / 60);
+      age = hours < 24
+        ? t('settings.age.hoursAgo', { hours })
+        : t('settings.age.daysAgo', { days: Math.round(hours / 24) });
+    }
+  }
+  return t('devices.synced', { age });
+}
+
 function stableColor(value, colors) {
   let hash = 0;
   for (const char of String(value || '')) hash = ((hash << 5) - hash + char.charCodeAt(0)) | 0;
@@ -1475,16 +1616,32 @@ function stableColor(value, colors) {
 
 function deviceRowsForPeriod() {
   const localId = state.settings?.deviceId || '';
-  return (state.stats?.devices || []).map((device) => ({
-    key: device.deviceId,
-    name: deviceLabel(device),
-    value: Number(device.periods?.[state.period]?.totalTokens || 0),
-    cost: Number(device.periods?.[state.period]?.costUsd || 0),
-    color: deviceColor(Boolean(device.stale)),
-    stale: Boolean(device.stale),
-    platform: device.platform || '',
-    local: Boolean(localId) && device.deviceId === localId
-  })).sort((a, b) => b.value - a.value);
+  return (state.stats?.devices || []).map((device) => {
+    const breakdown = deviceBreakdownApi.deviceBreakdownForPeriod(device, state.period, {
+      clientLabels,
+      clientColors,
+      fallbackColor: clientColors.default
+    });
+    const period = device.periods?.[state.period] || {};
+    const runtime = deviceRuntimeLabel(device.agentRuntime);
+    const version = device.agentVersion ? `${runtime ? `${runtime} ` : ''}v${device.agentVersion}` : runtime;
+    const metaParts = [deviceBreakdownApi.devicePlatformLabel(device.platform, device.osName, device.osVersion), version, deviceSyncedLabel(device.updatedAt)].filter(Boolean);
+    return {
+      key: device.deviceId,
+      name: deviceLabel(device),
+      value: breakdown.totalTokens,
+      cost: Number(period.costUsd || 0),
+      color: deviceColor(Boolean(device.stale)),
+      stale: Boolean(device.stale),
+      platform: device.platform || '',
+      local: Boolean(localId) && device.deviceId === localId,
+      deviceDetail: {
+        ...breakdown,
+        emptyText: breakdown.totalTokens > 0 ? t('devices.detailsUnavailable') : t('home.noTools'),
+        metaParts
+      }
+    };
+  }).sort((a, b) => b.value - a.value);
 }
 
 function toolRowsForPeriod(period) {
@@ -1636,7 +1793,7 @@ function limitProviderMeta(provider, provenance = null) {
 
 function limitProviderPlan(provider) {
   if (provider?.status && provider.status !== 'ok' && !provider.stale) return limitStatusLabel(provider.status, false);
-  const label = String(provider?.accountLabel || '').trim();
+  const label = String(provider?.planLabel || provider?.accountLabel || '').trim();
   if (label) return limitProviderPresentationApi.limitProviderDisplayLabel(label);
   return provider?.status && provider.status !== 'ok' ? limitStatusLabel(provider.status, false) : '';
 }
@@ -1659,6 +1816,10 @@ function enabledLimitProviderSet() {
   return new Set(configuredLimitProviderSelection());
 }
 
+function limitProviderEnabled(providerName) {
+  return enabledLimitProviderSet().has(providerName);
+}
+
 function limitProviderSelectionIncluding(providerName) {
   const selected = new Set(configuredLimitProviderSelection());
   selected.add(providerName);
@@ -1678,6 +1839,24 @@ function windowForKind(provider, kind) {
 
 function windowsForKind(provider, kind) {
   return (provider?.windows || []).filter((window) => window.kind === kind);
+}
+
+function antigravityQuotaGroups(provider) {
+  const entries = (provider?.windows || [])
+    .filter((window) => window.kind === 'session' || window.kind === 'weekly')
+    .map((window) => {
+      const presentation = limitProviderPresentationApi.antigravityQuotaWindow(window);
+      return presentation ? { ...presentation, window } : null;
+    });
+  // Legacy GetUserStatus pools have model names rather than group + period
+  // labels. Keep their existing flat layout instead of guessing a hierarchy.
+  if (entries.length === 0 || entries.some((entry) => entry === null)) return [];
+  const groups = new Map();
+  for (const entry of entries) {
+    if (!groups.has(entry.groupLabel)) groups.set(entry.groupLabel, []);
+    groups.get(entry.groupLabel).push(entry);
+  }
+  return [...groups].map(([label, windows]) => ({ label, windows }));
 }
 
 function formatLimitAmount(value) {
@@ -1964,7 +2143,9 @@ function limitWindowNode(label, window, color, tone = 1, valueOverride = null, d
   const meter = limitMeterNode(color, fillPercent, tone);
   const reset = document.createElement('div');
   reset.className = 'limit-reset';
-  const resetText = formatReset(window?.resetsAt) || window?.resetDescription || '';
+  const resetText = window?.resetsAt
+    ? formatReset(window.resetsAt)
+    : window?.resetDescription || '';
   if (detailText) {
     // Keep the reset text left-aligned (consistent with every other provider)
     // and add the absolute count on the right, under the top-line percentage.
@@ -2329,12 +2510,39 @@ function renderProviderWindows(provider, color) {
     }
   } else if (provider.provider === 'antigravity') {
     windows.classList.add('limit-windows-antigravity');
-    const weeklyWindows = windowsForKind(provider, 'weekly');
-    const visibleWindows = weeklyWindows.length > 0 ? weeklyWindows : [null];
-    for (const weekly of visibleWindows) {
-      const node = limitWindowNode(weekly?.label || 'Weekly', weekly, color, 0.78);
-      node.classList.add('limit-window-wide');
-      windows.append(node);
+    const quotaGroups = antigravityQuotaGroups(provider);
+    if (quotaGroups.length > 0) {
+      windows.classList.add('limit-windows-antigravity-grouped');
+      for (const group of quotaGroups) {
+        const groupNode = document.createElement('div');
+        groupNode.className = 'limit-window-group';
+        groupNode.setAttribute('role', 'group');
+        groupNode.setAttribute('aria-label', group.label);
+        const title = document.createElement('div');
+        title.className = 'limit-window-group-title';
+        title.textContent = group.label;
+        const groupWindows = document.createElement('div');
+        groupWindows.className = 'limit-window-group-items';
+        for (const entry of group.windows) {
+          const opacity = entry.window.kind === 'session' ? 0.95 : 0.78;
+          groupWindows.append(limitWindowNode(
+            entry.windowLabel,
+            { ...entry.window, label: entry.windowLabel },
+            color,
+            opacity
+          ));
+        }
+        groupNode.append(title, groupWindows);
+        windows.append(groupNode);
+      }
+    } else {
+      const weeklyWindows = windowsForKind(provider, 'weekly');
+      const visibleWindows = weeklyWindows.length > 0 ? weeklyWindows : [null];
+      for (const quotaWindow of visibleWindows) {
+        const node = limitWindowNode(quotaWindow?.label || 'Weekly', quotaWindow, color, 0.78);
+        node.classList.add('limit-window-wide');
+        windows.append(node);
+      }
     }
   } else if (provider.provider === 'opencode') {
     // Go reports session/weekly/monthly windows ($12/$30/$60); Zen reports a prepaid balance (and,
@@ -2629,6 +2837,18 @@ function renderMimoAccountGroup(label, providers, color) {
   return row;
 }
 
+function opencodeAccountTitle(provider, index) {
+  const name = String(provider?.accountName || '').trim();
+  if (name) return name;
+  // Older synced clients put the user-defined profile name in accountLabel.
+  // Keep those rows identifiable while new clients carry profile and plan in
+  // separate fields. Go/Zen are plan labels, never account identities.
+  const legacyName = String(provider?.accountLabel || '').trim();
+  return legacyName && legacyName !== 'Go' && legacyName !== 'Zen'
+    ? legacyName
+    : `Account ${index + 1}`;
+}
+
 function renderOpenCodeAccountGroup(label, providers, color) {
   const row = document.createElement('div');
   row.className = 'limit-row limit-row-group';
@@ -2639,10 +2859,15 @@ function renderOpenCodeAccountGroup(label, providers, color) {
   });
   const accountList = document.createElement('div');
   accountList.className = 'limit-account-list';
-  providers.forEach((provider) => {
-    accountList.append(renderLimitProviderRow('opencode', provider.accountLabel || 'OpenCode', provider, color, {
+  providers.forEach((provider, index) => {
+    const legacyProfileLabel = !provider?.accountName
+      && provider?.accountLabel
+      && provider.accountLabel !== 'Go'
+      && provider.accountLabel !== 'Zen';
+    accountList.append(renderLimitProviderRow('opencode', opencodeAccountTitle(provider, index), provider, color, {
       accountRow: true,
-      showIcon: false
+      showIcon: false,
+      ...(legacyProfileLabel ? { planText: '' } : {})
     }));
   });
   row.append(head, accountList);
@@ -3440,13 +3665,24 @@ function homeModuleShell(kind, title, viewId, meta = '') {
   return { module, body };
 }
 
+function homeLimitAccountTitle(id, provider, index) {
+  if (id === 'codex') return codexAccountTitle(provider, index);
+  if (id === 'mimo') return mimoAccountTitle(provider, index);
+  if (id === 'opencode') return opencodeAccountTitle(provider, index);
+  if (id === 'wecode') return wecodeAccountTitle(provider, index);
+  return String(provider?.accountEmail || provider?.accountName || '').trim() || `Account ${index + 1}`;
+}
+
 function homeLimitRows() {
   const enabled = enabledLimitProviderSet();
   const providerOrder = state.settings?.homeLimitProviderOrder || state.settings?.limitProviderOrder;
   const providerOptions = limitProviderOrderApi.orderedLimitProviders(LIMIT_PROVIDERS, providerOrder);
   const hasConfiguredOrder = Boolean(state.settings?.homeLimitProviderOrder);
   return homeOverviewApi.homeLimitAccountsForProviders({
-    providers: state.stats?.limits?.providers || [],
+    providers: (state.stats?.limits?.providers || []).map((provider) => ({
+      ...provider,
+      windows: limitProviderPresentationApi.limitProviderCompactWindows(provider, provider.windows)
+    })),
     providerOptions,
     enabledProviderIds: Array.from(enabled),
     hiddenProviderIds: Array.from(hiddenHomeLimitProviderSet()),
@@ -3456,14 +3692,21 @@ function homeLimitRows() {
     accountName: (provider, index, providerEntries) => {
       const id = String(provider?.provider || '').trim().toLowerCase();
       const option = providerOptions.find((entry) => entry.id === id);
-      if (id === 'codex' && providerEntries.length > 1) return codexAccountTitle(provider, index);
-      if (id === 'wecode' && providerEntries.length > 1) return wecodeAccountTitle(provider, index);
-      return option?.label || id;
+      const providerTitle = option?.label || id;
+      if (providerEntries.length > 1) {
+        const accountTitle = homeLimitAccountTitle(id, provider, index);
+        return state.settings?.showHomeLimitProviderNames === true || state.settings?.showToolIcons === false
+          ? `${providerTitle} · ${accountTitle}`
+          : accountTitle;
+      }
+      return providerTitle;
     }
   });
 }
 
-function homeLimitWindowLabel(window) {
+function homeLimitWindowLabel(window, providerId = '', visibleWindows = []) {
+  const compactLabel = limitProviderPresentationApi.limitProviderCompactWindowLabel(providerId, window, visibleWindows);
+  if (compactLabel) return compactLabel;
   if (window?.kind === 'billing') {
     const label = String(window?.label || '').trim();
     if (label) return label;
@@ -3539,7 +3782,7 @@ function renderHomeLimitModule() {
       line.className = 'home-limit-window-line';
       const label = document.createElement('span');
       label.className = 'home-limit-window-label';
-      label.textContent = homeLimitWindowLabel(window);
+      label.textContent = homeLimitWindowLabel(window, row.providerId, row.windows);
       const value = document.createElement('span');
       value.className = 'home-list-value';
       const showUsed = Boolean(state.settings?.showLimitUsed);
@@ -3558,20 +3801,27 @@ function renderHomeLimitModule() {
       const meter = homeLimitMeterNode(window);
       if (meter) metric.append(meter);
       const resetAt = formatReset(window.resetsAt);
-      const resetDescription = window.resetDescription
-        ? t('home.reset', { value: window.resetDescription })
-        : '';
       const wecodeDetail = row.providerId === 'wecode' && window.kind === 'billing'
         ? formatWecodeAmountDetail(window)
         : '';
       const resetText = document.createElement('span');
       resetText.className = 'home-limit-reset';
+      const resetLabel = window.resetsAt
+        ? resetAt || '\u00a0'
+        : window.resetDescription
+        ? t('home.reset', { value: window.resetDescription })
+        : '\u00a0';
+      const periodLabel = limitProviderPresentationApi.limitProviderCompactWindowPeriodLabel(row.providerId, window, row.windows);
       // WeCode has no reset schedule, so drop the empty reset line and surface
       // the spend/remaining amounts there instead, keeping the window one line.
-      resetText.textContent = resetAt || resetDescription || wecodeDetail || '\u00a0';
-      if (wecodeDetail && !resetAt && !resetDescription) {
+      let resetLine = periodLabel && resetLabel !== '\u00a0'
+        ? `${periodLabel} · ${resetLabel}`
+        : resetLabel;
+      if (resetLine === '\u00a0' && wecodeDetail) {
+        resetLine = wecodeDetail;
         resetText.classList.add('home-limit-amount-detail');
       }
+      resetText.textContent = resetLine;
       metric.append(resetText);
       windows.append(metric);
     }
@@ -4068,6 +4318,7 @@ function render() {
   const totalChanged = nextTotal !== state.currentTotal;
   if (state.suppressInitialNumberAnimation) {
     cancelNumberAnimation();
+    numberAnimValue = nextTotal;
     els.totalTokens.textContent = formatNumber(nextTotal);
     updateTotalCompact(nextTotal);
     state.suppressInitialNumberAnimation = false;
@@ -4076,13 +4327,15 @@ function render() {
     // widest endpoint first (a downward roll starts wider than it settles), so the
     // number never vanishes, clips, or resizes mid-roll. Re-fit on completion so a
     // window resize during the animation, or a downward settle, still ends correct.
-    const widest = formatNumber(nextTotal).length >= formatNumber(state.currentTotal).length ? nextTotal : state.currentTotal;
+    const animationFrom = numberAnimHandle ? numberAnimValue : state.currentTotal;
+    const widest = formatNumber(nextTotal).length >= formatNumber(animationFrom).length ? nextTotal : animationFrom;
     els.totalTokens.textContent = formatNumber(widest);
     updateTotalCompact(nextTotal);
-    animateNumber(els.totalTokens, state.currentTotal, nextTotal, state.periodMotionActive ? 800 : 1000, fitTotalNumber);
+    animateNumber(els.totalTokens, animationFrom, nextTotal, state.periodMotionActive ? 800 : 1000, fitTotalNumber);
     pulseLiveDot();
-  } else {
+  } else if (!headlineNumberIsAnimatingTo(nextTotal)) {
     cancelNumberAnimation();
+    numberAnimValue = nextTotal;
     els.totalTokens.textContent = formatNumber(nextTotal);
     updateTotalCompact(nextTotal);
   }
@@ -4396,16 +4649,15 @@ function clamp(value, min, max) {
   return Math.max(min, Math.min(max, Number(value)));
 }
 
-function applyControlLayout(settingsInTitlebar) {
-  const titlebarSlot = document.getElementById('titlebarActionSlot');
+function applyControlLayout(swapSettingsAndRefresh) {
   const footerSlot = document.getElementById('footerActionSlot');
-  if (!titlebarSlot || !footerSlot) return;
-  if (settingsInTitlebar) {
-    titlebarSlot.appendChild(els.settingsButton);
-    footerSlot.appendChild(els.refreshButton);
+  if (!footerSlot || !els.utilityActions) return;
+  footerSlot.appendChild(els.utilityActions);
+  els.utilityActions.classList.toggle('is-swapped', swapSettingsAndRefresh);
+  if (swapSettingsAndRefresh) {
+    els.utilityActions.append(els.settingsButton, els.refreshButton);
   } else {
-    titlebarSlot.appendChild(els.refreshButton);
-    footerSlot.appendChild(els.settingsButton);
+    els.utilityActions.append(els.refreshButton, els.settingsButton);
   }
 }
 
@@ -4426,7 +4678,13 @@ function applyAppearanceSettings(settings) {
   els.liveDot.style.display = (settings?.showLiveDot !== false) ? '' : 'none';
   els.shell.classList.toggle('desktop-mode', settings?.windowBehavior === 'desktop');
   els.shell.classList.toggle('title-icon-only', settings?.titleIconOnly === true);
-  if (settings && 'settingsInTitlebar' in settings) applyControlLayout(settings.settingsInTitlebar === true);
+  const trayMode = settings && 'trayMode' in settings
+    ? settings.trayMode === true
+    : state.settings?.trayMode === true;
+  els.shell.classList.toggle('tray-mode', trayMode);
+  if (settings && ('settingsInTitlebar' in settings || 'trayMode' in settings)) {
+    applyControlLayout(settings.settingsInTitlebar === true);
+  }
   const isWindows = navigator.userAgent.toLowerCase().includes('windows');
   
   let isMacLegacyRadius = false;
@@ -5033,7 +5291,7 @@ function appearancePatchFromControls() {
     showToolIcons: Boolean(els.toolIconsInput.checked),
     titleIconOnly: Boolean(els.titleIconInput.checked),
     showCompactTotalTokens: Boolean(els.showCompactTotalTokensInput.checked),
-    settingsInTitlebar: Boolean(els.settingsInTitlebarInput.checked),
+    settingsInTitlebar: Boolean(els.swapSettingsRefreshInput.checked),
     glassOpacity: Number(els.glassInput.value === '' ? defaultAppearance.glassOpacity : els.glassInput.value),
     glassBlur: Number(els.blurInput.value === '' ? defaultAppearance.glassBlur : els.blurInput.value),
     zoomFactor: Number(els.zoomInput.value === '' ? defaultAppearance.zoomFactor * 100 : els.zoomInput.value) / 100
@@ -5268,7 +5526,7 @@ function syncSettingsForm() {
   els.toolIconsInput.checked = state.settings.showToolIcons !== false;
   els.titleIconInput.checked = state.settings.titleIconOnly === true;
   els.showCompactTotalTokensInput.checked = state.settings.showCompactTotalTokens === true;
-  els.settingsInTitlebarInput.checked = state.settings.settingsInTitlebar === true;
+  els.swapSettingsRefreshInput.checked = state.settings.settingsInTitlebar === true;
   els.discordRpcInput.checked = Boolean(state.settings.discordRpcEnabled);
   syncWindowBehaviorControls();
   els.floatingBubbleInput.checked = state.settings.floatingBubbleEnabled === true;
@@ -5722,6 +5980,42 @@ function renderHomeLimitProviderList() {
     .orderedLimitProviders(LIMIT_PROVIDERS, homeLimitProviderOrderValue())
     .filter(({ id }) => enabled.has(id));
   const hasCustomOrder = Boolean(state.settings?.homeLimitProviderOrder);
+  const statusLabel = document.createElement('label');
+  statusLabel.className = 'checkbox-label home-limit-status-setting';
+  const statusInput = document.createElement('input');
+  statusInput.type = 'checkbox';
+  statusInput.checked = state.settings?.showHomeLimitBars === true;
+  const statusText = document.createElement('span');
+  statusText.textContent = t('settings.home.showLimitBars');
+  statusInput.addEventListener('change', () => void saveSettings({ showHomeLimitBars: statusInput.checked }));
+  statusLabel.append(statusInput, statusText);
+  const providerNamesLabel = document.createElement('label');
+  providerNamesLabel.className = 'checkbox-label home-limit-status-setting';
+  const providerNamesInput = document.createElement('input');
+  providerNamesInput.type = 'checkbox';
+  const providerNamesRequired = state.settings?.showToolIcons === false;
+  providerNamesInput.checked = providerNamesRequired || state.settings?.showHomeLimitProviderNames === true;
+  providerNamesInput.disabled = providerNamesRequired;
+  const providerNamesText = document.createElement('span');
+  providerNamesText.textContent = t('settings.home.showLimitProviderNames');
+  const providerNamesCopy = document.createElement('span');
+  providerNamesCopy.className = 'home-limit-provider-names-copy';
+  providerNamesCopy.append(providerNamesText);
+  if (providerNamesRequired) {
+    const requiredReason = t('settings.home.providerNamesRequiredWithoutIcons');
+    const requiredReasonText = document.createElement('span');
+    requiredReasonText.id = 'homeLimitProviderNamesReason';
+    requiredReasonText.className = 'home-limit-provider-names-reason';
+    requiredReasonText.textContent = requiredReason;
+    providerNamesCopy.append(requiredReasonText);
+    providerNamesLabel.title = requiredReason;
+    providerNamesInput.setAttribute('aria-describedby', requiredReasonText.id);
+  }
+  providerNamesInput.addEventListener('change', async () => {
+    await saveSettings({ showHomeLimitProviderNames: providerNamesInput.checked });
+    renderHomeIfVisible();
+  });
+  providerNamesLabel.append(providerNamesInput, providerNamesCopy);
   const countLabel = document.createElement('label');
   countLabel.className = 'settings-item home-limit-account-count-setting';
   const countText = document.createElement('span');
@@ -5770,7 +6064,7 @@ function renderHomeLimitProviderList() {
   showAll.addEventListener('click', () => void showAllHomeLimitProviders());
   headerActions.append(reset, showAll);
   header.append(note, headerActions);
-  wrap.append(countLabel, header);
+  wrap.append(statusLabel, providerNamesLabel, countLabel, header);
   for (const { id, label, settingsLabel } of providers) {
     const isHidden = hidden.has(id);
     const row = document.createElement('div');
@@ -6171,6 +6465,20 @@ function renderWslPanel() {
       row.append(name, tag);
       els.wslPanel.append(row);
     }
+
+    if (wslStatusPresentationApi.sqliteHelpClients(status).length > 0) {
+      const help = document.createElement('p');
+      help.className = 'settings-note wsl-panel-help';
+      const message = document.createElement('span');
+      message.textContent = t('settings.collection.wslPanel.sqliteHelp');
+      const guide = document.createElement('button');
+      guide.type = 'button';
+      guide.className = 'inline-link';
+      guide.textContent = t('settings.collection.wslPanel.setupGuide');
+      guide.addEventListener('click', () => window.tokenMonitor.openExternal?.(TOKEN_MONITOR_WSL_SQLITE_GUIDE_URL));
+      help.append(message, ' ', guide);
+      els.wslPanel.append(help);
+    }
   }
 }
 
@@ -6350,6 +6658,7 @@ async function onLimitProviderToggle() {
     setBreakdown('tool');
   }
   await saveSettings({ limitProviders: checked.join(','), limitsEnabled: checked.length > 0 });
+  clearDisabledLimitProviderPendingChecks(new Set(checked));
   await refreshStats({ force: true });
 }
 
@@ -6732,12 +7041,13 @@ els.breakdown.addEventListener('click', (event) => {
 els.pinButton.addEventListener('click', () => {
   saveSettings({ windowBehavior: nextWindowBehavior(currentWindowBehavior()) });
 });
-els.settingsButton.addEventListener('click', () => {
+els.settingsButton.addEventListener('click', (event) => {
   if (state.viewSwitcherOpen) setViewSwitcherOpen(false);
   els.settingsPanel.classList.toggle('hidden');
   const settingsOpen = !els.settingsPanel.classList.contains('hidden');
   if (!settingsOpen) stopWindowShortcutRecording();
   els.shell.classList.toggle('settings-open', settingsOpen);
+  if (!settingsOpen && event.detail > 0) els.settingsButton.blur();
   els.shell.style.transform = 'translateZ(0)';
   requestAnimationFrame(() => { els.shell.style.transform = ''; });
 });
@@ -6942,14 +7252,21 @@ for (const input of els.reduceMotionInputs || []) {
   });
 }
 els.liveDotInput.addEventListener('change', saveAppearanceFromControls);
-els.toolIconsInput.addEventListener('change', saveAppearanceFromControls);
+els.toolIconsInput.addEventListener('change', async () => {
+  state.settings.showToolIcons = els.toolIconsInput.checked;
+  renderHomeIfVisible();
+  await saveAppearanceFromControls();
+});
 els.titleIconInput.addEventListener('change', saveAppearanceFromControls);
 els.showCompactTotalTokensInput.addEventListener('change', async () => {
   await saveAppearanceFromControls();
   if (!numberAnimHandle) updateTotalCompact(state.currentTotal);
 });
 window.addEventListener('resize', () => { if (!numberAnimHandle) fitTotalNumber(); });
-els.settingsInTitlebarInput.addEventListener('change', saveAppearanceFromControls);
+els.swapSettingsRefreshInput.addEventListener('change', () => {
+  applyControlLayout(els.swapSettingsRefreshInput.checked);
+  void saveAppearanceFromControls();
+});
 els.discordRpcInput.addEventListener('change', saveAppearanceFromControls);
 els.windowBehaviorInput.addEventListener('change', () => saveSettings({ windowBehavior: els.windowBehaviorInput.value }));
 els.floatingBubbleInput.addEventListener('change', () => {
@@ -7932,6 +8249,15 @@ const externalLimitAccountConfig = {
   }
 };
 
+function clearDisabledLimitProviderPendingChecks(enabledProviders) {
+  if (!enabledProviders.has('deepseek')) clearDeepseekPendingCheck();
+  if (!enabledProviders.has('minimax')) clearMinimaxPendingCheck();
+  if (!enabledProviders.has('copilot')) clearCopilotPendingCheck();
+  for (const providerName of Object.keys(externalLimitAccountConfig)) {
+    if (!enabledProviders.has(providerName)) clearExternalProviderCheckPending(providerName);
+  }
+}
+
 function externalProviderForAccount(providerName) {
   const provider = localProviderStatus(providerName);
   const config = externalLimitAccountConfig[providerName];
@@ -7986,8 +8312,8 @@ function isCurrentCopilotSignInFlow(flowId) {
   return current && incoming === current;
 }
 
-function copilotAccountStatusText(provider, configured, source) {
-  const accountStatus = limitProviderPresentationApi.apiKeyAccountStatus(provider, configured);
+function copilotAccountStatusText(provider, configured, source, enabled = true) {
+  const accountStatus = limitProviderPresentationApi.apiKeyAccountStatus(provider, configured, enabled);
   if (accountStatus === 'linked') {
     const accountName = String(provider?.accountName || '').trim();
     return accountName || t(source === 'env' ? 'settings.copilot.statusEnv' : 'settings.copilot.statusSet');
@@ -7996,6 +8322,7 @@ function copilotAccountStatusText(provider, configured, source) {
   if (accountStatus === 'notConfigured') return t('settings.copilot.statusNotSet');
   const statusKeys = {
     checking: 'settings.common.checking',
+    disabled: 'settings.limits.status.disabled',
     limited: 'settings.common.limited',
     unavailable: 'settings.common.unavailable',
     notChecked: 'settings.common.notChecked',
@@ -8004,8 +8331,8 @@ function copilotAccountStatusText(provider, configured, source) {
   return t(statusKeys[accountStatus] || 'settings.common.error');
 }
 
-function apiKeyAccountStatusText(providerName, provider, configured, source) {
-  const accountStatus = limitProviderPresentationApi.apiKeyAccountStatus(provider, configured);
+function apiKeyAccountStatusText(providerName, provider, configured, source, enabled = true) {
+  const accountStatus = limitProviderPresentationApi.apiKeyAccountStatus(provider, configured, enabled);
   if (accountStatus === 'linked') {
     return t(source === 'env' ? `settings.${providerName}.statusEnv` : `settings.${providerName}.statusSet`);
   }
@@ -8013,6 +8340,7 @@ function apiKeyAccountStatusText(providerName, provider, configured, source) {
   if (accountStatus === 'notConfigured') return t(`settings.${providerName}.statusNotSet`);
   const statusKeys = {
     checking: 'settings.common.checking',
+    disabled: 'settings.limits.status.disabled',
     limited: 'settings.common.limited',
     unavailable: 'settings.common.unavailable',
     notChecked: 'settings.common.notChecked',
@@ -8108,7 +8436,8 @@ function renderExternalProviderStatus(providerName) {
   const wasPending = Number(state[config.pendingKey] || 0) > 0;
   const provider = externalProviderForAccount(providerName);
   const configured = Boolean(state.settings?.[config.configuredKey]);
-  const pending = Number(state[config.pendingKey] || 0) > 0;
+  const enabled = limitProviderEnabled(providerName);
+  const pending = enabled && Number(state[config.pendingKey] || 0) > 0;
   const linked = externalProviderAccountLinked(providerName);
   if (providerName === 'ollama' && wasPending && !pending && linked) {
     setExternalAccountExpanded('ollama', false);
@@ -8130,7 +8459,7 @@ function renderExternalProviderStatus(providerName) {
   }
   setCursorStatusText(
     statusEl,
-    pending ? t('settings.common.checking') : apiKeyAccountStatusText(providerName, provider, configured, source)
+    pending ? t('settings.common.checking') : apiKeyAccountStatusText(providerName, provider, configured, source, enabled)
   );
   manualPanel.classList.toggle('hidden', linked);
   openBtn.classList.toggle('hidden', linked);
@@ -8163,8 +8492,9 @@ function renderMinimaxStatus() {
   const source = state.settings?.minimaxApiKeySource || '';
   const provider = minimaxProviderForAccount();
   const configured = Boolean(state.settings?.minimaxApiKeyConfigured);
+  const enabled = limitProviderEnabled('minimax');
   const linked = minimaxAccountLinked();
-  setCursorStatusText(statusEl, apiKeyAccountStatusText('minimax', provider, configured, source));
+  setCursorStatusText(statusEl, apiKeyAccountStatusText('minimax', provider, configured, source, enabled));
   manualPanel.classList.toggle('hidden', linked);
   openBtn.classList.toggle('hidden', linked);
   logoutBtn.classList.toggle('hidden', !linked || source !== 'settings');
@@ -8186,10 +8516,11 @@ function renderCopilotStatus() {
   const source = state.settings?.copilotApiTokenSource || '';
   const provider = copilotProviderForAccount();
   const configured = Boolean(state.settings?.copilotApiTokenConfigured);
+  const enabled = limitProviderEnabled('copilot');
   const linked = copilotAccountLinked();
   errorEl.textContent = state.copilotErrorMessage || '';
   errorEl.classList.toggle('hidden', !state.copilotErrorMessage);
-  setCursorStatusText(statusEl, copilotAccountStatusText(provider, configured, source));
+  setCursorStatusText(statusEl, copilotAccountStatusText(provider, configured, source, enabled));
   manualPanel.classList.toggle('hidden', linked);
   if (linked && state.copilotManualExpanded) setCopilotManualExpanded(false);
   signInBtn.classList.toggle('hidden', linked || state.copilotSignInBusy);
@@ -8216,8 +8547,9 @@ function renderDeepseekStatus() {
   const source = state.settings?.deepseekApiKeySource || '';
   const provider = deepseekProviderForAccount();
   const configured = Boolean(state.settings?.deepseekApiKeyConfigured);
+  const enabled = limitProviderEnabled('deepseek');
   const linked = deepseekAccountLinked();
-  setCursorStatusText(statusEl, apiKeyAccountStatusText('deepseek', provider, configured, source));
+  setCursorStatusText(statusEl, apiKeyAccountStatusText('deepseek', provider, configured, source, enabled));
   manualPanel.classList.toggle('hidden', linked);
   openBtn.classList.toggle('hidden', linked);
   logoutBtn.classList.toggle('hidden', !linked || source !== 'settings');

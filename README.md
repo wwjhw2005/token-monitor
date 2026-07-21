@@ -62,6 +62,20 @@ Token Monitor supports token usage, account-limit checks, and session details se
 | <img src=".github/assets/tools-icon/ollama.png" width="28" alt="Ollama" /> | Ollama | Ollama Cloud cookie (session/weekly usage via ollama.com/settings) | — | ✅ | — |
 | <img src=".github/assets/tools-icon/wecode.png" width="28" alt="WeCode" /> | WeCode | WeCode username (quota via copilot.weibo.com API) | — | ✅ | — |
 
+## Showcase
+
+| Home View | Limits View | Tools View |
+|:---:|:---:|:---:|
+| ![Home View](.github/assets/home-view.png) | ![Limits View](.github/assets/limits-view.png) | ![Tools View](.github/assets/tools-view.png) |
+
+| Session View | Models View | Service Status |
+|:---:|:---:|:---:|
+| ![Session View](.github/assets/sessions-view.png) | ![Models View](.github/assets/models-view.png) | ![Service Status](.github/assets/status-view.png) |
+
+| Usage Dashboard — Overview | Usage Dashboard — Trends |
+|:---:|:---:|
+| ![Usage Dashboard Overview](.github/assets/dashboard-overview.png) | ![Usage Dashboard Trends](.github/assets/dashboard-trends.png) |
+
 ## Why Token Monitor?
 
 Most usage monitors are useful on the machine they run on. Token Monitor is built for multi-device work: each device watches its own local logs, sends summary updates to your hub, and every connected widget sees token changes almost immediately.
@@ -69,7 +83,7 @@ Most usage monitors are useful on the machine they run on. Token Monitor is buil
 ## Features
 
 - **Live token tracking** for Claude Code, Codex, Hermes Agent, OpenCode, OpenClaw, Cursor, Antigravity, Cline, Kimi, Qwen, Grok Build, GitHub Copilot, Pi, Zed, Kilo Code, MiMo Code, ZCode, Kiro, CodeBuddy, WorkBuddy, and Proma (UI updates within seconds of each turn)
-- **WSL usage (Windows)** — usage from AI tools running inside a running WSL distro is detected automatically and merged into your totals (refreshed on the periodic scan, about every 5 minutes)
+- **WSL usage (Windows)** — file-based usage from a running WSL distro is detected automatically and merged about every 5 minutes; SQLite-backed tools such as OpenCode and Hermes may require a [headless agent inside WSL](docs/wsl-sqlite-setup.md)
 - **Real-time multi-device sync** over Server-Sent Events
 - **Breakdown views** grouped by tool, device, model, session, or account limits
 - **Per-session detail** — open a Claude Code, Codex, or OpenCode session to see tokens per prompt, expandable to each reply's exact token split and tools used (read on-demand from local transcripts or databases, never synced)
@@ -90,18 +104,6 @@ Most usage monitors are useful on the machine they run on. Token Monitor is buil
 - **iOS widget support** via Widgy and Scriptable through the Worker hub
 - **Discord Rich Presence** to broadcast today's tokens, cost, and top client (opt-in)
 - **Privacy-first:** prompts, responses, source code, and file contents stay on your machine
-
-| Limits View | Devices View | Models View |
-|:---:|:---:|:---:|
-| ![Limits View](.github/assets/limits-view.png) | ![Devices View](.github/assets/devices-view.png) | ![Models View](.github/assets/models-view.png) |
-
-| Session View | Session Details | Service Status |
-|:---:|:---:|:---:|
-| ![Session View](.github/assets/sessions-view.png) | ![Session Details](.github/assets/session-details.png) | ![Service Status](.github/assets/status-view.png) |
-
-| Usage Dashboard — Overview | Usage Dashboard — Trends |
-|:---:|:---:|
-| ![Usage Dashboard Overview](.github/assets/dashboard-overview.png) | ![Usage Dashboard Trends](.github/assets/dashboard-trends.png) |
 
 ## Installation
 
