@@ -5980,15 +5980,8 @@ function renderHomeLimitProviderList() {
     .orderedLimitProviders(LIMIT_PROVIDERS, homeLimitProviderOrderValue())
     .filter(({ id }) => enabled.has(id));
   const hasCustomOrder = Boolean(state.settings?.homeLimitProviderOrder);
-  const statusLabel = document.createElement('label');
-  statusLabel.className = 'checkbox-label home-limit-status-setting';
-  const statusInput = document.createElement('input');
-  statusInput.type = 'checkbox';
-  statusInput.checked = state.settings?.showHomeLimitBars === true;
-  const statusText = document.createElement('span');
-  statusText.textContent = t('settings.home.showLimitBars');
-  statusInput.addEventListener('change', () => void saveSettings({ showHomeLimitBars: statusInput.checked }));
-  statusLabel.append(statusInput, statusText);
+  // Decision A: Home three-tone meters always render — no low-limit bar
+  // checkbox. Keep the field read-tolerant in main.js for old settings only.
   const providerNamesLabel = document.createElement('label');
   providerNamesLabel.className = 'checkbox-label home-limit-status-setting';
   const providerNamesInput = document.createElement('input');
@@ -6064,7 +6057,7 @@ function renderHomeLimitProviderList() {
   showAll.addEventListener('click', () => void showAllHomeLimitProviders());
   headerActions.append(reset, showAll);
   header.append(note, headerActions);
-  wrap.append(statusLabel, providerNamesLabel, countLabel, header);
+  wrap.append(providerNamesLabel, countLabel, header);
   for (const { id, label, settingsLabel } of providers) {
     const isHidden = hidden.has(id);
     const row = document.createElement('div');
