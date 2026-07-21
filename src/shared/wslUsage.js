@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const { execFileSync } = require('node:child_process');
 const { emptyPeriod, extractUsageFromTokscale, mergePeriods } = require('./usage');
 const { buildPromaPeriods, collectPromaRows } = require('./promaUsage');
+const { buildGrokReconciliations, reconcileGrokJson } = require('./grokUsage');
 
 const LXSS_KEY = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Lxss';
 
@@ -226,6 +227,7 @@ async function collectWslUsage(options = {}, deps = {}) {
   const { clients, trackedClients = clients, allTimeSince, commandTimeoutMs, now, runTokscale, logger, decoratePeriods } = options;
   const buildProma = options.buildPromaPeriods || buildPromaPeriods;
   const collectProma = options.collectPromaRows || collectPromaRows;
+  const buildGrok = options.buildGrokReconciliations || buildGrokReconciliations;
   const existsSync = deps.existsSync || fs.existsSync;
   const readdirSync = deps.readdirSync || fs.readdirSync;
   const bundle = emptyWslBundle();
@@ -278,14 +280,26 @@ async function collectWslUsage(options = {}, deps = {}) {
     const homeClientsCsv = clientsForHomeScan(clients, home, existsSync);
     if (homeClientsCsv.length === 0 || typeof runTokscale !== 'function') continue;
     try {
+      let grokReconciliations = null;
+      if (tracked.has('grok') && homeDataClients.includes('grok')) {
+        try {
+          grokReconciliations = buildGrok({
+            now,
+            allTimeSince,
+            roots: [wslHomePath(home, '.grok/sessions')]
+          });
+        } catch (error) {
+          if (typeof logger === 'function') logger(`wsl Grok usage parse failed for ${home}: ${error.message}`);
+        }
+      }
       // Serial on purpose (issue #15): never run these concurrently.
       const todayJson = await runTokscale({ clients: homeClientsCsv, flags: ['--today', '--home', home], commandTimeoutMs });
       const monthJson = await runTokscale({ clients: homeClientsCsv, flags: ['--month', '--home', home], commandTimeoutMs });
       const allTimeJson = await runTokscale({ clients: homeClientsCsv, flags: ['--since', allTimeSince, '--home', home], commandTimeoutMs });
       const periods = {
-        today: extractUsageFromTokscale(todayJson),
-        month: extractUsageFromTokscale(monthJson),
-        allTime: extractUsageFromTokscale(allTimeJson)
+        today: extractUsageFromTokscale(grokReconciliations ? reconcileGrokJson(todayJson, grokReconciliations.today) : todayJson),
+        month: extractUsageFromTokscale(grokReconciliations ? reconcileGrokJson(monthJson, grokReconciliations.month) : monthJson),
+        allTime: extractUsageFromTokscale(grokReconciliations ? reconcileGrokJson(allTimeJson, grokReconciliations.allTime) : allTimeJson)
       };
       if (typeof decoratePeriods === 'function') decoratePeriods(periods, home);
       bundle.today = mergePeriods(bundle.today, periods.today);

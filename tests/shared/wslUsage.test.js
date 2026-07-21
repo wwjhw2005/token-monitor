@@ -306,6 +306,50 @@ test('collectWslUsage sums two homes per period', async () => {
   assert.deepEqual(bundle.today.clients, { claude: 15 });
 });
 
+test('collectWslUsage reconciles Grok breakdowns inside each WSL home', async () => {
+  const home = '\\\\wsl$\\Ubuntu\\home\\alice';
+  const sessionId = 'grok-session';
+  const reconciliation = {
+    sessions: new Map([[sessionId, {
+      complete: true,
+      rows: [{
+        client: 'grok', sessionId, model: 'grok-4.5',
+        input: 20, output: 5, cacheRead: 80, cacheWrite: 0,
+        reasoning: 0, messageCount: 1, cost: 0,
+        startedAt: '2026-07-09T10:00:00.000Z', lastUsedAt: '2026-07-09T10:00:00.000Z'
+      }]
+    }]])
+  };
+  const roots = [];
+  const runTokscale = async () => ({
+    entries: [{
+      client: 'grok', sessionId, model: 'grok-4.5',
+      input: 25, output: 0, cacheRead: 0, cacheWrite: 0,
+      messageCount: 1, cost: 0.00005
+    }]
+  });
+  const { bundle } = await collectWslUsage({
+    clients: 'grok', trackedClients: 'grok', allTimeSince: '2026-01-01',
+    now: new Date('2026-07-09T12:00:00.000Z'), runTokscale,
+    buildGrokReconciliations(options) {
+      roots.push(options.roots[0]);
+      return { today: reconciliation, month: reconciliation, allTime: reconciliation };
+    }
+  }, {
+    platform: 'win32',
+    exec: (cmd) => (cmd === 'reg' ? 'Lxss' : 'Ubuntu\n'),
+    readdirSync: (target) => target === '\\\\wsl$\\Ubuntu\\home' ? ['alice'] : [],
+    existsSync: (target) => target === `${home}\\.grok\\sessions`
+  });
+
+  assert.deepEqual(roots, [`${home}\\.grok\\sessions`]);
+  assert.equal(bundle.today.totalTokens, 105);
+  assert.equal(bundle.today.cacheReadTokens, 80);
+  assert.equal(bundle.today.outputTokens, 5);
+  assert.equal(bundle.month.totalTokens, 105);
+  assert.equal(bundle.allTime.totalTokens, 105);
+});
+
 test('collectWslUsage decorates each home before merging periods', async () => {
   const homes = ['\\\\wsl$\\Ubuntu\\home\\alice'];
   const decorated = [];

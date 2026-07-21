@@ -21,6 +21,7 @@ const cursorAuth = require('./cursorAuth');
 const { findSessionFiles, codexSessionFile } = require('./sessionFiles');
 const opencodeSession = require('./opencodeSession');
 const { buildPromaHistoryGraph, buildPromaPeriods, collectPromaRows } = require('./promaUsage');
+const { buildGrokReconciliations, reconcileGrokJson } = require('./grokUsage');
 const { hashKey } = require('./hashKey');
 const { hostOsInfo, normalizeOsInfo } = require('./osVersion');
 
@@ -626,6 +627,7 @@ async function collectUsageOnce(options) {
   // separately below and merged back in.
   const tokscaleClients = normalizedClients ? normalizedClients.split(',').filter((c) => c !== 'proma').join(',') : normalizedClients;
   const includesProma = normalizedClients.split(',').includes('proma');
+  const includesGrok = normalizedClients.split(',').includes('grok');
   let today = emptyPeriod();
   let month = emptyPeriod();
   let allTime = emptyPeriod();
@@ -634,6 +636,7 @@ async function collectUsageOnce(options) {
   let promaPeriods = null;
   let promaRows = null;
   let promaPricing = null;
+  let grokReconciliations = null;
   if (normalizedClients) {
     await maybeSyncCursor(tokscaleClients, options.logger);
     await maybeSyncAntigravity(tokscaleClients, options.logger, options.homeDir || os.homedir());
@@ -655,13 +658,28 @@ async function collectUsageOnce(options) {
         if (typeof options.logger === 'function') options.logger(`proma parse failed: ${err.message}`);
       }
     }
+    if (includesGrok) {
+      try {
+        grokReconciliations = buildGrokReconciliations({
+          now: collectedAt,
+          allTimeSince,
+          homeDir: options.homeDir,
+          root: options.grokUsageRoot
+        });
+      } catch (err) {
+        if (typeof options.logger === 'function') options.logger(`grok usage parse failed: ${err.message}`);
+      }
+    }
+    const extractPeriod = (json, periodName) => extractUsageFromTokscale(
+      grokReconciliations ? reconcileGrokJson(json, grokReconciliations[periodName]) : json
+    );
     if (anchorUsed) {
       // Anchored tick (watch-triggered): every tokscale period scan costs the
       // same full load + filter, so scan only --today and update the broader
       // windows exactly via applyPeriodDelta — one spawn instead of three.
       if (tokscaleClients) {
         const todayJson = await runTokscaleFn({ clients: tokscaleClients, flags: ['--today'], commandTimeoutMs });
-        today = extractUsageFromTokscale(todayJson);
+        today = extractPeriod(todayJson, 'today');
       }
       // The persisted anchor contains every Windows-side client, including
       // locally parsed Proma. Include its fresh today usage before deriving
@@ -673,15 +691,15 @@ async function collectUsageOnce(options) {
       // Serial on purpose: concurrent scans triple the peak CPU/IO load, which
       // is what let the issue #15 self-trigger loop spike tokscale past 500% CPU.
       const todayJson = await runTokscaleFn({ clients: tokscaleClients, flags: ['--today'], commandTimeoutMs });
-      today = extractUsageFromTokscale(todayJson);
+      today = extractPeriod(todayJson, 'today');
       if (typeof options.onProgress === 'function') decorateLocalPeriods({ today });
       try { if (typeof options.onProgress === 'function') options.onProgress({ today, updatedAt: new Date().toISOString() }); } catch (_) {}
       const monthJson = await runTokscaleFn({ clients: tokscaleClients, flags: ['--month'], commandTimeoutMs });
-      month = extractUsageFromTokscale(monthJson);
+      month = extractPeriod(monthJson, 'month');
       if (typeof options.onProgress === 'function') decorateLocalPeriods({ today, month });
       try { if (typeof options.onProgress === 'function') options.onProgress({ today, month, updatedAt: new Date().toISOString() }); } catch (_) {}
       const allTimeJson = await runTokscaleFn({ clients: tokscaleClients, flags: ['--since', allTimeSince], commandTimeoutMs });
-      allTime = extractUsageFromTokscale(allTimeJson);
+      allTime = extractPeriod(allTimeJson, 'allTime');
     }
     // Always decorate: session timestamps drive the recency sort regardless of the
     // Projects opt-out (issue #182). decorateLocalPeriods gates only project identity
