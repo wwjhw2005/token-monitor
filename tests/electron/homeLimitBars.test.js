@@ -33,7 +33,9 @@ test('Home limit meter shows a three-tone progress bar keyed on remaining quota'
   assert.match(app, /function homeLimitMeterColor\(remainingPercent\)/);
   assert.match(app, /if \(remaining < 10\) return 'var\(--red\)'/);
   assert.match(app, /if \(remaining < 30\) return 'var\(--yellow\)'/);
-  assert.match(app, /return 'var\(--green\)'/);
+  assert.match(app, /return 'var\(--success\)'/);
+  assert.doesNotMatch(app, /var\(--green\)/);
+  assert.match(css, /--success:\s*#[0-9a-f]+/i);
   assert.match(app, /function homeLimitMeterNode\(window\)/);
   assert.match(app, /'home-limit-meter'/);
   assert.match(app, /'home-limit-meter-fill'/);

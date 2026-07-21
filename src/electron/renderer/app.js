@@ -3736,7 +3736,7 @@ function homeLimitMeterColor(remainingPercent) {
   const remaining = Math.max(0, Math.min(100, Number(remainingPercent) || 0));
   if (remaining < 10) return 'var(--red)';
   if (remaining < 30) return 'var(--yellow)';
-  return 'var(--green)';
+  return 'var(--success)';
 }
 
 // Home-only progress bar: fill width = used quota (fills as quota is consumed),
