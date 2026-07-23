@@ -237,6 +237,53 @@ function buildGrokReconciliations(options = {}) {
   };
 }
 
+function localDateKey(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function buildGrokHistoryReconciliation(options = {}) {
+  const turns = Array.isArray(options.turns) ? options.turns : collectGrokTurns(options);
+  const byDate = new Map();
+  for (const turn of turns) {
+    const date = turn.timestamp ? localDateKey(turn.timestamp) : '';
+    if (!date) continue;
+    if (!byDate.has(date)) byDate.set(date, []);
+    byDate.get(date).push(turn);
+  }
+
+  const days = new Map();
+  for (const [date, dayTurns] of byDate) {
+    const window = aggregateWindow(dayTurns, 0);
+    if (window.sessions.size === 0) continue;
+    const models = new Map();
+    for (const session of window.sessions.values()) {
+      for (const row of session.rows) {
+        if (!models.has(row.model)) {
+          models.set(row.model, {
+            model: row.model, input: 0, output: 0, cacheRead: 0,
+            cacheWrite: 0, reasoning: 0, messages: 0, cost: 0
+          });
+        }
+        const target = models.get(row.model);
+        target.input += row.input;
+        target.output += row.output;
+        target.cacheRead += row.cacheRead;
+        target.cacheWrite += row.cacheWrite;
+        target.reasoning += row.reasoning;
+        target.messages += row.messageCount;
+        target.cost += row.cost;
+      }
+    }
+    days.set(date, {
+      complete: dayTurns.every((turn) => turn.hasUsage),
+      rows: [...models.values()]
+    });
+  }
+  return { days };
+}
+
 function rowClient(row) {
   return String(row?.client || row?.source || row?.platform || '').trim().toLowerCase();
 }
@@ -248,6 +295,98 @@ function rowSessionId(row) {
 function rowTokens(row) {
   return numberValue(row?.input) + numberValue(row?.output)
     + numberValue(row?.cacheRead) + numberValue(row?.cacheWrite);
+}
+
+function graphTokenValue(row, key) {
+  return numberValue(row?.tokens?.[key]);
+}
+
+function graphRowClient(row) {
+  return String(row?.client || '').trim().toLowerCase();
+}
+
+function graphRowModel(row) {
+  return normalizeModel(row?.modelId || row?.model || row?.model_id);
+}
+
+function graphTotals(clients) {
+  const tokenBreakdown = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, reasoning: 0 };
+  let cost = 0;
+  let messages = 0;
+  for (const row of clients) {
+    for (const key of Object.keys(tokenBreakdown)) tokenBreakdown[key] += graphTokenValue(row, key);
+    cost += Number(row?.cost || 0);
+    messages += numberValue(row?.messages);
+  }
+  return {
+    tokenBreakdown,
+    totals: {
+      tokens: tokenBreakdown.input + tokenBreakdown.output + tokenBreakdown.cacheRead + tokenBreakdown.cacheWrite,
+      cost,
+      messages
+    }
+  };
+}
+
+function reconcileGrokGraph(graph, reconciliation) {
+  if (!graph || typeof graph !== 'object' || !reconciliation?.days) return graph;
+  const contributions = Array.isArray(graph.contributions)
+    ? graph.contributions.map((day) => ({ ...day, clients: Array.isArray(day?.clients) ? [...day.clients] : [] }))
+    : [];
+  const byDate = new Map(contributions.map((day) => [String(day?.date || '').slice(0, 10), day]));
+
+  for (const [date, exact] of reconciliation.days) {
+    let day = byDate.get(date);
+    if (!day) {
+      day = { date, clients: [], activeTimeMs: 0 };
+      contributions.push(day);
+      byDate.set(date, day);
+    }
+    const original = day.clients;
+    const oldGrok = original.filter((row) => graphRowClient(row).includes('grok'));
+    const replacing = exact.complete || oldGrok.length === 0;
+    const clients = replacing
+      ? original.filter((row) => !graphRowClient(row).includes('grok'))
+      : [...original];
+    const exactCost = exact.rows.reduce((sum, row) => sum + Number(row.cost || 0), 0);
+    const oldCost = oldGrok.reduce((sum, row) => sum + Number(row.cost || 0), 0);
+    const exactTokens = exact.rows.reduce((sum, row) => sum + rowTokens(row), 0);
+
+    for (const row of exact.rows) {
+      const template = oldGrok.find((old) => graphRowModel(old) === row.model) || oldGrok[0] || {};
+      let cost;
+      if (replacing) {
+        cost = exactCost > 0
+          ? row.cost
+          : (exactTokens > 0 ? oldCost * (rowTokens(row) / exactTokens) : 0);
+      } else {
+        const templateInput = graphTokenValue(template, 'input');
+        cost = Math.max(0, row.cost - (
+          templateInput > 0 ? row.input * (Number(template.cost || 0) / templateInput) : 0
+        ));
+      }
+      clients.push({
+        ...template,
+        client: 'grok',
+        modelId: row.model,
+        providerId: template.providerId || template.provider_id || 'xai',
+        tokens: {
+          input: replacing ? row.input : 0,
+          output: row.output,
+          cacheRead: row.cacheRead,
+          cacheWrite: row.cacheWrite,
+          reasoning: row.reasoning
+        },
+        cost,
+        messages: replacing ? row.messages : 0
+      });
+    }
+    const totals = graphTotals(clients);
+    Object.assign(day, totals, { clients });
+  }
+
+  contributions.sort((left, right) => String(left?.date || '').localeCompare(String(right?.date || '')));
+  return { ...graph, contributions };
 }
 
 function reconcileGrokJson(json, reconciliation) {
@@ -323,10 +462,12 @@ function resetGrokUsageCache() {
 
 module.exports = {
   aggregateWindow,
+  buildGrokHistoryReconciliation,
   buildGrokReconciliations,
   collectGrokTurns,
   normalizeModel,
   parseUpdatesFile,
+  reconcileGrokGraph,
   reconcileGrokJson,
   resetGrokUsageCache,
   timestampMs,

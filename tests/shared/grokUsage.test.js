@@ -7,12 +7,15 @@ const path = require('node:path');
 const test = require('node:test');
 
 const {
+  buildGrokHistoryReconciliation,
   buildGrokReconciliations,
   collectGrokTurns,
+  reconcileGrokGraph,
   reconcileGrokJson,
   resetGrokUsageCache
 } = require('../../src/shared/grokUsage');
 const { extractUsageFromTokscale } = require('../../src/shared/usage');
+const { parseGraphResult } = require('../../src/shared/history');
 const { collectUsageOnce, localTodayKey } = require('../../src/shared/collector');
 
 function writeSession(root, sessionId, turns, model = 'grok-4.5') {
@@ -194,4 +197,81 @@ test('collector reconciles Grok usage before deriving anchored month and all-tim
   assert.equal(next.today.outputTokens, 15);
   assert.equal(next.month.totalTokens, 555);
   assert.equal(next.allTime.totalTokens, 1055);
+});
+
+test('Grok history reconciliation corrects complete days and supplements mixed days', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'grok-history-'));
+  const completeDate = new Date(2026, 6, 8, 12).getTime();
+  const mixedDate = new Date(2026, 6, 9, 12).getTime();
+  writeSession(root, 'complete', [
+    completedTurn({ sessionId: 'complete', promptId: 'p1', timestamp: completeDate - 1000, usage: usage({ input: 100, output: 10, cacheRead: 80, cost: 0.00011 }) }),
+    completedTurn({ sessionId: 'complete', promptId: 'p2', timestamp: completeDate, usage: usage({ input: 50, output: 5, cacheRead: 30, cost: 0.000055 }) })
+  ]);
+  writeSession(root, 'mixed', [
+    completedTurn({ sessionId: 'mixed', promptId: 'old', timestamp: mixedDate - 1000 }),
+    completedTurn({ sessionId: 'mixed', promptId: 'new', timestamp: mixedDate, usage: usage({ input: 100, output: 5, cacheRead: 80, cost: 0.0002 }) })
+  ]);
+
+  resetGrokUsageCache();
+  const reconciliation = buildGrokHistoryReconciliation({ root });
+  const graph = {
+    contributions: [
+      {
+        date: '2026-07-08', activeTimeMs: 100,
+        clients: [
+          { client: 'grok', modelId: 'grok-4.5', tokens: { input: 50, output: 0, cacheRead: 0, cacheWrite: 0, reasoning: 0 }, cost: 0.0001, messages: 2 },
+          { client: 'codex', modelId: 'gpt-5', tokens: { input: 7, output: 0, cacheRead: 0, cacheWrite: 0, reasoning: 0 }, cost: 0.00002, messages: 1 }
+        ]
+      },
+      {
+        date: '2026-07-09', activeTimeMs: 200,
+        clients: [
+          { client: 'grok', modelId: 'grok-4.5', tokens: { input: 60, output: 0, cacheRead: 0, cacheWrite: 0, reasoning: 0 }, cost: 0.00012, messages: 2 }
+        ]
+      }
+    ]
+  };
+
+  const patched = reconcileGrokGraph(graph, reconciliation);
+  const completeDay = patched.contributions[0];
+  const completeGrok = completeDay.clients.find((row) => row.client === 'grok');
+  assert.deepEqual(completeGrok.tokens, { input: 40, output: 15, cacheRead: 110, cacheWrite: 0, reasoning: 6 });
+  assert.ok(Math.abs(completeGrok.cost - 0.000165) < 1e-12);
+  assert.equal(completeGrok.messages, 2);
+  assert.equal(completeDay.clients.find((row) => row.client === 'codex').tokens.input, 7);
+  assert.equal(completeDay.totals.tokens, 172);
+
+  const history = parseGraphResult(patched);
+  assert.equal(history.contributions[0].tokens, 172);
+  assert.equal(history.contributions[0].perClient.grok.tokens, 165);
+  assert.equal(history.contributions[0].perModel['grok-4.5'].tokens, 165);
+  assert.equal(history.contributions[1].tokens, 145);
+  assert.equal(history.contributions[1].perClient.grok.messages, 2);
+  assert.ok(Math.abs(history.contributions[1].perClient.grok.cost - 0.00028) < 1e-12);
+});
+
+test('collector applies local Grok turns to the shared trends history', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'grok-history-'));
+  const now = new Date(2026, 6, 9, 12).getTime();
+  const sessionId = 'history-session';
+  writeSession(root, sessionId, [
+    completedTurn({ sessionId, promptId: 'p1', timestamp: now, usage: usage({ input: 100, output: 10, cacheRead: 80, cost: 0.0002 }) })
+  ]);
+  resetGrokUsageCache();
+  const summary = await collectUsageOnce({
+    clients: 'grok', allTimeSince: '2026-01-01', commandTimeoutMs: 1000,
+    deviceId: 'grok-history-test', agentVersion: 'test', now,
+    grokUsageRoot: root,
+    runTokscale: async () => tokscaleJson(sessionId, 25),
+    runGraph: async () => ({ contributions: [{ date: '2026-07-09', clients: [
+      { client: 'grok', modelId: 'grok-4.5', tokens: { input: 25 }, cost: 0.00005, messages: 1 }
+    ] }] }),
+    includeHistory: true, historyEnabled: true, dailyHistoryArchiveEnabled: false,
+    limitsEnabled: false, wslScanEnabled: false
+  });
+
+  assert.equal(summary.history.daily[0].tokens, 110);
+  assert.equal(summary.history.daily[0].perClient.grok.tokens, 110);
+  assert.equal(summary.history.daily[0].perModel['grok-4.5'].tokens, 110);
+  assert.ok(Math.abs(summary.history.daily[0].cost - 0.0002) < 1e-12);
 });

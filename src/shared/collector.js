@@ -21,7 +21,13 @@ const cursorAuth = require('./cursorAuth');
 const { findSessionFiles, codexSessionFile } = require('./sessionFiles');
 const opencodeSession = require('./opencodeSession');
 const { buildPromaHistoryGraph, buildPromaPeriods, collectPromaRows } = require('./promaUsage');
-const { buildGrokReconciliations, reconcileGrokJson } = require('./grokUsage');
+const {
+  buildGrokHistoryReconciliation,
+  buildGrokReconciliations,
+  collectGrokTurns,
+  reconcileGrokGraph,
+  reconcileGrokJson
+} = require('./grokUsage');
 const { hashKey } = require('./hashKey');
 const { hostOsInfo, normalizeOsInfo } = require('./osVersion');
 
@@ -558,8 +564,11 @@ async function collectHistoryOnce(options) {
   if (clients) {
     try {
       const graphJson = await runGraph({ clients, commandTimeoutMs: options.commandTimeoutMs || HISTORY_TIMEOUT_MS });
-      rawGraphs.push(graphJson);
-      histories.push(normalizeHistory(parseGraphResult(graphJson), { capDays, todayKey }));
+      const reconciledGraph = options.grokHistoryReconciliation
+        ? reconcileGrokGraph(graphJson, options.grokHistoryReconciliation)
+        : graphJson;
+      rawGraphs.push(reconciledGraph);
+      histories.push(normalizeHistory(parseGraphResult(reconciledGraph), { capDays, todayKey }));
     } catch (error) {
       if (typeof options.logger === 'function') options.logger(`tokscale graph failed: ${error.message}`);
     }
@@ -636,6 +645,7 @@ async function collectUsageOnce(options) {
   let promaPeriods = null;
   let promaRows = null;
   let promaPricing = null;
+  let grokTurns = null;
   let grokReconciliations = null;
   if (normalizedClients) {
     await maybeSyncCursor(tokscaleClients, options.logger);
@@ -660,11 +670,14 @@ async function collectUsageOnce(options) {
     }
     if (includesGrok) {
       try {
+        grokTurns = collectGrokTurns({
+          homeDir: options.homeDir,
+          root: options.grokUsageRoot
+        });
         grokReconciliations = buildGrokReconciliations({
           now: collectedAt,
           allTimeSince,
-          homeDir: options.homeDir,
-          root: options.grokUsageRoot
+          turns: grokTurns
         });
       } catch (err) {
         if (typeof options.logger === 'function') options.logger(`grok usage parse failed: ${err.message}`);
@@ -838,6 +851,9 @@ async function collectUsageOnce(options) {
     const history = await collectHistoryOnce({
       clients: tokscaleClients,
       promaGraph: includesProma ? buildPromaHistoryGraph({ rows: promaRows || collectPromaRows(), pricingByModel: promaPricing || {} }) : null,
+      grokHistoryReconciliation: includesGrok && grokTurns
+        ? buildGrokHistoryReconciliation({ turns: grokTurns })
+        : null,
       historyEnabled: options.historyEnabled,
       commandTimeoutMs: options.historyTimeoutMs,
       capDays: options.historyCapDays,

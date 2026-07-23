@@ -152,6 +152,38 @@ test('collectHistoryOnce merges Proma history with tokscale graph history', asyn
   assert.equal(history.daily[0].perModel['gpt-5'].tokens, 10);
 });
 
+test('collectHistoryOnce reconciles Grok graph data before normalizing and archiving it', async (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'token-monitor-grok-history-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const archivePath = path.join(dir, 'daily-history.json');
+  const grokHistoryReconciliation = {
+    days: new Map([['2026-06-07', {
+      complete: true,
+      rows: [{
+        model: 'grok-4.5', input: 20, output: 5, cacheRead: 80,
+        cacheWrite: 0, reasoning: 2, messages: 1, cost: 0.0002
+      }]
+    }]])
+  };
+  const history = await collectHistoryOnce({
+    clients: 'grok', todayKey: '2026-06-07', grokHistoryReconciliation,
+    dailyHistoryArchiveEnabled: true,
+    dailyHistoryArchiveOptions: { path: archivePath },
+    runGraph: async () => ({ contributions: [{ date: '2026-06-07', clients: [
+      { client: 'grok', modelId: 'grok-4.5', tokens: { input: 25 }, cost: 0.00005, messages: 1 }
+    ] }] })
+  });
+
+  assert.equal(history.daily[0].tokens, 105);
+  assert.equal(history.daily[0].perClient.grok.tokens, 105);
+  assert.equal(history.daily[0].perModel['grok-4.5'].tokens, 105);
+  assert.ok(Math.abs(history.daily[0].cost - 0.0002) < 1e-12);
+  const stored = JSON.parse(fs.readFileSync(archivePath, 'utf8'));
+  const observation = Object.values(stored.days['2026-06-07'].observations)[0];
+  assert.equal(observation.tokens, 105);
+  assert.ok(Math.abs(observation.cost - 0.0002) < 1e-12);
+});
+
 test('collectHistoryOnce builds Proma-only history without starting tokscale graph', async () => {
   let graphCalled = false;
   const history = await collectHistoryOnce({
