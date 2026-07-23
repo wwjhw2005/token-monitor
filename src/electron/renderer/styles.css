@@ -14,12 +14,7 @@
   --line-alpha: 0.138;
   --line-strong-alpha: 0.238;
   --control-alpha: 0.049;
-  --highlight-alpha: 0.07;
   --glass: rgba(var(--glass-rgb), var(--glass-alpha));
-  --glass-surface:
-    linear-gradient(180deg, rgba(var(--overlay-rgb), var(--highlight-alpha)), rgba(var(--overlay-rgb), 0.022)),
-    linear-gradient(135deg, rgba(var(--overlay-rgb), 0.035), rgba(0, 0, 0, 0.09)),
-    var(--glass);
   --glass-filter: blur(32px) saturate(115%);
   --floating-bubble-radius: 17px;
   --glass-strong: rgba(31, 35, 41, 0.56);
@@ -78,11 +73,10 @@ input, textarea, [contenteditable="true"] {
   padding: 12px 14px 14px;
   overflow: hidden;
   isolation: isolate;
-  border: 1px solid var(--line-strong);
   border-radius: 14px;
   clip-path: inset(0 round 14px);
-  background: var(--glass-surface);
-  box-shadow: 0 22px 55px var(--shadow), inset 0 1px 0 rgba(var(--overlay-rgb), 0.13);
+  background: var(--glass);
+  box-shadow: 0 22px 55px var(--shadow);
   -webkit-backdrop-filter: var(--glass-filter);
   backdrop-filter: var(--glass-filter);
 }
@@ -105,14 +99,6 @@ html.is-mac-legacy .shell {
   border-radius: 10px;
   clip-path: inset(0 round 10px);
 }
-.shell::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  border-radius: inherit;
-  background: linear-gradient(180deg, rgba(var(--overlay-rgb), 0.08), transparent 36%);
-}
 .floating-bubble-tab {
   -webkit-app-region: no-drag;
   -webkit-appearance: none;
@@ -129,18 +115,14 @@ html.is-mac-legacy .shell {
   overflow: hidden;
   border: 0;
   border-radius: var(--floating-bubble-radius);
-  background: var(--glass-surface);
+  background: var(--glass);
   color: var(--number);
   cursor: grab;
-  box-shadow: inset 0 1px 0 rgba(var(--overlay-rgb), 0.13);
   outline: none;
   -webkit-backdrop-filter: var(--glass-filter);
   backdrop-filter: var(--glass-filter);
 }
 .system-glass-disabled .floating-bubble-tab {
-  box-shadow:
-    inset 0 0 0 1px var(--line-strong),
-    inset 0 1px 0 rgba(var(--overlay-rgb), 0.13);
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
 }
@@ -584,6 +566,7 @@ body.is-windows.floating-bubble-collapsed-right .floating-bubble-tab {
   border-top: 1px solid rgba(var(--line-rgb), 0.06);
 }
 .settings-panel .settings-item.hidden { display: none; }
+#windowsBackdropNote.hidden { display: none; }
 .settings-item-text {
   flex: 1 1 auto;
   min-width: 0;
@@ -1096,6 +1079,35 @@ span.settings-note.settings-item-desc {
 #codexLoginStatus.hidden { display: none; }
 .settings-note { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.45; }
 .settings-note code { padding: 1px 5px; border-radius: 3px; background: rgba(var(--overlay-rgb), 0.06); font-size: 10px; }
+.kimi-cookie-steps { text-wrap: pretty; }
+.kimi-api-fallback {
+  min-width: 0;
+  padding-top: 10px;
+  border-top: 1px solid rgba(var(--line-rgb), 0.075);
+  color: var(--muted);
+  font-size: 10px;
+}
+.kimi-api-fallback summary {
+  width: max-content;
+  max-width: 100%;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1.35;
+  user-select: none;
+}
+.kimi-api-fallback summary::marker { color: var(--muted); }
+.kimi-api-fallback summary:focus-visible {
+  border-radius: 3px;
+  outline: 1px solid rgba(115, 189, 245, 0.72);
+  outline-offset: 3px;
+}
+.kimi-api-fallback-body {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
 .app-update-notes {
   min-width: 0;
   padding-top: 8px;
@@ -2681,6 +2693,13 @@ html.is-windows .settings-panel select option {
 }
 
 .row { display: grid; gap: 6px; padding-bottom: 10px; border-bottom: 1px solid rgba(var(--line-rgb), 0.12); }
+.breakdown.large-session-list .session-row {
+  contain-intrinsic-block-size: auto 72px;
+}
+.breakdown.large-session-list.large-session-list-ready .session-row {
+  content-visibility: auto;
+  contain: layout paint style;
+}
 .row-head { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 10px; font-size: 12px; }
 .row-name { display: flex; min-width: 0; flex: 1 1 auto; align-items: center; gap: 8px; color: var(--text); }
 .dot {
@@ -3105,7 +3124,7 @@ html.is-windows .settings-panel select option {
 }
 .limit-windows-antigravity-grouped {
   grid-template-columns: 1fr;
-  gap: 16px;
+  gap: 10px;
 }
 .limit-window-group {
   display: grid;
@@ -4319,7 +4338,49 @@ html.is-windows .limit-live-badge {
   font-size: 0.85em;
 }
 
-.custom-pricing-edit { cursor: pointer; }
+.custom-pricing-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.custom-pricing-edit {
+  display: grid;
+  justify-self: stretch;
+  gap: 2px;
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.custom-pricing-edit:focus-visible {
+  outline: 1px solid rgba(115, 189, 245, 0.72);
+  outline-offset: 2px;
+}
+
+.custom-pricing-row .managed-account-meta {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.custom-pricing-row .custom-pricing-remove {
+  width: auto;
+  height: 24px;
+  padding: 0 8px;
+  font-size: 10px;
+  line-height: 24px;
+  opacity: 0.72;
+}
 
 .opencode-profile-list {
   margin-bottom: 4px;

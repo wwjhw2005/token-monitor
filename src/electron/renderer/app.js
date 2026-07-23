@@ -3,6 +3,8 @@
 const clientLabels = { claude: 'Claude Code', codex: 'Codex', hermes: 'Hermes', gemini: 'Gemini', cursor: 'Cursor', opencode: 'OpenCode', openclaw: 'OpenClaw', antigravity: 'Antigravity', cline: 'Cline', kimi: 'Kimi', qwen: 'Qwen', grok: 'Grok Build', copilot: 'GitHub Copilot', pi: 'Pi', zed: 'Zed', kilocode: 'Kilo Code', micode: 'MiMo Code', zcode: 'ZCode', kiro: 'Kiro', codebuddy: 'CodeBuddy', workbuddy: 'WorkBuddy', proma: 'Proma' };
 const { clientColors, fallbackModelColors, modelVendorFor, modelColor } = window.TokenMonitorUsageCharts;
 const motionPreferenceApi = window.TokenMonitorMotionPreference;
+const windowsGlassApi = window.TokenMonitorWindowsGlass;
+const glassRenderingApi = window.TokenMonitorGlassRendering;
 const wslStatusPresentationApi = window.TokenMonitorWslStatusPresentation;
 const reducedMotionMedia = window.matchMedia?.('(prefers-reduced-motion: reduce)');
 const clientsWithIcon = new Set([
@@ -19,7 +21,7 @@ function osIconFor(platform) {
 }
 
 function iconKindFor(rowData, breakdown) {
-  if (!state.settings?.showToolIcons) return { kind: 'dot' };
+  if (!toolIconsEnabled(state.settings?.showToolIcons)) return { kind: 'dot' };
   if (breakdown === 'device') {
     const os = osIconFor(rowData.platform);
     return os ? { kind: 'icon', iconClass: `row-icon-os-${os}` } : { kind: 'dot' };
@@ -100,6 +102,14 @@ const { limitFillPercent, limitModeSuffix } = window.TokenMonitorLimitDisplayMod
 const i18n = window.TokenMonitorI18n;
 const currencyApi = window.TokenMonitorCurrency;
 const sessionRowsApi = window.TokenMonitorSessionRows;
+const breakdownRenderPolicyApi = window.TokenMonitorBreakdownRenderPolicy;
+const {
+  createAfterLayoutScheduler,
+  isLargeSessionBreakdown,
+  rowRenderFingerprint,
+  shouldAnimateBreakdownRows,
+  toolIconsEnabled
+} = breakdownRenderPolicyApi;
 const deviceBreakdownApi = window.TokenMonitorDeviceBreakdown;
 const projectRowsApi = window.TokenMonitorProjectRows;
 const sessionDetailApi = window.TokenMonitorSessionDetail;
@@ -116,6 +126,7 @@ const LIMIT_CAPABILITY_TAG_KEYS = {
   'App/CLI RPC': 'settings.limits.capability.appCliRpc',
   'Manual login': 'settings.limits.capability.manualLogin',
   Web: 'settings.limits.capability.web',
+  'Web/API': 'settings.limits.capability.webApi',
   'App/CLI must be open': 'settings.limits.capability.appMustBeOpen',
   RPC: 'settings.limits.capability.rpc',
   'Local/Zen': 'settings.limits.capability.localZen',
@@ -123,12 +134,15 @@ const LIMIT_CAPABILITY_TAG_KEYS = {
   Subscription: 'settings.limits.capability.subscription',
   'Token Plan': 'settings.limits.capability.tokenPlan',
   'Coding Plan': 'settings.limits.capability.codingPlan',
+  'Membership/Coding Plan': 'settings.limits.capability.membershipCodingPlan',
   'API key': 'settings.limits.capability.apiKey',
   'AK/SK': 'settings.limits.capability.akSk',
   'GitHub OAuth': 'settings.limits.capability.githubOAuth',
   API: 'settings.limits.capability.api',
   'Add API key': 'settings.limits.status.addApiKey',
   'Update API key': 'settings.limits.status.updateApiKey',
+  'Add credential': 'settings.limits.status.addCredential',
+  'Update credential': 'settings.limits.status.updateCredential',
   Live: 'settings.limits.status.live',
   Linked: 'settings.limits.status.linked',
   'Sign in': 'settings.limits.status.signIn',
@@ -216,15 +230,16 @@ let directBreakdownOverride = null;
 state.projectSettingsExpanded = false;
 state.homeActivitySettingsExpanded = false;
 state.settingsSections = Object.fromEntries(SETTINGS_SECTION_IDS.map((id) => [id, false]));
-const defaultAppearance = { glassOpacity: 68, glassBlur: 32, zoomFactor: 1, systemGlass: true, reduceMotion: 'system', showLiveDot: true, showToolIcons: true, titleIconOnly: true, showCompactTotalTokens: false, settingsInTitlebar: false };
+const defaultAppearance = { glassOpacity: 68, glassBlur: 32, zoomFactor: 1, systemGlass: true, windowsBackdrop: 'acrylic', reduceMotion: 'system', showLiveDot: true, showToolIcons: true, titleIconOnly: true, showCompactTotalTokens: false, settingsInTitlebar: false };
 let preferenceDrag = null;
 let viewSwitcherLongPressTimer = null;
 let viewSwitcherLongPressTriggered = false;
 let viewSwitcherHoverCloseTimer = null;
 const els = {
-  shell: document.querySelector('.shell'), status: document.getElementById('status'), liveDot: document.getElementById('liveDot'), totalTokens: document.getElementById('totalTokens'), totalTokensCompact: document.getElementById('totalTokensCompact'), cost: document.getElementById('cost'), homePanel: document.getElementById('homePanel'), breakdown: document.getElementById('breakdown'), serviceStatusPanel: document.getElementById('serviceStatusPanel'), limitsPanel: document.getElementById('limitsPanel'), trendsPanel: document.getElementById('trendsPanel'), viewSwitcher: document.getElementById('viewSwitcher'), pinButton: document.getElementById('pinButton'), utilityActions: document.getElementById('utilityActions'), settingsButton: document.getElementById('settingsButton'), settingsPanel: document.getElementById('settingsPanel'), languageInput: document.getElementById('languageInput'), currencyInput: document.getElementById('currencyInput'), currencyRateRow: document.getElementById('currencyRateRow'), currencyRateModeAuto: document.getElementById('currencyRateModeAuto'), currencyRateModeManual: document.getElementById('currencyRateModeManual'), currencyRateManualField: document.getElementById('currencyRateManualField'), currencyRateOverrideInput: document.getElementById('currencyRateOverrideInput'), currencyRateStatus: document.getElementById('currencyRateStatus'), hubUrlInput: document.getElementById('hubUrlInput'), secretInput: document.getElementById('secretInput'), deviceIdInput: document.getElementById('deviceIdInput'), limitProviderCheckboxes: document.getElementById('limitProviderCheckboxes'), limitsRefreshInput: document.getElementById('limitsRefreshInput'), showLimitSourceInput: document.getElementById('showLimitSourceInput'), maskLimitAccountEmailsInput: document.getElementById('maskLimitAccountEmailsInput'), showLimitUsedInput: document.getElementById('showLimitUsedInput'), systemGlassInput: document.getElementById('systemGlassInput'), liveDotInput: document.getElementById('liveDotInput'), toolIconsInput: document.getElementById('toolIconsInput'), floatingBubbleInput: document.getElementById('floatingBubbleInput'), floatingBubbleTriggerInput: document.getElementById('floatingBubbleTriggerInput'), floatingBubbleTriggerRow: document.getElementById('floatingBubbleTriggerRow'), floatingBubbleContentInput: document.getElementById('floatingBubbleContentInput'), floatingBubbleContentRow: document.getElementById('floatingBubbleContentRow'), floatingBubbleContent: document.getElementById('floatingBubbleContent'), discordRpcInput: document.getElementById('discordRpcInput'), windowBehaviorInput: document.getElementById('windowBehaviorInput'), showTrayIconInput: document.getElementById('showTrayIconInput'), showTrayProviderBadgeInput: document.getElementById('showTrayProviderBadgeInput'), trayModeInput: document.getElementById('trayModeInput'), trayContentInput: document.getElementById('trayContentInput'), windowToggleShortcutValue: document.getElementById('windowToggleShortcutValue'), windowToggleShortcutClearButton: document.getElementById('windowToggleShortcutClearButton'), windowToggleShortcutNote: document.getElementById('windowToggleShortcutNote'), glassInput: document.getElementById('glassInput'), blurInput: document.getElementById('blurInput'), zoomInput: document.getElementById('zoomInput'), resetGlassButton: document.getElementById('resetGlassButton'), resetDepthButton: document.getElementById('resetDepthButton'), resetZoomButton: document.getElementById('resetZoomButton'), saveSettingsButton: document.getElementById('saveSettingsButton'), clientDisplayList: document.getElementById('clientDisplayList'), wslScanInput: document.getElementById('wslScanInput'), wslScanRow: document.getElementById('wslScanRow'), wslPanel: document.getElementById('wslPanel'), openConfigButton: document.getElementById('openConfigButton'), exportAutoInput: document.getElementById('exportAutoInput'), exportAutoDetails: document.getElementById('exportAutoDetails'), exportAutoStatus: document.getElementById('exportAutoStatus'), exportDirLabel: document.getElementById('exportDirLabel'), exportPickDirButton: document.getElementById('exportPickDirButton'), exportIntervalInput: document.getElementById('exportIntervalInput'), exportNowButton: document.getElementById('exportNowButton'), refreshButton: document.getElementById('refreshButton'), minButton: document.getElementById('minButton'), closeButton: document.getElementById('closeButton'), floatingBubbleTab: document.getElementById('floatingBubbleTab')
+  shell: document.querySelector('.shell'), status: document.getElementById('status'), liveDot: document.getElementById('liveDot'), totalTokens: document.getElementById('totalTokens'), totalTokensCompact: document.getElementById('totalTokensCompact'), cost: document.getElementById('cost'), homePanel: document.getElementById('homePanel'), breakdown: document.getElementById('breakdown'), serviceStatusPanel: document.getElementById('serviceStatusPanel'), limitsPanel: document.getElementById('limitsPanel'), trendsPanel: document.getElementById('trendsPanel'), viewSwitcher: document.getElementById('viewSwitcher'), pinButton: document.getElementById('pinButton'), utilityActions: document.getElementById('utilityActions'), settingsButton: document.getElementById('settingsButton'), settingsPanel: document.getElementById('settingsPanel'), languageInput: document.getElementById('languageInput'), currencyInput: document.getElementById('currencyInput'), currencyRateRow: document.getElementById('currencyRateRow'), currencyRateModeAuto: document.getElementById('currencyRateModeAuto'), currencyRateModeManual: document.getElementById('currencyRateModeManual'), currencyRateManualField: document.getElementById('currencyRateManualField'), currencyRateOverrideInput: document.getElementById('currencyRateOverrideInput'), currencyRateStatus: document.getElementById('currencyRateStatus'), hubUrlInput: document.getElementById('hubUrlInput'), secretInput: document.getElementById('secretInput'), deviceIdInput: document.getElementById('deviceIdInput'), limitProviderCheckboxes: document.getElementById('limitProviderCheckboxes'), limitsRefreshInput: document.getElementById('limitsRefreshInput'), showLimitSourceInput: document.getElementById('showLimitSourceInput'), maskLimitAccountEmailsInput: document.getElementById('maskLimitAccountEmailsInput'), showLimitUsedInput: document.getElementById('showLimitUsedInput'), liveDotInput: document.getElementById('liveDotInput'), toolIconsInput: document.getElementById('toolIconsInput'), floatingBubbleInput: document.getElementById('floatingBubbleInput'), floatingBubbleTriggerInput: document.getElementById('floatingBubbleTriggerInput'), floatingBubbleTriggerRow: document.getElementById('floatingBubbleTriggerRow'), floatingBubbleContentInput: document.getElementById('floatingBubbleContentInput'), floatingBubbleContentRow: document.getElementById('floatingBubbleContentRow'), floatingBubbleContent: document.getElementById('floatingBubbleContent'), discordRpcInput: document.getElementById('discordRpcInput'), windowBehaviorInput: document.getElementById('windowBehaviorInput'), showTrayIconInput: document.getElementById('showTrayIconInput'), showTrayProviderBadgeInput: document.getElementById('showTrayProviderBadgeInput'), trayModeInput: document.getElementById('trayModeInput'), trayContentInput: document.getElementById('trayContentInput'), windowToggleShortcutValue: document.getElementById('windowToggleShortcutValue'), windowToggleShortcutClearButton: document.getElementById('windowToggleShortcutClearButton'), windowToggleShortcutNote: document.getElementById('windowToggleShortcutNote'), glassInput: document.getElementById('glassInput'), blurInput: document.getElementById('blurInput'), zoomInput: document.getElementById('zoomInput'), resetGlassButton: document.getElementById('resetGlassButton'), resetDepthButton: document.getElementById('resetDepthButton'), resetZoomButton: document.getElementById('resetZoomButton'), saveSettingsButton: document.getElementById('saveSettingsButton'), clientDisplayList: document.getElementById('clientDisplayList'), wslScanInput: document.getElementById('wslScanInput'), wslScanRow: document.getElementById('wslScanRow'), wslPanel: document.getElementById('wslPanel'), openConfigButton: document.getElementById('openConfigButton'), exportAutoInput: document.getElementById('exportAutoInput'), exportAutoDetails: document.getElementById('exportAutoDetails'), exportAutoStatus: document.getElementById('exportAutoStatus'), exportDirLabel: document.getElementById('exportDirLabel'), exportPickDirButton: document.getElementById('exportPickDirButton'), exportIntervalInput: document.getElementById('exportIntervalInput'), exportNowButton: document.getElementById('exportNowButton'), refreshButton: document.getElementById('refreshButton'), minButton: document.getElementById('minButton'), closeButton: document.getElementById('closeButton'), floatingBubbleTab: document.getElementById('floatingBubbleTab')
 };
 Object.assign(els, {
+  systemGlassInputs: Array.from(document.querySelectorAll('input[name="systemGlassOption"]')),
   floatingBubbleOptions: document.getElementById('floatingBubbleOptions'),
   trayIconOptions: document.getElementById('trayIconOptions'),
   trayOptions: document.getElementById('trayOptions'),
@@ -245,6 +260,9 @@ Object.assign(els, {
   sessionUsageArchiveInput: document.getElementById('sessionUsageArchiveInput'),
   sessionUsageArchiveStatus: document.getElementById('sessionUsageArchiveStatus'),
   reduceMotionInputs: Array.from(document.querySelectorAll('input[name="reduceMotionOption"]')),
+  windowsBackdropRow: document.getElementById('windowsBackdropRow'),
+  windowsBackdropInput: document.getElementById('windowsBackdropInput'),
+  windowsBackdropNote: document.getElementById('windowsBackdropNote'),
   clearSessionUsageArchiveButton: document.getElementById('clearSessionUsageArchiveButton'),
   startupGroup: document.getElementById('startupGroup'),
   startAtLoginInput: document.getElementById('startAtLoginInput'),
@@ -1072,6 +1090,33 @@ function animateNumber(el, from, to, duration = 1000, onDone = null) {
 
 const rowNumberAnimations = new Map();
 const rowBarAnimations = new Map();
+const rowRenderFingerprints = new WeakMap();
+const largeSessionContainmentScheduler = createAfterLayoutScheduler(
+  typeof requestAnimationFrame === 'function' ? requestAnimationFrame : null,
+  typeof cancelAnimationFrame === 'function' ? cancelAnimationFrame : null
+);
+
+function updateLargeSessionContainment(enabled, { remeasure = false } = {}) {
+  els.breakdown.classList.toggle('large-session-list', enabled);
+  if (!enabled) {
+    largeSessionContainmentScheduler.cancel();
+    els.breakdown.classList.remove('large-session-list-ready');
+    return;
+  }
+  if (remeasure) {
+    largeSessionContainmentScheduler.cancel();
+    els.breakdown.classList.remove('large-session-list-ready');
+  }
+  if (largeSessionContainmentScheduler.pending() || els.breakdown.classList.contains('large-session-list-ready')) return;
+  // Let Chromium lay out every new row without size containment first. The
+  // `auto` intrinsic size can then retain each row's real block size before
+  // off-screen rendering is enabled, avoiding scroll-geometry corrections.
+  largeSessionContainmentScheduler.schedule(() => {
+    if (els.breakdown.classList.contains('large-session-list')) {
+      els.breakdown.classList.add('large-session-list-ready');
+    }
+  });
+}
 
 function prefersReducedMotion() {
   return motionPreferenceApi.shouldReduceMotion(state.settings?.reduceMotion, reducedMotionMedia?.matches);
@@ -1104,8 +1149,10 @@ function applyReduceMotionPreference(value) {
 }
 
 function captureBreakdownMotion() {
+  const rows = Array.from(els.breakdown?.querySelectorAll('.row[data-key]') || []);
+  if (!shouldAnimateBreakdownRows(rows.length, { reducedMotion: prefersReducedMotion() })) return null;
   const snapshot = new Map();
-  for (const row of els.breakdown?.querySelectorAll('.row[data-key]') || []) {
+  for (const row of rows) {
     const rect = row.getBoundingClientRect();
     const fill = row.querySelector('.bar-fill');
     const trackWidth = fill?.parentElement?.getBoundingClientRect().width || 0;
@@ -1161,9 +1208,11 @@ function animateRowNumber(el, from, to, duration = 420) {
 }
 
 function animateBreakdownFrom(snapshot, { duration = 420 } = {}) {
-  if (prefersReducedMotion()) return;
+  if (!snapshot) return;
+  const rows = Array.from(els.breakdown?.querySelectorAll('.row[data-key]') || []);
+  if (!shouldAnimateBreakdownRows(rows.length, { reducedMotion: prefersReducedMotion() })) return;
   let enteringIndex = 0;
-  for (const row of els.breakdown?.querySelectorAll('.row[data-key]') || []) {
+  for (const row of rows) {
     const previous = snapshot.get(row.dataset.key);
     const value = Number(row.dataset.motionValue || 0);
     const fill = row.querySelector('.bar-fill');
@@ -1328,7 +1377,7 @@ function rowTemplate(rowData) {
 
 function renderDeviceAccordion(accordionInner, deviceDetail) {
   const signature = JSON.stringify([
-    state.settings?.showToolIcons === true,
+    toolIconsEnabled(state.settings?.showToolIcons),
     deviceDetail.emptyText,
     deviceDetail.metaParts,
     deviceDetail.tools.map((tool) => [
@@ -1357,7 +1406,7 @@ function renderDeviceAccordion(accordionInner, deviceDetail) {
       const label = document.createElement('div');
       label.className = 'device-tool-label';
       const mark = document.createElement('span');
-      if (state.settings?.showToolIcons && clientsWithIcon.has(tool.client)) {
+      if (toolIconsEnabled(state.settings?.showToolIcons) && clientsWithIcon.has(tool.client)) {
         mark.className = `device-tool-mark row-icon row-icon-${tool.client}`;
       } else {
         mark.className = 'device-tool-mark dot';
@@ -1539,7 +1588,9 @@ function applyHomeListMark(mark, iconKind, color) {
 }
 
 function renderRows(rows, { incompleteHint = '' } = {}) {
+  const largeSessionList = isLargeSessionBreakdown(state.breakdown, rows.length);
   if (rows.length === 0 && !incompleteHint) {
+    updateLargeSessionContainment(false);
     els.breakdown.replaceChildren();
     state.rowSignature = '';
     return;
@@ -1553,7 +1604,8 @@ function renderRows(rows, { incompleteHint = '' } = {}) {
   const children = Array.from(els.breakdown.children);
   const existingHint = children.find((child) => child.classList.contains('breakdown-incomplete-hint'));
   const existing = new Map(children.filter((child) => child !== existingHint).map((child) => [child.dataset.key, child]));
-  if (signature !== state.rowSignature) {
+  const structureChanged = signature !== state.rowSignature;
+  if (structureChanged) {
     const nodes = rows.map((row) => existing.get(row.key) || rowTemplate(row));
     if (incompleteHint) {
       const hint = existingHint || document.createElement('p');
@@ -1565,12 +1617,24 @@ function renderRows(rows, { incompleteHint = '' } = {}) {
     els.breakdown.replaceChildren(...nodes);
     state.rowSignature = signature;
   }
+  updateLargeSessionContainment(largeSessionList, { remeasure: structureChanged });
   const current = new Map(Array.from(els.breakdown.children)
     .filter((child) => !child.classList.contains('breakdown-incomplete-hint'))
     .map((child) => [child.dataset.key, child]));
+  const renderContext = {
+    breakdown: state.breakdown,
+    currency: currentCurrency(),
+    currencyRatesEffective: state.settings?.currencyRatesEffective || null,
+    locale: currentLocale(),
+    showToolIcons: toolIconsEnabled(state.settings?.showToolIcons)
+  };
   for (const rowData of rows) {
     const row = current.get(rowData.key);
-    if (row) updateRow(row, { ...rowData, max });
+    if (!row) continue;
+    const fingerprint = rowRenderFingerprint(rowData, max, renderContext);
+    if (rowRenderFingerprints.get(row) === fingerprint) continue;
+    updateRow(row, { ...rowData, max });
+    rowRenderFingerprints.set(row, fingerprint);
   }
   if (liveMotionSnapshot) animateBreakdownFrom(liveMotionSnapshot, { duration: 600 });
 }
@@ -2717,6 +2781,32 @@ function renderProviderWindows(provider, color) {
         0.68,
         null,
         formatLimitCount(credits, Boolean(state.settings?.showLimitUsed))
+      );
+      node.classList.add('limit-window-wide');
+      windows.append(node);
+    }
+  } else if (provider.provider === 'kimi') {
+    const fiveHour = windowForKind(provider, 'session');
+    const weekly = windowForKind(provider, 'weekly');
+    const monthly = windowForKind(provider, 'billing');
+    if (fiveHour) {
+      const node = limitWindowNode(fiveHour.label || '5-hour', fiveHour, color, 0.95);
+      if (!weekly) node.classList.add('limit-window-wide');
+      windows.append(node);
+    }
+    if (weekly) {
+      const node = limitWindowNode(weekly.label || 'Weekly', weekly, color, 0.68);
+      if (!fiveHour) node.classList.add('limit-window-wide');
+      windows.append(node);
+    }
+    if (monthly) {
+      const node = limitWindowNode(
+        monthly.label || 'Monthly',
+        monthly,
+        color,
+        0.5,
+        null,
+        monthly.detail || ''
       );
       node.classList.add('limit-window-wide');
       windows.append(node);
@@ -4699,15 +4789,32 @@ function applyControlLayout(swapSettingsAndRefresh) {
 }
 
 function applyAppearanceSettings(settings) {
-  const opacity = clamp(settings?.glassOpacity ?? 68, 0, 100) / 100;
+  const opacity = glassRenderingApi.renderedGlassOpacity(settings, {
+    platform: state.appInfo?.platform,
+    userAgent: navigator.userAgent
+  });
   const depth = clamp(settings?.glassBlur ?? 32, 0, 100) / 100;
   const systemGlassDisabled = settings?.systemGlass === false;
+  const isWindows = navigator.userAgent.toLowerCase().includes('windows');
+  const windowsGlass = windowsGlassApi.appearanceState(settings, { isWindows });
   document.documentElement.style.setProperty('--glass-alpha', opacity.toFixed(2));
   document.documentElement.style.setProperty('--line-alpha', (0.1 + depth * 0.09).toFixed(3));
   document.documentElement.style.setProperty('--line-strong-alpha', (0.18 + depth * 0.14).toFixed(3));
   document.documentElement.style.setProperty('--control-alpha', (0.03 + depth * 0.045).toFixed(3));
-  document.documentElement.style.setProperty('--highlight-alpha', (0.045 + depth * 0.06).toFixed(3));
   document.documentElement.classList.toggle('system-glass-disabled', systemGlassDisabled);
+  els.windowsBackdropRow?.classList.toggle('hidden', !windowsGlass.showBackdropControl);
+  if (els.windowsBackdropInput) {
+    els.windowsBackdropInput.value = windowsGlass.backdropMode;
+  }
+  if (els.windowsBackdropNote) {
+    const accentFallback = windowsGlass.showAccentNote
+      && new URLSearchParams(window.location.search).get('windowsBackdropFallback') === '1';
+    els.windowsBackdropNote.textContent = t(accentFallback
+      ? 'settings.appearance.windowsBackdropFallback'
+      : 'settings.appearance.windowsBackdropNote');
+    els.windowsBackdropNote.classList.toggle('error', accentFallback);
+    els.windowsBackdropNote.classList.toggle('hidden', !windowsGlass.showAccentNote);
+  }
   applyReduceMotionPreference(settings?.reduceMotion);
   // Only full settings objects carry themeColors; glass/zoom preview patches
   // omit it, so we must not wipe theme overrides mid-slider-drag.
@@ -4722,8 +4829,6 @@ function applyAppearanceSettings(settings) {
   if (settings && ('settingsInTitlebar' in settings || 'trayMode' in settings)) {
     applyControlLayout(settings.settingsInTitlebar === true);
   }
-  const isWindows = navigator.userAgent.toLowerCase().includes('windows');
-  
   let isMacLegacyRadius = false;
   if (!isWindows && state.appInfo?.platform === 'darwin' && state.appInfo?.osRelease) {
     // macOS Tahoe (macOS 26) is Darwin 25. Older macOS versions (like 14, 15) use a ~12px native vibrancy radius.
@@ -5321,8 +5426,10 @@ function handleFloatingBubblePointerUp(event) {
 }
 
 function appearancePatchFromControls() {
+  const systemGlass = els.systemGlassInputs?.find((input) => input.checked)?.value !== 'off';
   return {
-    systemGlass: Boolean(els.systemGlassInput.checked),
+    systemGlass,
+    windowsBackdrop: windowsGlassApi.normalizeWindowsBackdropMode(els.windowsBackdropInput?.value),
     reduceMotion: els.reduceMotionInputs?.find((input) => input.checked)?.value || 'system',
     showLiveDot: Boolean(els.liveDotInput.checked),
     showToolIcons: Boolean(els.toolIconsInput.checked),
@@ -5556,7 +5663,9 @@ function syncSettingsForm() {
       : t('settings.export.statusNeedsFolder');
   }
   renderWslPanel();
-  els.systemGlassInput.checked = state.settings.systemGlass !== false;
+  const systemGlass = state.settings.systemGlass === false ? 'off' : 'system';
+  for (const input of els.systemGlassInputs || []) input.checked = input.value === systemGlass;
+  if (els.windowsBackdropInput) els.windowsBackdropInput.value = windowsGlassApi.normalizeWindowsBackdropMode(state.settings.windowsBackdrop);
   const reduceMotion = motionPreferenceApi.normalize(state.settings.reduceMotion);
   for (const input of els.reduceMotionInputs || []) input.checked = input.value === reduceMotion;
   els.liveDotInput.checked = state.settings.showLiveDot !== false;
@@ -7273,7 +7382,12 @@ function setupThemeAccordion(group, toggle, details) {
 
 setupThemeAccordion(els.themeAdvancedGroup, els.themeAdvancedToggle, els.themeAdvancedDetails);
 setupThemeAccordion(els.themeVendorGroup, els.themeVendorToggle, els.themeVendorDetails);
-els.systemGlassInput.addEventListener('change', saveAppearanceFromControls);
+for (const input of els.systemGlassInputs || []) {
+  input.addEventListener('change', () => {
+    if (input.checked) saveAppearanceFromControls();
+  });
+}
+els.windowsBackdropInput?.addEventListener('change', saveAppearanceFromControls);
 for (const input of els.reduceMotionInputs || []) {
   input.addEventListener('change', async () => {
     if (!input.checked) return;
@@ -8263,8 +8377,8 @@ const externalLimitAccountConfig = {
     pendingKey: 'qoderPendingCheckSince'
   },
   kimi: {
-    configuredKey: 'kimiApiKeyConfigured',
-    sourceKey: 'kimiApiKeySource',
+    configuredKey: 'kimiCredentialConfigured',
+    sourceKey: 'kimiCredentialSource',
     pendingKey: 'kimiPendingCheckSince'
   },
   ollama: {
@@ -8867,8 +8981,9 @@ function renderCustomPricing() {
   }
   for (const ov of overrides) {
     const row = document.createElement('div');
-    row.className = 'managed-account-row';
-    const main = document.createElement('div');
+    row.className = 'managed-account-row custom-pricing-row';
+    const main = document.createElement('button');
+    main.type = 'button';
     main.className = 'managed-account-main custom-pricing-edit';
     main.title = t('settings.customPricing.edit');
     main.addEventListener('click', () => { if (openCustomPricingForm) openCustomPricingForm(ov); });
@@ -8881,7 +8996,7 @@ function renderCustomPricing() {
     main.append(name, meta);
     const remove = document.createElement('button');
     remove.type = 'button';
-    remove.className = 'managed-account-remove';
+    remove.className = 'managed-account-remove custom-pricing-remove';
     remove.textContent = t('settings.customPricing.remove');
     remove.addEventListener('click', async () => {
       const next = customPricingFormApi.removeOverride(state.settings?.customModelPricing || [], ov.modelId);
@@ -9596,7 +9711,7 @@ function setupCursorAccountUI() {
     });
 
     document.getElementById('kimiLogoutButton').addEventListener('click', async () => {
-      await saveSettings({ kimiApiKey: '' });
+      await saveSettings({ kimiApiKey: '', kimiWebAccessToken: '' });
       clearExternalProviderCheckPending('kimi');
       clearExternalProviderPendingStatus('kimi');
       renderExternalProviderStatus('kimi');
@@ -9605,6 +9720,30 @@ function setupCursorAccountUI() {
 
     document.getElementById('kimiRefreshButton').addEventListener('click', async () => {
       await refreshStats({ force: true });
+    });
+
+    document.getElementById('kimiWebAccessTokenSubmit').addEventListener('click', async () => {
+      const input = document.getElementById('kimiWebAccessTokenInput');
+      const errorEl = document.getElementById('kimiErrorMessage');
+      errorEl.classList.add('hidden');
+      if (!String(input.value || '').trim()) {
+        errorEl.textContent = t('settings.kimi.statusNotSet');
+        errorEl.classList.remove('hidden');
+        return;
+      }
+      try {
+        markExternalProviderCheckPending('kimi');
+        await saveSettings({ kimiWebAccessToken: input.value });
+        input.value = '';
+        renderExternalProviderStatus('kimi');
+        await refreshStats({ force: true });
+        setExternalAccountExpanded('kimi', !externalProviderAccountLinked('kimi'));
+        renderExternalProviderStatus('kimi');
+      } catch (err) {
+        clearExternalProviderCheckPending('kimi');
+        errorEl.textContent = t('settings.kimi.saveFailed', { message: err.message });
+        errorEl.classList.remove('hidden');
+      }
     });
 
     document.getElementById('kimiApiKeySubmit').addEventListener('click', async () => {

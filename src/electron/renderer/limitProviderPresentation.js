@@ -33,7 +33,7 @@
     zaiteam: { api: 'API' },
     volcengine: { api: 'API' },
     qoder: { web: 'Web' },
-    kimi: { api: 'API' },
+    kimi: { api: 'API', web: 'Web' },
     ollama: { web: 'Web' },
     wecode: { api: 'API' }
   };
@@ -61,7 +61,7 @@
     zaiteam: ['Team Plan', 'API key'],
     volcengine: ['Coding Plan', 'API key'],
     qoder: ['Manual login', 'Web'],
-    kimi: ['Coding Plan', 'API key'],
+    kimi: ['Membership/Coding Plan', 'Web/API'],
     ollama: ['Manual login', 'Web'],
     wecode: ['API']
   };
@@ -249,6 +249,7 @@
     if (status === 'disabled') return { label: 'Disabled', tone: 'muted' };
     if (status === 'noSyncedData') return { label: 'No synced data', tone: 'sync' };
     if (status === 'unauthorized') {
+      if (providerName === 'kimi') return { label: 'Update credential', tone: 'setup' };
       return providerName === 'deepseek' || providerName === 'minimax' || providerName === 'copilot' || providerName === 'zai' || providerName === 'zaiteam' || providerName === 'volcengine' || providerName === 'kimi'
         ? { label: 'Update API key', tone: 'setup' }
         : providerName === 'qoder'
@@ -262,6 +263,7 @@
     if (status === 'unavailable') return { label: 'Unavailable', tone: 'warn' };
     if (providerName === 'mimo' && status === 'error') return { label: 'Unavailable', tone: 'warn' };
     if (status === 'notConfigured') {
+      if (providerName === 'kimi') return { label: 'Add credential', tone: 'setup' };
       if (providerName === 'antigravity') return { label: 'Open app or CLI', tone: 'setup' };
       if (providerName === 'cursor' || providerName === 'copilot' || providerName === 'qoder' || providerName === 'ollama') return { label: 'Sign in', tone: 'setup' };
       if (providerName === 'deepseek' || providerName === 'minimax' || providerName === 'zai' || providerName === 'zaiteam' || providerName === 'volcengine' || providerName === 'kimi') return { label: 'Add API key', tone: 'setup' };
