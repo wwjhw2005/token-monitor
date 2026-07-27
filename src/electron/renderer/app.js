@@ -1,6 +1,6 @@
 'use strict';
 
-const clientLabels = { claude: 'Claude Code', codex: 'Codex', hermes: 'Hermes', gemini: 'Gemini', cursor: 'Cursor', opencode: 'OpenCode', openclaw: 'OpenClaw', antigravity: 'Antigravity', cline: 'Cline', kimi: 'Kimi', qwen: 'Qwen', grok: 'Grok Build', copilot: 'GitHub Copilot', pi: 'Pi', zed: 'Zed', kilocode: 'Kilo Code', micode: 'MiMo Code', zcode: 'ZCode', kiro: 'Kiro', codebuddy: 'CodeBuddy', workbuddy: 'WorkBuddy', proma: 'Proma' };
+const clientLabels = { claude: 'Claude Code', codex: 'Codex', hermes: 'Hermes Agent', gemini: 'Gemini', cursor: 'Cursor', opencode: 'OpenCode', openclaw: 'OpenClaw', antigravity: 'Antigravity', cline: 'Cline', kimi: 'Kimi', qwen: 'Qwen', grok: 'Grok Build', copilot: 'GitHub Copilot', pi: 'Pi', zed: 'Zed', kilocode: 'Kilo Code', micode: 'MiMo Code', zcode: 'ZCode', kiro: 'Kiro', codebuddy: 'CodeBuddy', workbuddy: 'WorkBuddy', proma: 'Proma' };
 const { clientColors, fallbackModelColors, modelVendorFor, modelColor } = window.TokenMonitorUsageCharts;
 const motionPreferenceApi = window.TokenMonitorMotionPreference;
 const windowsGlassApi = window.TokenMonitorWindowsGlass;
@@ -9,7 +9,7 @@ const wslStatusPresentationApi = window.TokenMonitorWslStatusPresentation;
 const reducedMotionMedia = window.matchMedia?.('(prefers-reduced-motion: reduce)');
 const clientsWithIcon = new Set([
   'claude', 'codex', 'gemini', 'cursor', 'opencode', 'openclaw', 'hermes', 'antigravity', 'cline', 'kimi', 'qwen', 'grok', 'copilot', 'pi', 'zed', 'kilocode', 'micode', 'zcode', 'kiro', 'codebuddy', 'workbuddy', 'proma',
-  'xai', 'deepseek', 'meta', 'mistral', 'qwen', 'moonshot', 'zai', 'zaiteam', 'cohere', 'xiaomi', 'mimo', 'minimax', 'doubao', 'volcengine', 'qoder', 'ollama', 'wecode'
+  'xai', 'openrouter', 'deepseek', 'meta', 'mistral', 'qwen', 'moonshot', 'zai', 'zaiteam', 'cohere', 'xiaomi', 'mimo', 'minimax', 'doubao', 'volcengine', 'qoder', 'ollama', 'wecode', 'thirdparty'
 ]);
 
 function osIconFor(platform) {
@@ -46,8 +46,8 @@ function iconKindFor(rowData, breakdown) {
 const KNOWN_CLIENTS = [
   { id: 'claude', label: 'Claude Code' },
   { id: 'codex', label: 'Codex' },
-  { id: 'hermes', label: 'Hermes' },
   { id: 'opencode', label: 'OpenCode' },
+  { id: 'hermes', label: 'Hermes Agent' },
   { id: 'openclaw', label: 'OpenClaw' },
   { id: 'cursor', label: 'Cursor' },
   { id: 'antigravity', label: 'Antigravity' },
@@ -69,26 +69,48 @@ const KNOWN_CLIENTS = [
 const LIMIT_PROVIDERS = [
   { id: 'claude', label: 'Claude', settingsLabel: 'Claude Code' },
   { id: 'codex', label: 'Codex' },
+  { id: 'opencode', label: 'OpenCode' },
   { id: 'cursor', label: 'Cursor' },
   { id: 'antigravity', label: 'Antigravity' },
-  { id: 'opencode', label: 'OpenCode' },
-  { id: 'deepseek', label: 'DeepSeek' },
-  { id: 'minimax', label: 'Minimax' },
-  { id: 'mimo', label: 'MiMo' },
+  { id: 'kimi', label: 'Kimi' },
   { id: 'grok', label: 'Grok' },
   { id: 'copilot', label: 'GitHub Copilot' },
-  { id: 'kiro', label: 'Kiro' },
+  { id: 'mimo', label: 'MiMo' },
   { id: 'zai', label: 'GLM' },
   { id: 'zaiteam', label: 'GLM Team' },
+  { id: 'kiro', label: 'Kiro' },
+  { id: 'deepseek', label: 'DeepSeek' },
+  { id: 'openrouter', label: 'OpenRouter' },
+  { id: 'minimax', label: 'Minimax' },
   { id: 'volcengine', label: 'Volcengine' },
   { id: 'qoder', label: 'Qoder' },
-  { id: 'kimi', label: 'Kimi' },
   { id: 'ollama', label: 'Ollama' },
-  { id: 'wecode', label: 'WeCode' }
+  { id: 'wecode', label: 'WeCode' },
+  { id: 'thirdparty', label: 'Third-party APIs' }
 ];
+const TRAY_ICON_VARIANTS = [
+  { id: 'claude-brand', label: 'Claude', after: 'claude' },
+  { id: 'chatgpt', label: 'ChatGPT', after: 'codex' }
+];
+const trayIconProviderIds = new Set([
+  ...clientsWithIcon,
+  ...TRAY_ICON_VARIANTS.map((provider) => provider.id)
+]);
+const TRAY_ICON_PROVIDERS = [
+  ...KNOWN_CLIENTS.flatMap((provider) => [
+    provider,
+    ...TRAY_ICON_VARIANTS.filter((variant) => variant.after === provider.id)
+  ]),
+  ...LIMIT_PROVIDERS
+]
+  .filter((provider, index, providers) => (
+    trayIconProviderIds.has(provider.id)
+    && providers.findIndex((entry) => entry.id === provider.id) === index
+  ));
 const DEFAULT_LIMIT_PROVIDER_ORDER = LIMIT_PROVIDERS.map((provider) => provider.id).join(',');
 const limitProviderOrderApi = window.TokenMonitorLimitProviderOrder;
 const limitProviderPresentationApi = window.TokenMonitorLimitProviderPresentation;
+const appUpdatePresentationApi = window.TokenMonitorAppUpdatePresentation;
 const accountIdentityApi = window.TokenMonitorAccountIdentity;
 const clientStatusPresentationApi = window.TokenMonitorClientStatusPresentation;
 const serviceStatusPresentationApi = window.TokenMonitorServiceStatusPresentation;
@@ -101,6 +123,7 @@ const homeModulePreferencesApi = window.TokenMonitorHomeModulePreferences;
 const { limitFillPercent, limitModeSuffix } = window.TokenMonitorLimitDisplayMode;
 const i18n = window.TokenMonitorI18n;
 const currencyApi = window.TokenMonitorCurrency;
+const trayLayoutApi = window.TokenMonitorTrayLayout;
 const sessionRowsApi = window.TokenMonitorSessionRows;
 const breakdownRenderPolicyApi = window.TokenMonitorBreakdownRenderPolicy;
 const {
@@ -135,6 +158,7 @@ const LIMIT_CAPABILITY_TAG_KEYS = {
   'Token Plan': 'settings.limits.capability.tokenPlan',
   'Coding Plan': 'settings.limits.capability.codingPlan',
   'Membership/Coding Plan': 'settings.limits.capability.membershipCodingPlan',
+  Relay: 'settings.limits.capability.relay',
   'API key': 'settings.limits.capability.apiKey',
   'AK/SK': 'settings.limits.capability.akSk',
   'GitHub OAuth': 'settings.limits.capability.githubOAuth',
@@ -219,9 +243,10 @@ function normalizeInitialViewValue(value, allowed, fallback) {
   return allowed.has(raw) ? raw : fallback;
 }
 
-const state = { period: normalizeInitialViewValue(initialViewState.period, viewPeriodValues, 'today'), appUpdate: null, breakdown: normalizeInitialViewValue(initialViewState.breakdown, viewBreakdownValues, 'home'), viewSwitcherOpen: false, viewSwitcherHasOpened: false, resetCreditsTooltipHasOpened: false, resetCreditsTooltipActive: false, resetCreditsTooltipRenderPending: false, settings: null, stats: null, homeHistory: null, homeHistoryBusy: false, homeHistoryRequested: false, homeHistorySignature: '', homeHistoryRetries: 0, homeHistoryRetryTimer: null, homeActivityScrollLeft: null, homeActivityFollowEnd: true, homeActivityResizeObserver: null, serviceStatus: null, serviceStatusBusy: false, serviceProvidersExpanded: false, trendSettingsExpanded: false, trendsActivating: false, homeSettingsExpanded: false, homeLimitSettingsExpanded: false, serviceStatusTicker: null, refreshTimer: null, refreshBusy: false, refreshFeedbackTimer: null, currentTotal: 0, rowSignature: '', streamConnected: false, streamFailure: null, mode: 'idle', appInfo: null, tokscaleStatus: null, tokscaleCheck: null, tokscaleBusy: false, hubInfo: null, cursorAccount: { status: null, error: '' }, cursorAccountExpanded: false, codexAccountExpanded: false, codexAccountError: '', codexSignInBusy: false, codexSignInFlowId: '', codexLoginUrl: '', codexLoginStatus: '', codexLoginOutput: '', codexActiveAccount: null, codexPendingActiveAccount: null, codexPendingActiveAccountUntil: 0, codexPendingActiveAccountTimer: null, codexSystemSwitchingAccountId: '', codexSystemSwitchErrorAccountId: '', codexSystemSwitchError: '', codexSwitchPopoverHasOpened: false, codexSwitchPopoverActive: false, codexSwitchPopoverRenderPending: false, customPricingExpanded: false, opencodeProfileCount: 0, opencodeCookieExpanded: false, deepseekAccountExpanded: false, deepseekPendingCheckSince: 0, minimaxAccountExpanded: false, minimaxPendingCheckSince: 0, zaiAccountExpanded: false, zaiPendingCheckSince: 0, zaiteamAccountExpanded: false, zaiteamPendingCheckSince: 0, volcengineAccountExpanded: false, volcenginePendingCheckSince: 0, qoderAccountExpanded: false, qoderPendingCheckSince: 0, kimiAccountExpanded: false, kimiPendingCheckSince: 0, ollamaAccountExpanded: false, ollamaPendingCheckSince: 0, wecodeAccountExpanded: false, wecodePendingCheckSince: 0, mimoAccountExpanded: false, mimoAccountError: '', copilotAccountExpanded: false, copilotManualExpanded: false, copilotPendingCheckSince: 0, copilotSignInBusy: false, copilotSignInCancelable: false, copilotSignInFlowId: '', copilotAuthorizeMessage: '', copilotLoginStatus: '', copilotErrorMessage: '', floatingBubble: initialFloatingBubble, suppressInitialNumberAnimation: window.__TOKEN_MONITOR_SUPPRESS_INITIAL_NUMBER_ANIMATION__ === true, openSession: null, detailSort: 'time', recordingWindowShortcut: false, windowShortcutInvalid: false };
+const state = { period: normalizeInitialViewValue(initialViewState.period, viewPeriodValues, 'today'), appUpdate: null, breakdown: normalizeInitialViewValue(initialViewState.breakdown, viewBreakdownValues, 'home'), viewSwitcherOpen: false, viewSwitcherHasOpened: false, limitDetailTooltipHasOpened: false, limitDetailTooltipActive: false, limitDetailTooltipRenderPending: false, settings: null, stats: null, homeHistory: null, homeHistoryBusy: false, homeHistoryRequested: false, homeHistorySignature: '', homeHistoryRetries: 0, homeHistoryRetryTimer: null, homeActivityScrollLeft: null, homeActivityFollowEnd: true, homeActivityResizeObserver: null, serviceStatus: null, serviceStatusBusy: false, serviceProvidersExpanded: false, trendSettingsExpanded: false, trendsActivating: false, homeSettingsExpanded: false, homeLimitSettingsExpanded: false, serviceStatusTicker: null, refreshTimer: null, refreshBusy: false, refreshFeedbackTimer: null, currentTotal: 0, rowSignature: '', streamConnected: false, streamFailure: null, mode: 'idle', appInfo: null, tokscaleStatus: null, tokscaleCheck: null, tokscaleBusy: false, hubInfo: null, cursorAccount: { status: null, error: '' }, cursorAccountExpanded: false, codexAccountExpanded: false, codexAccountError: '', codexSignInBusy: false, codexSignInFlowId: '', codexLoginUrl: '', codexLoginStatus: '', codexLoginOutput: '', codexWorkspaceChoices: [], codexWorkspaceId: '', codexActiveAccount: null, codexPendingActiveAccount: null, codexPendingActiveAccountUntil: 0, codexPendingActiveAccountTimer: null, codexSystemSwitchingAccountId: '', codexSystemSwitchErrorAccountId: '', codexSystemSwitchError: '', codexSwitchPopoverHasOpened: false, codexSwitchPopoverActive: false, codexSwitchPopoverRenderPending: false, customPricingExpanded: false, claudeAccountExpanded: false, claudePendingCheckSince: 0, opencodeProfileCount: 0, opencodeCookieExpanded: false, openrouterProfileCount: 0, openrouterAccountExpanded: false, thirdPartyProfileCount: 0, thirdPartyAccountExpanded: false, deepseekAccountExpanded: false, deepseekPendingCheckSince: 0, minimaxAccountExpanded: false, minimaxPendingCheckSince: 0, zaiAccountExpanded: false, zaiPendingCheckSince: 0, zaiteamAccountExpanded: false, zaiteamPendingCheckSince: 0, volcengineAccountExpanded: false, volcenginePendingCheckSince: 0, qoderAccountExpanded: false, qoderPendingCheckSince: 0, kimiAccountExpanded: false, kimiPendingCheckSince: 0, ollamaAccountExpanded: false, ollamaPendingCheckSince: 0, wecodeAccountExpanded: false, wecodePendingCheckSince: 0, mimoAccountExpanded: false, mimoAccountError: '', copilotAccountExpanded: false, copilotManualExpanded: false, copilotPendingCheckSince: 0, copilotSignInBusy: false, copilotSignInCancelable: false, copilotSignInFlowId: '', copilotAuthorizeMessage: '', copilotLoginStatus: '', copilotErrorMessage: '', floatingBubble: initialFloatingBubble, suppressInitialNumberAnimation: window.__TOKEN_MONITOR_SUPPRESS_INITIAL_NUMBER_ANIMATION__ === true, openSession: null, detailSort: 'time', recordingWindowShortcut: false, windowShortcutInvalid: false };
 state.homeHistoryLoadedSignature = '';
 state.homeHistoryRetrySignature = '';
+state.homeReturnVisible = false;
 state.appUpdateNotesPresentedVersion = '';
 state.periodMotionActive = false;
 state.animateBarsFromZero = false;
@@ -236,9 +261,11 @@ let viewSwitcherLongPressTimer = null;
 let viewSwitcherLongPressTriggered = false;
 let viewSwitcherHoverCloseTimer = null;
 const els = {
-  shell: document.querySelector('.shell'), status: document.getElementById('status'), liveDot: document.getElementById('liveDot'), totalTokens: document.getElementById('totalTokens'), totalTokensCompact: document.getElementById('totalTokensCompact'), cost: document.getElementById('cost'), homePanel: document.getElementById('homePanel'), breakdown: document.getElementById('breakdown'), serviceStatusPanel: document.getElementById('serviceStatusPanel'), limitsPanel: document.getElementById('limitsPanel'), trendsPanel: document.getElementById('trendsPanel'), viewSwitcher: document.getElementById('viewSwitcher'), pinButton: document.getElementById('pinButton'), utilityActions: document.getElementById('utilityActions'), settingsButton: document.getElementById('settingsButton'), settingsPanel: document.getElementById('settingsPanel'), languageInput: document.getElementById('languageInput'), currencyInput: document.getElementById('currencyInput'), currencyRateRow: document.getElementById('currencyRateRow'), currencyRateModeAuto: document.getElementById('currencyRateModeAuto'), currencyRateModeManual: document.getElementById('currencyRateModeManual'), currencyRateManualField: document.getElementById('currencyRateManualField'), currencyRateOverrideInput: document.getElementById('currencyRateOverrideInput'), currencyRateStatus: document.getElementById('currencyRateStatus'), hubUrlInput: document.getElementById('hubUrlInput'), secretInput: document.getElementById('secretInput'), deviceIdInput: document.getElementById('deviceIdInput'), limitProviderCheckboxes: document.getElementById('limitProviderCheckboxes'), limitsRefreshInput: document.getElementById('limitsRefreshInput'), showLimitSourceInput: document.getElementById('showLimitSourceInput'), maskLimitAccountEmailsInput: document.getElementById('maskLimitAccountEmailsInput'), showLimitUsedInput: document.getElementById('showLimitUsedInput'), liveDotInput: document.getElementById('liveDotInput'), toolIconsInput: document.getElementById('toolIconsInput'), floatingBubbleInput: document.getElementById('floatingBubbleInput'), floatingBubbleTriggerInput: document.getElementById('floatingBubbleTriggerInput'), floatingBubbleTriggerRow: document.getElementById('floatingBubbleTriggerRow'), floatingBubbleContentInput: document.getElementById('floatingBubbleContentInput'), floatingBubbleContentRow: document.getElementById('floatingBubbleContentRow'), floatingBubbleContent: document.getElementById('floatingBubbleContent'), discordRpcInput: document.getElementById('discordRpcInput'), windowBehaviorInput: document.getElementById('windowBehaviorInput'), showTrayIconInput: document.getElementById('showTrayIconInput'), showTrayProviderBadgeInput: document.getElementById('showTrayProviderBadgeInput'), trayModeInput: document.getElementById('trayModeInput'), trayContentInput: document.getElementById('trayContentInput'), windowToggleShortcutValue: document.getElementById('windowToggleShortcutValue'), windowToggleShortcutClearButton: document.getElementById('windowToggleShortcutClearButton'), windowToggleShortcutNote: document.getElementById('windowToggleShortcutNote'), glassInput: document.getElementById('glassInput'), blurInput: document.getElementById('blurInput'), zoomInput: document.getElementById('zoomInput'), resetGlassButton: document.getElementById('resetGlassButton'), resetDepthButton: document.getElementById('resetDepthButton'), resetZoomButton: document.getElementById('resetZoomButton'), saveSettingsButton: document.getElementById('saveSettingsButton'), clientDisplayList: document.getElementById('clientDisplayList'), wslScanInput: document.getElementById('wslScanInput'), wslScanRow: document.getElementById('wslScanRow'), wslPanel: document.getElementById('wslPanel'), openConfigButton: document.getElementById('openConfigButton'), exportAutoInput: document.getElementById('exportAutoInput'), exportAutoDetails: document.getElementById('exportAutoDetails'), exportAutoStatus: document.getElementById('exportAutoStatus'), exportDirLabel: document.getElementById('exportDirLabel'), exportPickDirButton: document.getElementById('exportPickDirButton'), exportIntervalInput: document.getElementById('exportIntervalInput'), exportNowButton: document.getElementById('exportNowButton'), refreshButton: document.getElementById('refreshButton'), minButton: document.getElementById('minButton'), closeButton: document.getElementById('closeButton'), floatingBubbleTab: document.getElementById('floatingBubbleTab')
+  shell: document.querySelector('.shell'), status: document.getElementById('status'), liveDot: document.getElementById('liveDot'), totalTokens: document.getElementById('totalTokens'), totalTokensCompact: document.getElementById('totalTokensCompact'), cost: document.getElementById('cost'), homePanel: document.getElementById('homePanel'), breakdown: document.getElementById('breakdown'), serviceStatusPanel: document.getElementById('serviceStatusPanel'), limitsPanel: document.getElementById('limitsPanel'), trendsPanel: document.getElementById('trendsPanel'), viewSwitcher: document.getElementById('viewSwitcher'), pinButton: document.getElementById('pinButton'), utilityActions: document.getElementById('utilityActions'), settingsButton: document.getElementById('settingsButton'), settingsPanel: document.getElementById('settingsPanel'), languageInput: document.getElementById('languageInput'), currencyInput: document.getElementById('currencyInput'), currencyRateRow: document.getElementById('currencyRateRow'), currencyRateModeAuto: document.getElementById('currencyRateModeAuto'), currencyRateModeManual: document.getElementById('currencyRateModeManual'), currencyRateManualField: document.getElementById('currencyRateManualField'), currencyRateOverrideInput: document.getElementById('currencyRateOverrideInput'), currencyRateStatus: document.getElementById('currencyRateStatus'), hubUrlInput: document.getElementById('hubUrlInput'), secretInput: document.getElementById('secretInput'), deviceIdInput: document.getElementById('deviceIdInput'), limitProviderCheckboxes: document.getElementById('limitProviderCheckboxes'), limitsRefreshInput: document.getElementById('limitsRefreshInput'), showLimitSourceInput: document.getElementById('showLimitSourceInput'), maskLimitAccountEmailsInput: document.getElementById('maskLimitAccountEmailsInput'), showLimitUsedInputs: Array.from(document.querySelectorAll('input[name="showLimitUsed"]')), liveDotInput: document.getElementById('liveDotInput'), toolIconsInput: document.getElementById('toolIconsInput'), floatingBubbleInput: document.getElementById('floatingBubbleInput'), floatingBubbleTriggerInputs: Array.from(document.querySelectorAll('input[name="floatingBubbleTrigger"]')), floatingBubbleTriggerRow: document.getElementById('floatingBubbleTriggerRow'), floatingBubbleContentInput: document.getElementById('floatingBubbleContentInput'), floatingBubbleContentRow: document.getElementById('floatingBubbleContentRow'), floatingBubbleComposer: document.getElementById('floatingBubbleComposer'), floatingBubbleContent: document.getElementById('floatingBubbleContent'), discordRpcInput: document.getElementById('discordRpcInput'), windowBehaviorInput: document.getElementById('windowBehaviorInput'), showTrayIconInput: document.getElementById('showTrayIconInput'), showTrayProviderBadgeInput: document.getElementById('showTrayProviderBadgeInput'), trayModeInput: document.getElementById('trayModeInput'), trayContentInput: document.getElementById('trayContentInput'), trayComposer: document.getElementById('trayComposer'), windowToggleShortcutValue: document.getElementById('windowToggleShortcutValue'), windowToggleShortcutClearButton: document.getElementById('windowToggleShortcutClearButton'), windowToggleShortcutNote: document.getElementById('windowToggleShortcutNote'), glassInput: document.getElementById('glassInput'), blurInput: document.getElementById('blurInput'), zoomInput: document.getElementById('zoomInput'), resetGlassButton: document.getElementById('resetGlassButton'), resetDepthButton: document.getElementById('resetDepthButton'), resetZoomButton: document.getElementById('resetZoomButton'), saveSettingsButton: document.getElementById('saveSettingsButton'), clientDisplayList: document.getElementById('clientDisplayList'), wslScanInput: document.getElementById('wslScanInput'), wslScanRow: document.getElementById('wslScanRow'), wslPanel: document.getElementById('wslPanel'), openConfigButton: document.getElementById('openConfigButton'), exportAutoInput: document.getElementById('exportAutoInput'), exportAutoDetails: document.getElementById('exportAutoDetails'), exportAutoStatus: document.getElementById('exportAutoStatus'), exportDirLabel: document.getElementById('exportDirLabel'), exportPickDirButton: document.getElementById('exportPickDirButton'), exportIntervalInput: document.getElementById('exportIntervalInput'), exportNowButton: document.getElementById('exportNowButton'), refreshButton: document.getElementById('refreshButton'), minButton: document.getElementById('minButton'), closeButton: document.getElementById('closeButton'), floatingBubbleTab: document.getElementById('floatingBubbleTab')
 };
 Object.assign(els, {
+  viewBackRow: document.getElementById('viewBackRow'),
+  backHomeButton: document.getElementById('backHomeButton'),
   systemGlassInputs: Array.from(document.querySelectorAll('input[name="systemGlassOption"]')),
   floatingBubbleOptions: document.getElementById('floatingBubbleOptions'),
   trayIconOptions: document.getElementById('trayIconOptions'),
@@ -283,6 +310,8 @@ Object.assign(els, {
   appUpdatePill: document.getElementById('appUpdatePill'),
   appUpdatePillAction: document.getElementById('appUpdatePillAction'),
   appUpdatePillLabel: document.getElementById('appUpdatePillLabel'),
+  appUpdatePillRestart: document.getElementById('appUpdatePillRestart'),
+  appUpdatePillRestartLabel: document.getElementById('appUpdatePillRestartLabel'),
   appUpdatePillDismiss: document.getElementById('appUpdatePillDismiss'),
   appUpdatePopover: document.getElementById('appUpdatePopover'),
   appUpdatePopoverTitle: document.getElementById('appUpdatePopoverTitle'),
@@ -291,6 +320,9 @@ Object.assign(els, {
   appUpdatePopoverRelease: document.getElementById('appUpdatePopoverRelease'),
   appUpdatePopoverClose: document.getElementById('appUpdatePopoverClose'),
   appUpdateInstalled: document.getElementById('appUpdateInstalled'),
+  automaticAppUpdatesRow: document.getElementById('automaticAppUpdatesRow'),
+  automaticAppUpdatesInput: document.getElementById('automaticAppUpdatesInput'),
+  automaticAppUpdatesNote: document.getElementById('automaticAppUpdatesNote'),
   appUpdateLatest: document.getElementById('appUpdateLatest'),
   appUpdateCheckButton: document.getElementById('appUpdateCheckButton'),
   appUpdateViewReleaseButton: document.getElementById('appUpdateViewReleaseButton'),
@@ -409,6 +441,7 @@ function translatedLimitProviderTag(tagInfo) {
 function applySettingsTranslations() {
   if (els.languageInput) els.languageInput.value = currentLanguage();
   i18n.applyTranslations(document, currentLocale());
+  setThirdPartyAdapterFields();
 }
 
 function applySettingsSectionDom(id, open) {
@@ -496,6 +529,18 @@ function setupSettingsSections() {
   els.settingsPanel?.addEventListener('keydown', cancelSettingsScrollAnchorOnKeydown);
 }
 
+function orderAccountProviderGroups() {
+  const container = document.getElementById('accountsSettingsDetails');
+  if (!container) return;
+  for (const provider of LIMIT_PROVIDERS) {
+    const groupId = provider.id === 'opencode'
+      ? 'opencodeCookieGroup'
+      : `${provider.id}AccountGroup`;
+    const group = document.getElementById(groupId);
+    if (group?.parentElement === container) container.append(group);
+  }
+}
+
 function refreshIntervalLabel(value) {
   const ms = Number(value) || 300000;
   const minutes = Math.max(1, Math.round(ms / 60000));
@@ -503,8 +548,11 @@ function refreshIntervalLabel(value) {
 }
 
 function viewsSummary() {
-  const hidden = hiddenViewSet();
-  const visible = VIEW_DISPLAY_OPTIONS.length - hidden.size;
+  const visible = viewDisplayPreferencesApi.visibleViewCount({
+    views: VIEW_DISPLAY_OPTIONS,
+    hiddenValue: state.settings?.hiddenViews,
+    disabledIds: disabledViewIds()
+  });
   return t('settings.summary.views', { visible, total: VIEW_DISPLAY_OPTIONS.length });
 }
 
@@ -523,8 +571,11 @@ function settingsSectionSummary(section) {
     });
   }
   if (section === 'accounts') {
+    const claudeLinked = externalProviderAccountLinked('claude');
     const cursorLinked = Boolean(state.cursorAccount.status?.loggedIn) && !state.cursorAccount.status?.expired;
     const opencodeCount = state.opencodeProfileCount || 0;
+    const openrouterCount = state.openrouterProfileCount || 0;
+    const thirdpartyCount = state.thirdPartyProfileCount || 0;
     const deepseekLinked = deepseekAccountLinked();
     const minimaxLinked = minimaxAccountLinked();
     const zaiLinked = externalProviderAccountLinked('zai');
@@ -538,8 +589,8 @@ function settingsSectionSummary(section) {
     const copilotLinked = copilotAccountLinked();
     const codexLinked = (state.settings?.codexManagedAccounts || []).length > 0;
     return t('settings.summary.accounts', {
-      linked: (codexLinked ? 1 : 0) + (cursorLinked ? 1 : 0) + (opencodeCount > 0 ? 1 : 0) + (deepseekLinked ? 1 : 0) + (minimaxLinked ? 1 : 0) + (zaiLinked ? 1 : 0) + (zaiteamLinked ? 1 : 0) + (volcengineLinked ? 1 : 0) + (qoderLinked ? 1 : 0) + (kimiLinked ? 1 : 0) + (ollamaLinked ? 1 : 0) + (wecodeLinked ? 1 : 0) + (mimoLinked ? 1 : 0) + (copilotLinked ? 1 : 0),
-      total: 14
+      linked: (claudeLinked ? 1 : 0) + (codexLinked ? 1 : 0) + (cursorLinked ? 1 : 0) + (opencodeCount > 0 ? 1 : 0) + (openrouterCount > 0 ? 1 : 0) + (thirdpartyCount > 0 ? 1 : 0) + (deepseekLinked ? 1 : 0) + (minimaxLinked ? 1 : 0) + (zaiLinked ? 1 : 0) + (zaiteamLinked ? 1 : 0) + (volcengineLinked ? 1 : 0) + (qoderLinked ? 1 : 0) + (kimiLinked ? 1 : 0) + (ollamaLinked ? 1 : 0) + (wecodeLinked ? 1 : 0) + (mimoLinked ? 1 : 0) + (copilotLinked ? 1 : 0),
+      total: 17
     });
   }
   if (section === 'limits') {
@@ -748,21 +799,44 @@ function renderAppUpdatePill() {
   const version = s?.latest?.version || s?.installVersion || '';
   if (!s || !mode || !version || !s.showUpdateNotice) {
     pill.classList.add('hidden');
+    pill.classList.remove('is-ready');
     pill.setAttribute('title', '');
     els.appUpdatePillLabel.textContent = '';
+    els.appUpdatePillAction.removeAttribute('title');
+    els.appUpdatePillAction.removeAttribute('aria-label');
+    els.appUpdatePillAction.disabled = false;
+    els.appUpdatePillRestart.classList.add('hidden');
+    els.appUpdatePillRestartLabel.textContent = '';
+    els.appUpdatePillRestart.disabled = false;
+    els.appUpdatePillRestart.removeAttribute('title');
+    els.appUpdatePillRestart.removeAttribute('aria-label');
     setAppUpdatePillDisclosure(false);
     return;
   }
-  const hasReleaseNotes = mode !== 'install' && releaseNoteGroupsForCurrentLocale(s.latest).length > 0;
+  const hasReleaseNotes = releaseNoteGroupsForCurrentLocale(s.latest).length > 0;
   setAppUpdatePillDisclosure(hasReleaseNotes);
   pill.classList.remove('hidden');
+  pill.classList.toggle('is-ready', mode === 'install');
   els.appUpdatePillDismiss.classList.toggle('hidden', mode === 'install' || s.installBusy);
-  pill.setAttribute('title', mode === 'install' ? t('settings.appUpdate.ready') : (s.latest?.name || `v${version}`));
+  pill.setAttribute('title', '');
+  const releaseLabel = hasReleaseNotes
+    ? t('settings.appUpdate.whatsNew', { version })
+    : (s.latest?.name || `v${version}`);
+  els.appUpdatePillAction.setAttribute('title', releaseLabel);
+  els.appUpdatePillAction.setAttribute('aria-label', releaseLabel);
+  els.appUpdatePillAction.disabled = mode === 'install' && !hasReleaseNotes && !s.latest?.htmlUrl;
+  els.appUpdatePillRestart.classList.toggle('hidden', mode !== 'install');
+  els.appUpdatePillRestart.disabled = Boolean(s.installBusy);
+  els.appUpdatePillRestartLabel.textContent = mode === 'install'
+    ? t('settings.appUpdate.restartShort')
+    : '';
+  els.appUpdatePillRestart.setAttribute('title', t('settings.appUpdate.ready'));
+  els.appUpdatePillRestart.setAttribute('aria-label', t('settings.appUpdate.restart'));
   if (s.installPhase === 'downloading' && Number.isFinite(s.installProgress)) {
     els.appUpdatePillLabel.textContent = `${Math.round(s.installProgress)}%`;
   } else {
     els.appUpdatePillLabel.textContent = mode === 'install'
-      ? `↻ ${t('settings.appUpdate.restart')}`
+      ? `v${version}`
       : `↑ v${version}`;
   }
 }
@@ -879,9 +953,7 @@ function renderSettingsAppUpdateRow() {
     els.appUpdateMessage.textContent = t('settings.appUpdate.downloading', { percent });
     els.appUpdateMessage.classList.remove('error');
   } else if (s.downloaded) {
-    els.appUpdateMessage.textContent = state.appInfo?.platform === 'win32'
-      ? t('settings.appUpdate.readyWindowsUnsigned')
-      : t('settings.appUpdate.ready');
+    els.appUpdateMessage.textContent = t('settings.appUpdate.ready');
     els.appUpdateMessage.classList.remove('error');
   } else if (s.installError) {
     els.appUpdateMessage.textContent = t('settings.appUpdate.installError');
@@ -892,6 +964,20 @@ function renderSettingsAppUpdateRow() {
   } else {
     els.appUpdateMessage.textContent = '';
     els.appUpdateMessage.classList.remove('error');
+  }
+}
+
+function renderAutomaticAppUpdateControl() {
+  if (!els.automaticAppUpdatesInput) return;
+  const control = appUpdatePresentationApi.automaticAppUpdateControlState({
+    preferenceEnabled: state.settings?.automaticAppUpdates,
+    updateState: state.appUpdate
+  });
+  els.automaticAppUpdatesInput.checked = control.checked;
+  els.automaticAppUpdatesInput.disabled = control.disabled;
+  els.automaticAppUpdatesRow?.classList.toggle('is-disabled', control.unavailable);
+  if (els.automaticAppUpdatesNote) {
+    els.automaticAppUpdatesNote.textContent = t(control.descriptionKey);
   }
 }
 
@@ -1991,14 +2077,14 @@ function codexResetCreditExpiryDateLabel(date) {
   return new Intl.DateTimeFormat(currentLocale(), { month: 'numeric', day: 'numeric' }).format(date);
 }
 
-function resetCreditsTooltipShouldHoldRender() {
-  if (!state.resetCreditsTooltipActive || !els.limitsPanel) return false;
-  return Boolean(els.limitsPanel.querySelector('.limit-reset-credits-info-wrap:hover, .limit-reset-credits-info-wrap:focus-within'));
+function limitDetailTooltipShouldHoldRender() {
+  if (!state.limitDetailTooltipActive || !els.limitsPanel) return false;
+  return Boolean(els.limitsPanel.querySelector('.limit-detail-tooltip-wrap:hover, .limit-detail-tooltip-wrap:focus-within'));
 }
 
-function flushPendingResetCreditsTooltipRender() {
-  if (!state.resetCreditsTooltipRenderPending || state.breakdown !== 'limits') return;
-  state.resetCreditsTooltipRenderPending = false;
+function flushPendingLimitDetailTooltipRender() {
+  if (!state.limitDetailTooltipRenderPending || state.breakdown !== 'limits') return;
+  state.limitDetailTooltipRenderPending = false;
   renderLimits();
 }
 
@@ -2051,19 +2137,19 @@ function codexResetCreditsNode(resetCredits) {
     expiryGroup.append(timeline);
     if (expirationDates.length > 1) {
       const infoWrap = document.createElement('span');
-      infoWrap.className = 'limit-reset-credits-info-wrap';
-      infoWrap.classList.toggle('has-opened', state.resetCreditsTooltipHasOpened);
+      infoWrap.className = 'limit-detail-tooltip-wrap';
+      infoWrap.classList.toggle('has-opened', state.limitDetailTooltipHasOpened);
       const info = document.createElement('span');
-      info.className = 'limit-reset-credits-info';
+      info.className = 'limit-detail-tooltip-trigger';
       info.textContent = 'i';
       info.tabIndex = 0;
       info.setAttribute('aria-label', expirationDates.map((date, index) => `Reset ${index + 1}: ${codexResetCreditExpiryDetailLabel(date)}`).join(', '));
       const tooltip = document.createElement('span');
-      tooltip.className = 'limit-reset-credits-tooltip';
+      tooltip.className = 'limit-detail-tooltip';
       tooltip.setAttribute('role', 'tooltip');
       expirationDates.forEach((date) => {
         const row = document.createElement('span');
-        row.className = 'limit-reset-credit-detail';
+        row.className = 'limit-detail-tooltip-row';
         const label = document.createElement('span');
         label.textContent = codexResetCreditExpiryDateLabel(date);
         const tooltipExpiry = document.createElement('span');
@@ -2072,15 +2158,15 @@ function codexResetCreditsNode(resetCredits) {
         tooltip.append(row);
       });
       const markResetCreditsTooltipOpened = () => {
-        state.resetCreditsTooltipHasOpened = true;
-        state.resetCreditsTooltipActive = true;
+        state.limitDetailTooltipHasOpened = true;
+        state.limitDetailTooltipActive = true;
         infoWrap.classList.add('has-opened');
       };
       const releaseResetCreditsTooltip = () => {
         requestAnimationFrame(() => {
-          if (infoWrap.matches(':hover, :focus-within')) return;
-          state.resetCreditsTooltipActive = false;
-          flushPendingResetCreditsTooltipRender();
+          if (limitDetailTooltipShouldHoldRender()) return;
+          state.limitDetailTooltipActive = false;
+          flushPendingLimitDetailTooltipRender();
         });
       };
       infoWrap.addEventListener('pointerenter', markResetCreditsTooltipOpened);
@@ -2097,19 +2183,172 @@ function codexResetCreditsNode(resetCredits) {
   return item;
 }
 
-const CURRENCY_SYMBOLS = { CNY: '¥', USD: '$' };
-
-function formatMoney(value, currency) {
-  const number = Number(value);
-  if (!Number.isFinite(number)) return '';
-  const symbol = CURRENCY_SYMBOLS[String(currency || '').toUpperCase()] || '$';
-  return `${symbol}${number.toFixed(2)}`;
+function openrouterSpendEntries(balance) {
+  return [
+    ['Today', optionalFiniteNumber(balance?.todaySpend)],
+    ['Week', optionalFiniteNumber(balance?.weekSpend)],
+    ['Month', optionalFiniteNumber(balance?.monthSpend)],
+    ['All time', optionalFiniteNumber(balance?.allTimeSpend)]
+  ].filter(([, value]) => value !== null);
 }
+
+function limitDetailInfoNode(entries, extraClass = '') {
+  if (!Array.isArray(entries) || entries.length === 0) return null;
+  const infoWrap = document.createElement('span');
+  infoWrap.className = ['limit-detail-tooltip-wrap', extraClass].filter(Boolean).join(' ');
+  infoWrap.classList.toggle('has-opened', state.limitDetailTooltipHasOpened);
+  const info = document.createElement('span');
+  info.className = 'limit-detail-tooltip-trigger';
+  info.textContent = 'i';
+  info.tabIndex = 0;
+  info.setAttribute(
+    'aria-label',
+    entries.map(([entryLabel, value]) => `${entryLabel}: ${value}`).join(', ')
+  );
+  const tooltip = document.createElement('span');
+  tooltip.className = 'limit-detail-tooltip';
+  tooltip.setAttribute('role', 'tooltip');
+  entries.forEach(([entryLabel, value]) => {
+    const row = document.createElement('span');
+    row.className = 'limit-detail-tooltip-row';
+    const tooltipLabel = document.createElement('span');
+    tooltipLabel.textContent = entryLabel;
+    const tooltipValue = document.createElement('span');
+    tooltipValue.textContent = value;
+    row.append(tooltipLabel, tooltipValue);
+    tooltip.append(row);
+  });
+  const markOpened = () => {
+    state.limitDetailTooltipHasOpened = true;
+    state.limitDetailTooltipActive = true;
+    infoWrap.classList.add('has-opened');
+  };
+  const release = () => {
+    requestAnimationFrame(() => {
+      if (limitDetailTooltipShouldHoldRender()) return;
+      state.limitDetailTooltipActive = false;
+      flushPendingLimitDetailTooltipRender();
+    });
+  };
+  infoWrap.addEventListener('pointerenter', markOpened);
+  infoWrap.addEventListener('focusin', markOpened);
+  infoWrap.addEventListener('pointerleave', release);
+  infoWrap.addEventListener('focusout', release);
+  infoWrap.append(info, tooltip);
+  return infoWrap;
+}
+
+function openrouterSpendNode(balance) {
+  const entries = openrouterSpendEntries(balance);
+  if (entries.length === 0) return null;
+  const currency = balance?.currency || 'USD';
+  const preferredSummary = entries.filter(([label]) => label === 'Today' || label === 'Month');
+  const summaryEntries = preferredSummary.length > 0 ? preferredSummary : entries.slice(0, 2);
+  const summaryText = summaryEntries
+    .map(([label, value]) => `${label} ${formatMoney(value, currency)}`)
+    .join(' · ');
+
+  const item = document.createElement('div');
+  item.className = 'limit-window limit-window-wide limit-window-note limit-spend';
+  const line = document.createElement('div');
+  line.className = 'limit-window-text limit-spend-line';
+  const label = document.createElement('span');
+  label.textContent = 'Spend';
+  const right = document.createElement('span');
+  right.className = 'limit-spend-right';
+  const summary = document.createElement('span');
+  summary.className = 'limit-spend-summary';
+  summary.textContent = summaryText;
+  right.append(summary);
+
+  if (entries.length > summaryEntries.length) {
+    right.append(limitDetailInfoNode(
+      entries.map(([entryLabel, value]) => [entryLabel, formatMoney(value, currency)]),
+      'limit-spend-info-wrap'
+    ));
+  }
+
+  line.append(label, right);
+  item.append(line);
+  item.setAttribute(
+    'aria-label',
+    ['Spend', ...entries.map(([entryLabel, value]) => `${entryLabel} ${formatMoney(value, currency)}`)].join(', ')
+  );
+  return item;
+}
+
+function thirdPartySpendNode(provider, quotaWindow) {
+  const balance = provider?.balance || null;
+  const currency = balance?.currency || 'USD';
+  const allTimeSpend = optionalFiniteNumber(balance?.allTimeSpend);
+  const entries = [];
+  const total = optionalFiniteNumber(quotaWindow?.limit);
+  const requestCount = optionalFiniteNumber(balance?.requestCount);
+  const quotaGroup = String(balance?.quotaGroup || '').trim();
+  const expiresAt = balance?.expiresAt ? new Date(balance.expiresAt) : null;
+  if (total !== null) entries.push([t('settings.thirdparty.totalQuota'), formatMoney(total, currency)]);
+  if (requestCount !== null) {
+    entries.push([t('settings.thirdparty.requests'), Math.max(0, Math.trunc(requestCount)).toLocaleString()]);
+  }
+  if (quotaGroup) entries.push([t('settings.thirdparty.group'), quotaGroup]);
+  if (expiresAt && !Number.isNaN(expiresAt.getTime())) {
+    entries.push([t('settings.thirdparty.expires'), expiresAt.toLocaleDateString()]);
+  }
+  if (allTimeSpend === null && entries.length === 0) return null;
+
+  const item = document.createElement('div');
+  item.className = 'limit-window limit-window-wide limit-window-note limit-spend';
+  const line = document.createElement('div');
+  line.className = 'limit-window-text limit-spend-line';
+  const label = document.createElement('span');
+  label.textContent = allTimeSpend === null ? 'Details' : 'Spend';
+  const right = document.createElement('span');
+  right.className = 'limit-spend-right';
+  if (allTimeSpend !== null) {
+    const summary = document.createElement('span');
+    summary.className = 'limit-spend-summary';
+    summary.textContent = `All time ${formatMoney(allTimeSpend, currency)}`;
+    right.append(summary);
+  }
+  const infoNode = limitDetailInfoNode(entries, 'limit-spend-info-wrap');
+  if (infoNode) right.append(infoNode);
+  line.append(label, right);
+  item.append(line);
+  item.setAttribute(
+    'aria-label',
+    [
+      allTimeSpend === null ? 'Details' : 'Spend',
+      ...(allTimeSpend === null ? [] : [`All time ${formatMoney(allTimeSpend, currency)}`]),
+      ...entries.map(([entryLabel, value]) => `${entryLabel} ${value}`)
+    ].join(', ')
+  );
+  return item;
+}
+
+const {
+  creditsMeterPercent,
+  formatCompactMoney,
+  formatMoney
+} = window.TokenMonitorLimitBalanceDisplay;
 
 function optionalFiniteNumber(value) {
   if (value === null || value === undefined || value === '') return null;
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
+}
+
+function openrouterCreditsWindow(provider) {
+  const windows = Array.isArray(provider?.windows) ? provider.windows : [];
+  // Older hubs normalized windows before `metric` existed. Keep the label
+  // fallback only for those mixed-version payloads.
+  return windows.find((window) => window?.metric === 'credits')
+    || windows.find((window) => !window?.metric && window?.label === 'Credits')
+    || null;
+}
+
+function thirdPartyQuotaWindow(provider) {
+  const windows = Array.isArray(provider?.windows) ? provider.windows : [];
+  return windows.find((window) => window?.metric === 'credits') || null;
 }
 
 function formatLimitWindowValue(window, fillPercent, hasPercent, showUsed) {
@@ -2126,8 +2365,15 @@ function formatLimitWindowValue(window, fillPercent, hasPercent, showUsed) {
 
 function formatHomeLimitWindowValue(window, showUsed) {
   if (window?.planStatus === 'expired') return t('limits.mimo.planExpired');
-  if (window?.kind === 'balance') {
-    return `${formatMoney(window.amount, window.currency)} left`;
+  // A credits window's headline value is money. Its percentage denominator is
+  // lifetime spend, which reads as a quota but isn't one.
+  if (window?.metric === 'credits') {
+    if (window.remaining == null) {
+      return String(window.detail || '').toLowerCase() === 'unlimited'
+        ? t('settings.thirdparty.unlimited')
+        : (window.detail || '--');
+    }
+    return formatCompactMoney(window.remaining, window.currency);
   }
   const percent = limitFillPercent(window?.remainingPercent, window?.usedPercent, showUsed);
   return `${formatPercent(percent)} ${limitModeSuffix(showUsed)}`;
@@ -2143,14 +2389,6 @@ function formatWecodeAmountDetail(window) {
   if (Number.isFinite(used)) parts.push(`${t('home.used')} ${used.toFixed(2)}`);
   if (Number.isFinite(remaining)) parts.push(`${t('home.wecode.remaining')} ${remaining.toFixed(2)}`);
   return parts.join(' · ');
-}
-
-function balanceRemainingWindow(balance) {
-  const amount = Math.max(0, Number(balance?.amount || 0));
-  const spend = Math.max(0, Number(balance?.monthSpend || 0));
-  const total = amount + spend;
-  const remainingPercent = total > 0 ? (amount / total) * 100 : 100;
-  return { remainingPercent };
 }
 
 function mimoTokenPlanWindowFromBalance(balance) {
@@ -2641,15 +2879,97 @@ function renderProviderWindows(provider, color) {
       node.classList.add('limit-window-wide');
       windows.append(node);
     }
+  } else if (provider.provider === 'openrouter') {
+    windows.classList.add('limit-windows-openrouter');
+    const balance = provider.balance || null;
+    const currency = balance?.currency || 'USD';
+    const balanceAmount = optionalFiniteNumber(balance?.amount);
+    const creditsWindow = openrouterCreditsWindow(provider);
+    if (balanceAmount !== null) {
+      const balanceWindow = creditsWindow || (balanceAmount === 0
+        ? { usedPercent: 100, remainingPercent: 0, showMeter: true }
+        : { showMeter: false });
+      const balanceNode = limitWindowNode(
+        'Balance',
+        { ...balanceWindow, label: 'Balance' },
+        color,
+        0.95,
+        formatMoney(balanceAmount, currency)
+      );
+      balanceNode.classList.add('limit-window-wide', 'limit-window-no-reset');
+      windows.append(balanceNode);
+    }
+    for (const quotaWindow of (provider.windows || []).filter((window) => window !== creditsWindow)) {
+      const hasMeter = quotaWindow?.showMeter !== false;
+      const remaining = optionalFiniteNumber(quotaWindow?.remaining);
+      const limit = optionalFiniteNumber(quotaWindow?.limit);
+      const absoluteDetail = hasMeter && remaining !== null && limit !== null
+        ? `${formatMoney(remaining, 'USD')} left · ${formatMoney(limit, 'USD')} total`
+        : '';
+      const valueOverride = hasMeter ? null : (quotaWindow?.detail || '—');
+      const node = limitWindowNode(
+        quotaWindow?.label || 'Usage',
+        quotaWindow,
+        color,
+        hasMeter ? 0.85 : 0.6,
+        valueOverride,
+        absoluteDetail
+      );
+      node.classList.add('limit-window-wide');
+      if (!hasMeter) node.classList.add('limit-window-no-reset');
+      windows.append(node);
+    }
+    const spendNode = openrouterSpendNode(balance);
+    if (spendNode) windows.append(spendNode);
+  } else if (provider.provider === 'thirdparty') {
+    windows.classList.add('limit-windows-thirdparty');
+    const balance = provider.balance || null;
+    const currency = balance?.currency || 'USD';
+    const balanceAmount = optionalFiniteNumber(balance?.amount);
+    const quotaWindow = thirdPartyQuotaWindow(provider);
+    const balanceLabel = quotaWindow?.label || 'Balance';
+    if (balanceAmount !== null) {
+      const balanceValue = formatMoney(balanceAmount, currency);
+      const balanceNode = limitWindowNode(
+        balanceLabel,
+        { ...(quotaWindow || { showMeter: false }), label: balanceLabel },
+        color,
+        0.95,
+        balanceValue
+      );
+      balanceNode.classList.add('limit-window-wide', 'limit-window-no-reset');
+      windows.append(balanceNode);
+    } else if (quotaWindow?.showMeter === false && quotaWindow.detail) {
+      const value = String(quotaWindow.detail).toLowerCase() === 'unlimited'
+        ? t('settings.thirdparty.unlimited')
+        : quotaWindow.detail;
+      const balanceNode = limitWindowNode(
+        balanceLabel,
+        { ...quotaWindow, label: balanceLabel },
+        color,
+        0.95,
+        value
+      );
+      balanceNode.classList.add('limit-window-wide', 'limit-window-no-reset');
+      windows.append(balanceNode);
+    }
+    const spendNode = thirdPartySpendNode(provider, quotaWindow);
+    if (spendNode) windows.append(spendNode);
   } else if (provider.provider === 'deepseek') {
-    // DeepSeek is pay-as-you-go: render the prepaid balance as a meter so the
-    // provider uses the same visual language as fixed quota windows.
+    // DeepSeek does not expose a fixed quota denominator. This intentionally
+    // visualizes the balance relative to this month's inferred starting funds:
+    // current / (current + observed month spend).
     windows.classList.add('limit-windows-deepseek');
     const balance = provider.balance || null;
     if (balance) {
       const currency = balance.currency;
-      const balanceNode = limitWindowNode('Balance', balanceRemainingWindow(balance), color, 0.95,
-        `${formatMoney(balance.amount, currency)} left`);
+      const balanceNode = limitWindowNode(
+        'Balance',
+        { remainingPercent: creditsMeterPercent(provider, null) },
+        color,
+        0.95,
+        formatMoney(balance.amount, currency)
+      );
       balanceNode.classList.add('limit-window-wide', 'limit-window-no-reset');
       windows.append(balanceNode);
 
@@ -2872,9 +3192,48 @@ function renderLimitProviderRow(id, label, provider, color, options = {}) {
   return row;
 }
 
-function codexAccountTitle(provider, index) {
-  const email = String(provider?.accountEmail || '').trim();
-  if (email) return state.settings?.maskLimitAccountEmails ? accountIdentityApi.maskEmailAddress(email) : email;
+// Every limits surface (the limits panel and the Home cards) resolves account
+// titles here. One table keeps a provider from masking its email on one surface
+// while leaking it on the other, and from rendering two different titles for the
+// same account. Providers identified by email need no entry — the default below
+// already masks them.
+const LIMIT_ACCOUNT_TITLES = {
+  codex: codexAccountTitle,
+  opencode: opencodeAccountTitle,
+  openrouter: (provider, index) => namedApiAccountTitle(provider, index, 'openrouter'),
+  thirdparty: (provider, index) => namedApiAccountTitle(provider, index, 'thirdparty'),
+  wecode: (provider, index) => namedApiAccountTitle(provider, index, 'wecode')
+};
+
+function limitAccountTitle(id, provider, index, providerEntries = [provider]) {
+  const resolve = LIMIT_ACCOUNT_TITLES[String(id || '').trim().toLowerCase()];
+  return resolve
+    ? resolve(provider, index, providerEntries)
+    : limitAccountDefaultTitle(provider, index, providerEntries);
+}
+
+// maskLimitAccountEmails is display-only: it hides the address on the limits
+// surfaces without changing what is collected, synced, or stored.
+function limitAccountEmailsMasked() {
+  return state.settings?.maskLimitAccountEmails === true;
+}
+
+function limitAccountDefaultTitle(provider, index, providerEntries = [provider]) {
+  return accountIdentityApi.accountTitleLabel(provider, providerEntries, {
+    maskEmail: limitAccountEmailsMasked(),
+    index
+  }) || `Account ${index + 1}`;
+}
+
+function codexAccountTitle(provider, index, providers = [provider]) {
+  const label = accountIdentityApi.codexAccountDisplayLabel(provider, providers, {
+    maskEmail: limitAccountEmailsMasked(),
+    index,
+    // Limits presents raw account data such as email and Plus/Pro labels, so
+    // keep the provider's canonical English workspace name on this surface.
+    personalWorkspaceLabel: 'Personal'
+  });
+  if (label) return label;
   // Never fall back to the plan label here — "Plus" as a title reads like an
   // account name. The plan still shows on the right via limitProviderPlan().
   return `Account ${index + 1}`;
@@ -2885,13 +3244,13 @@ function renderCodexAccountGroup(label, providers, color) {
   row.className = `limit-row limit-row-group${providers.some((provider) => provider.stale) ? ' stale' : ''}`;
   const groupProvider = { provider: 'codex', status: 'ok', windows: [] };
   const head = renderLimitProviderHead('codex', label, groupProvider, color, {
-    planText: `${providers.length} accounts`,
+    planText: t('settings.codex.nAccounts', { count: providers.length }),
     hideMeta: true
   });
   const accountList = document.createElement('div');
   accountList.className = 'limit-account-list';
   providers.forEach((provider, index) => {
-    accountList.append(renderLimitProviderRow('codex', codexAccountTitle(provider, index), provider, color, {
+    accountList.append(renderLimitProviderRow('codex', limitAccountTitle('codex', provider, index, providers), provider, color, {
       accountRow: true,
       accountTitle: true,
       allowSystemSwitch: true,
@@ -2903,10 +3262,25 @@ function renderCodexAccountGroup(label, providers, color) {
   return row;
 }
 
-function mimoAccountTitle(provider, index) {
-  const email = String(provider?.accountEmail || '').trim();
-  if (email) return state.settings?.maskLimitAccountEmails ? accountIdentityApi.maskEmailAddress(email) : email;
-  return `Account ${index + 1}`;
+function renderClaudeAccountGroup(label, providers, color) {
+  const row = document.createElement('div');
+  row.className = `limit-row limit-row-group${providers.some((provider) => provider.stale) ? ' stale' : ''}`;
+  const groupProvider = { provider: 'claude', status: 'ok', windows: [] };
+  const head = renderLimitProviderHead('claude', label, groupProvider, color, {
+    planText: t('settings.claude.nAccounts', { count: providers.length }),
+    hideMeta: true
+  });
+  const accountList = document.createElement('div');
+  accountList.className = 'limit-account-list';
+  providers.forEach((provider, index) => {
+    accountList.append(renderLimitProviderRow('claude', limitAccountTitle('claude', provider, index, providers), provider, color, {
+      accountRow: true,
+      accountTitle: true,
+      showIcon: false
+    }));
+  });
+  row.append(head, accountList);
+  return row;
 }
 
 function mimoSettingsAccountTitle(account, index) {
@@ -2918,13 +3292,13 @@ function renderMimoAccountGroup(label, providers, color) {
   row.className = `limit-row limit-row-group${providers.some((provider) => provider.stale) ? ' stale' : ''}`;
   const groupProvider = { provider: 'mimo', status: 'ok', windows: [] };
   const head = renderLimitProviderHead('mimo', label, groupProvider, color, {
-    planText: `${providers.length} accounts`,
+    planText: t('settings.mimo.nAccounts', { count: providers.length }),
     hideMeta: true
   });
   const accountList = document.createElement('div');
   accountList.className = 'limit-account-list';
   providers.forEach((provider, index) => {
-    accountList.append(renderLimitProviderRow('mimo', mimoAccountTitle(provider, index), provider, color, {
+    accountList.append(renderLimitProviderRow('mimo', limitAccountTitle('mimo', provider, index, providers), provider, color, {
       accountRow: true,
       accountTitle: true,
       showIcon: false
@@ -2961,7 +3335,7 @@ function renderOpenCodeAccountGroup(label, providers, color) {
       && provider?.accountLabel
       && provider.accountLabel !== 'Go'
       && provider.accountLabel !== 'Zen';
-    accountList.append(renderLimitProviderRow('opencode', opencodeAccountTitle(provider, index), provider, color, {
+    accountList.append(renderLimitProviderRow('opencode', limitAccountTitle('opencode', provider, index, providers), provider, color, {
       accountRow: true,
       showIcon: false,
       ...(legacyProfileLabel ? { planText: '' } : {})
@@ -2971,40 +3345,79 @@ function renderOpenCodeAccountGroup(label, providers, color) {
   return row;
 }
 
-function wecodeAccountTitle(provider, index) {
-  return String(provider?.accountName || '').trim() || `Account ${index + 1}`;
+function namedApiAccountTitle(provider, index, providerId) {
+  const accountName = String(provider?.accountName || provider?.accountLabel || '').trim();
+  if (accountName.toLowerCase() === 'environment') return t(`settings.${providerId}.environment`);
+  return accountName || `Account ${index + 1}`;
 }
 
-function renderWecodeAccountGroup(label, providers, color) {
+function thirdPartyPlanText(provider) {
+  if (provider?.status !== 'ok') return undefined;
+  const planLabel = String(provider?.planLabel || '').toLowerCase();
+  if (planLabel === 'account') return 'Account';
+  if (planLabel === 'api key') return 'API key';
+  if (planLabel === 'custom') return 'Custom';
+  return undefined;
+}
+
+function renderNamedApiAccountGroup(providerId, label, providers, color, options = {}) {
   const row = document.createElement('div');
   row.className = `limit-row limit-row-group${providers.some((provider) => provider.stale) ? ' stale' : ''}`;
-  const groupProvider = { provider: 'wecode', status: 'ok', windows: [] };
-  const head = renderLimitProviderHead('wecode', label, groupProvider, color, {
-    planText: `${providers.length} accounts`,
+  const groupProvider = { provider: providerId, status: 'ok', windows: [] };
+  const head = renderLimitProviderHead(providerId, label, groupProvider, color, {
+    planText: options.groupPlanText,
     hideMeta: true
   });
   const accountList = document.createElement('div');
   accountList.className = 'limit-account-list';
   providers.forEach((provider, index) => {
-    accountList.append(renderLimitProviderRow('wecode', wecodeAccountTitle(provider, index), provider, color, {
-      accountRow: true,
-      showIcon: false
-    }));
+    accountList.append(renderLimitProviderRow(
+      providerId,
+      limitAccountTitle(providerId, provider, index, providers),
+      provider,
+      color,
+      {
+        accountRow: true,
+        showIcon: false,
+        ...(options.planTextForProvider
+          ? { planText: options.planTextForProvider(provider) }
+          : {})
+      }
+    ));
   });
   row.append(head, accountList);
   return row;
 }
 
+function renderOpenRouterAccountGroup(label, providers, color) {
+  return renderNamedApiAccountGroup('openrouter', label, providers, color, {
+    groupPlanText: t('settings.openrouter.nAccounts', { count: providers.length })
+  });
+}
+
+function renderThirdPartyAccountGroup(label, providers, color) {
+  return renderNamedApiAccountGroup('thirdparty', label, providers, color, {
+    groupPlanText: t('settings.thirdparty.nAccounts', { count: providers.length }),
+    planTextForProvider: thirdPartyPlanText
+  });
+}
+
+function renderWecodeAccountGroup(label, providers, color) {
+  return renderNamedApiAccountGroup('wecode', label, providers, color, {
+    groupPlanText: `${providers.length} accounts`
+  });
+}
+
 function renderLimits() {
   if (!els.limitsPanel) return;
-  const holdResetCreditsTooltipRender = resetCreditsTooltipShouldHoldRender();
+  const holdLimitDetailTooltipRender = limitDetailTooltipShouldHoldRender();
   const holdCodexSwitchPopoverRender = codexSwitchPopoverShouldHoldRender();
-  if (holdResetCreditsTooltipRender || holdCodexSwitchPopoverRender) {
-    if (holdResetCreditsTooltipRender) state.resetCreditsTooltipRenderPending = true;
+  if (holdLimitDetailTooltipRender || holdCodexSwitchPopoverRender) {
+    if (holdLimitDetailTooltipRender) state.limitDetailTooltipRenderPending = true;
     if (holdCodexSwitchPopoverRender) state.codexSwitchPopoverRenderPending = true;
     return;
   }
-  state.resetCreditsTooltipRenderPending = false;
+  state.limitDetailTooltipRenderPending = false;
   state.codexSwitchPopoverRenderPending = false;
   const limitsEnabled = state.settings?.limitsEnabled !== false;
   const enabled = enabledLimitProviderSet();
@@ -3026,12 +3439,24 @@ function renderLimits() {
       ? providerEntries
       : { provider: id, status: 'disabled', windows: [] };
     const color = id === 'mimo' ? clientColors.xiaomi : (clientColors[id] || clientColors.default);
+    if (id === 'claude' && Array.isArray(visibleProviders) && visibleProviders.length > 1) {
+      nodes.push(renderClaudeAccountGroup(label, visibleProviders, color));
+      continue;
+    }
     if (id === 'codex' && Array.isArray(visibleProviders) && visibleProviders.length > 1) {
       nodes.push(renderCodexAccountGroup(label, visibleProviders, color));
       continue;
     }
     if (id === 'opencode' && Array.isArray(visibleProviders) && visibleProviders.length > 1) {
       nodes.push(renderOpenCodeAccountGroup(label, visibleProviders, color));
+      continue;
+    }
+    if (id === 'openrouter' && Array.isArray(visibleProviders) && visibleProviders.length > 1) {
+      nodes.push(renderOpenRouterAccountGroup(label, visibleProviders, color));
+      continue;
+    }
+    if (id === 'thirdparty' && Array.isArray(visibleProviders) && visibleProviders.length > 1) {
+      nodes.push(renderThirdPartyAccountGroup(label, visibleProviders, color));
       continue;
     }
     if (id === 'mimo' && Array.isArray(visibleProviders) && visibleProviders.length > 1) {
@@ -3043,10 +3468,12 @@ function renderLimits() {
       continue;
     }
     const provider = Array.isArray(visibleProviders) ? visibleProviders[0] : visibleProviders;
-    nodes.push(renderLimitProviderRow(id, label, provider, color, id === 'codex' ? {
-      accountTitle: true,
-      allowSystemSwitch: true
-    } : undefined));
+    const rowOptions = id === 'codex'
+      ? { accountTitle: true, allowSystemSwitch: true }
+      : id === 'thirdparty'
+        ? { planText: thirdPartyPlanText(provider) }
+        : undefined;
+    nodes.push(renderLimitProviderRow(id, label, provider, color, rowOptions));
   }
   els.limitsPanel.replaceChildren(...nodes);
 }
@@ -3727,13 +4154,13 @@ function homeModuleShell(kind, title, viewId, meta = '') {
   module.setAttribute('aria-label', title);
   module.addEventListener('click', (event) => {
     if (event.target.closest('.home-activity-scroll')) return;
-    renderBreakdownChange(viewId);
+    renderBreakdownChange(viewId, { fromHome: true });
   });
   module.addEventListener('keydown', (event) => {
     if (event.target !== module) return;
     if (event.key !== 'Enter' && event.key !== ' ') return;
     event.preventDefault();
-    renderBreakdownChange(viewId);
+    renderBreakdownChange(viewId, { fromHome: true });
   });
   const head = document.createElement('div');
   head.className = 'home-module-head';
@@ -3762,14 +4189,6 @@ function homeModuleShell(kind, title, viewId, meta = '') {
   return { module, body };
 }
 
-function homeLimitAccountTitle(id, provider, index) {
-  if (id === 'codex') return codexAccountTitle(provider, index);
-  if (id === 'mimo') return mimoAccountTitle(provider, index);
-  if (id === 'opencode') return opencodeAccountTitle(provider, index);
-  if (id === 'wecode') return wecodeAccountTitle(provider, index);
-  return String(provider?.accountEmail || provider?.accountName || '').trim() || `Account ${index + 1}`;
-}
-
 function homeLimitRows() {
   const enabled = enabledLimitProviderSet();
   const providerOrder = state.settings?.homeLimitProviderOrder || state.settings?.limitProviderOrder;
@@ -3791,7 +4210,7 @@ function homeLimitRows() {
       const option = providerOptions.find((entry) => entry.id === id);
       const providerTitle = option?.label || id;
       if (providerEntries.length > 1) {
-        const accountTitle = homeLimitAccountTitle(id, provider, index);
+        const accountTitle = limitAccountTitle(id, provider, index, providerEntries);
         return state.settings?.showHomeLimitProviderNames === true || state.settings?.showToolIcons === false
           ? `${providerTitle} · ${accountTitle}`
           : accountTitle;
@@ -3815,7 +4234,6 @@ function homeLimitWindowLabel(window, providerId = '', visibleWindows = []) {
     monthly: 'home.limit.monthly'
   }[window.kind];
   if (key) return t(key);
-  if (window?.kind === 'balance') return 'Balance';
   return window.label;
 }
 
@@ -4344,8 +4762,17 @@ function renderHomeTrendsModule() {
     cell: activityLayout.cell,
     gap: activityLayout.gap
   });
-  const activeDays = activity.cells.filter((cell) => cell.tokens > 0).length;
-  const { module, body } = homeModuleShell('trends', t('home.activity'), 'trends', t('home.activeDays', { count: activeDays }));
+  const summaryActiveDays = state.stats?.historyPreview?.summary?.activeDays;
+  const activeDaysWindow = state.settings?.homeActiveDaysWindow || 'all';
+  const displayActiveDays = activeDaysWindow === 'year'
+    ? activity.cells.filter((cell) => cell.tokens > 0).length
+    : (Number.isFinite(summaryActiveDays)
+        ? summaryActiveDays
+        : activity.cells.filter((cell) => cell.tokens > 0).length);
+  const activeDaysLabel = activeDaysWindow === 'year'
+    ? t('home.activeDaysYear', { count: displayActiveDays })
+    : t('home.activeDays', { count: displayActiveDays });
+  const { module, body } = homeModuleShell('trends', t('home.activity'), 'trends', activeDaysLabel);
   const activityScroll = document.createElement('div');
   activityScroll.className = 'home-activity-scroll';
   activityScroll.tabIndex = 0;
@@ -4471,6 +4898,7 @@ function render() {
   if (!state.refreshBusy && !state.refreshFeedbackTimer) setRefreshButtonState('idle');
   els.shell.classList.toggle('session-mode', state.breakdown === 'session');
   els.shell.classList.toggle('home-mode', state.breakdown === 'home');
+  els.viewBackRow?.classList.toggle('hidden', state.breakdown === 'home' || !state.homeReturnVisible);
   // Leaving Home only CSS-hides the panel, so its heatmap scroller never sees a
   // pointerleave — dismiss the body-level tooltip here (renderHome covers rerenders).
   if (state.breakdown !== 'home') hideHomeActivityTooltip();
@@ -4678,8 +5106,11 @@ async function refreshStats(options = {}) {
     renderLimitProviderCheckboxes();
     renderToolPreferences();
     renderWslPanel();
+    updateOpenRouterProfilesStatus();
+    updateThirdPartyProfilesStatus();
     renderDeepseekStatus();
     renderMinimaxStatus();
+    renderExternalProviderStatus('claude');
     renderExternalProviderStatus('zai');
     renderExternalProviderStatus('zaiteam');
     renderExternalProviderStatus('volcengine');
@@ -4741,6 +5172,7 @@ function setBreakdown(breakdown, options = {}) {
     publishViewState();
     return false;
   }
+  state.homeReturnVisible = options.fromHome === true && state.breakdown === 'home' && next !== 'home';
   state.breakdown = next;
   state.rowSignature = '';
   publishViewState();
@@ -5237,7 +5669,7 @@ function applyFloatingBubbleState(payload = {}) {
   renderFloatingBubbleContent();
 }
 
-const BUBBLE_CONTENT_VALUES = ['icon', 'tokens', 'cost', 'both', 'tokensAll', 'costAll', 'bothAll', 'limitsAllSessions', 'bars', 'barsSession', 'barsWeekly', 'barsAllSessions'];
+const BUBBLE_CONTENT_VALUES = ['icon', 'tokens', 'cost', 'both', 'tokensAll', 'costAll', 'bothAll', 'limitsAllSessions', 'bars', 'barsSession', 'barsWeekly', 'barsAllSessions', 'custom'];
 function normalizeTrayContentValue(value) {
   return BUBBLE_CONTENT_VALUES.includes(value) ? value : 'icon';
 }
@@ -5268,7 +5700,9 @@ function renderFloatingBubbleContent() {
     const dataUrl = state.stats
       ? trayDataUrlForMode(mode, 44, floatingBubbleGeneratedColors(), {
           contentOnly: mode === 'barsAllSessions' || mode === 'limitsAllSessions',
-          providerContrastHalo: true
+          providerContrastHalo: true,
+          showProviderBadge: false,
+          layout: mode === 'custom' ? state.settings?.floatingBubbleCustomLayout : undefined
         })
       : null;
     if (dataUrl) {
@@ -5629,7 +6063,8 @@ function syncSettingsForm() {
   els.limitsRefreshInput.value = String(LIMIT_REFRESH_OPTIONS.includes(Number(state.settings.limitsRefreshMs)) ? state.settings.limitsRefreshMs : 300000);
   els.showLimitSourceInput.checked = Boolean(state.settings.showLimitSource);
   els.maskLimitAccountEmailsInput.checked = Boolean(state.settings.maskLimitAccountEmails);
-  els.showLimitUsedInput.value = state.settings.showLimitUsed ? 'used' : 'remaining';
+  const showLimitUsed = state.settings.showLimitUsed ? 'used' : 'remaining';
+  for (const input of els.showLimitUsedInputs || []) input.checked = input.value === showLimitUsed;
   if (els.syncUploadIntervalInput) {
     const value = Number(state.settings.syncUploadIntervalMs);
     const allowed = Array.from(els.syncUploadIntervalInput.options, (option) => Number(option.value));
@@ -5647,6 +6082,7 @@ function syncSettingsForm() {
   }
   if (els.wslScanInput) els.wslScanInput.checked = state.settings.wslScanEnabled !== false;
   if (els.sessionUsageArchiveInput) els.sessionUsageArchiveInput.checked = state.settings.sessionUsageArchiveEnabled !== false;
+  renderAutomaticAppUpdateControl();
   renderSessionUsageArchiveStatus();
   const exportAutoOn = Boolean(state.settings.exportAutoEnabled);
   const exportDir = state.settings.exportDir || '';
@@ -5676,19 +6112,21 @@ function syncSettingsForm() {
   els.discordRpcInput.checked = Boolean(state.settings.discordRpcEnabled);
   syncWindowBehaviorControls();
   els.floatingBubbleInput.checked = state.settings.floatingBubbleEnabled === true;
-  if (els.floatingBubbleTriggerInput) els.floatingBubbleTriggerInput.value = state.settings.floatingBubbleTrigger === 'hover' ? 'hover' : 'click';
+  const floatingBubbleTrigger = state.settings.floatingBubbleTrigger === 'hover' ? 'hover' : 'click';
+  for (const input of els.floatingBubbleTriggerInputs || []) input.checked = input.value === floatingBubbleTrigger;
   if (els.floatingBubbleContentInput) els.floatingBubbleContentInput.value = normalizeTrayContentValue(state.settings.floatingBubbleContent);
   els.floatingBubbleOptions?.classList.toggle('hidden', state.settings.floatingBubbleEnabled !== true);
   const showTrayIcon = state.settings.showTrayIcon !== false;
   if (els.showTrayIconInput) els.showTrayIconInput.checked = showTrayIcon;
   els.trayModeInput.disabled = !showTrayIcon;
   els.trayModeInput.checked = showTrayIcon && Boolean(state.settings.trayMode);
-  els.trayContentInput.value = ['tokens', 'cost', 'both', 'tokensAll', 'costAll', 'bothAll', 'limitsAllSessions', 'bars', 'barsSession', 'barsWeekly', 'barsAllSessions', 'icon'].includes(state.settings.trayContent) ? state.settings.trayContent : 'tokens';
+  els.trayContentInput.value = ['tokens', 'cost', 'both', 'tokensAll', 'costAll', 'bothAll', 'limitsAllSessions', 'bars', 'barsSession', 'barsWeekly', 'barsAllSessions', 'icon', 'custom'].includes(state.settings.trayContent) ? state.settings.trayContent : 'tokens';
   els.trayContentInput.disabled = !showTrayIcon;
   els.showTrayProviderBadgeInput.checked = state.settings.showTrayProviderBadge === true;
   els.showTrayProviderBadgeInput.disabled = !showTrayIcon;
   els.trayIconOptions?.classList.toggle('hidden', !showTrayIcon);
   els.trayOptions?.classList.toggle('hidden', !showTrayIcon || !state.settings.trayMode);
+  refreshTrayComposers();
   syncWindowShortcutStatus();
   if (els.startAtLoginInput) {
     els.startAtLoginInput.disabled = !state.appInfo?.loginItemSupported;
@@ -5707,6 +6145,7 @@ function syncSettingsForm() {
   syncSliderRows();
   renderDeepseekStatus();
   renderMinimaxStatus();
+  renderExternalProviderStatus('claude');
   renderExternalProviderStatus('zai');
   renderExternalProviderStatus('zaiteam');
   renderExternalProviderStatus('volcengine');
@@ -5721,6 +6160,8 @@ function syncSettingsForm() {
   renderLimitProviderCheckboxes();
   renderSettingsSummaries();
   renderOpenCodeProfiles();
+  renderOpenRouterProfiles();
+  renderThirdPartyProfiles();
   applyVendorColorOverrides(state.settings.vendorColors);
   applyAppearanceSettings(state.settings);
   buildAppearanceColorControls();
@@ -5744,6 +6185,16 @@ function hiddenClientSet() {
 
 function hiddenViewSet() {
   return new Set(viewDisplayPreferencesApi.normalizeHiddenViews(state.settings?.hiddenViews, VIEW_DISPLAY_OPTIONS).split(',').filter(Boolean));
+}
+
+// Views the user cannot reach because the feature behind them is switched off.
+// The settings rows, the summary count and the last-visible-view guard all read
+// this one list so they cannot disagree about what is on screen.
+function disabledViewIds() {
+  const ids = [];
+  if (state.settings?.historyEnabled === false) ids.push('trends');
+  if (state.settings?.projectsEnabled === false) ids.push('project');
+  return ids;
 }
 
 function hiddenHomeModuleSet() {
@@ -5956,14 +6407,17 @@ function renderViewPreferences() {
   if (els.resetViewDisplayOrderButton) els.resetViewDisplayOrderButton.disabled = !hasCustomOrder;
   if (els.showAllViewsButton) els.showAllViewsButton.disabled = !hasHiddenViews;
   els.viewDisplayList.replaceChildren();
-  const visibleCount = views.filter((view) => !hidden.has(view.id)).length;
+  const disabled = new Set(disabledViewIds());
+  const visibleCount = viewDisplayPreferencesApi.visibleViewCount({
+    views,
+    hiddenValue: state.settings?.hiddenViews,
+    disabledIds: [...disabled]
+  });
   for (const view of views) {
     const id = view.id;
     const label = viewLabel(view);
     const isHidden = hidden.has(id);
-    const historyEnabled = state.settings?.historyEnabled !== false;
-    const projectsEnabled = state.settings?.projectsEnabled !== false;
-    const isDisabled = (id === 'trends' && !historyEnabled) || (id === 'project' && !projectsEnabled);
+    const isDisabled = disabled.has(id);
     const isEffectivelyHidden = isHidden || isDisabled;
     const row = document.createElement('div');
     row.className = 'view-preference-row';
@@ -6119,7 +6573,7 @@ function renderViewPreferences() {
 function renderHomeLimitProviderList() {
   const wrap = document.createElement('div');
   wrap.id = 'homeLimitProviderList';
-  wrap.className = 'home-limit-provider-list';
+  wrap.className = 'settings-nested-list home-limit-provider-list';
   const hidden = hiddenHomeLimitProviderSet();
   const enabled = enabledLimitProviderSet();
   const providers = limitProviderOrderApi
@@ -6237,7 +6691,7 @@ function renderHomeLimitProviderList() {
 function renderHomeSettingsList() {
   const wrap = document.createElement('div');
   wrap.id = 'homeSettingsList';
-  wrap.className = 'home-settings-list';
+  wrap.className = 'settings-nested-list home-settings-list';
   const hidden = hiddenHomeModuleSet();
   const modules = homeModulePreferencesApi.orderedHomeModules(HOME_MODULE_OPTIONS, state.settings?.homeModuleOrder);
   const hasCustomOrder = homeModulePreferencesApi.normalizeHomeModuleOrder(state.settings?.homeModuleOrder, HOME_MODULE_OPTIONS).join(',') !== homeModulePreferencesApi.DEFAULT_HOME_MODULE_ORDER;
@@ -6349,14 +6803,16 @@ function renderHomeSettingsList() {
 }
 
 function renderHomeActivitySettings() {
-  const row = document.createElement('div');
-  row.className = 'home-activity-settings';
-  const label = document.createElement('span');
-  label.textContent = t('settings.home.heatmapColor');
-  const options = document.createElement('div');
-  options.className = 'inline-options';
-  options.setAttribute('role', 'radiogroup');
-  options.setAttribute('aria-label', label.textContent);
+  const frag = document.createDocumentFragment();
+
+  const heatmapRow = document.createElement('div');
+  heatmapRow.className = 'home-activity-settings';
+  const heatmapLabel = document.createElement('span');
+  heatmapLabel.textContent = t('settings.home.heatmapColor');
+  const heatmapOptions = document.createElement('div');
+  heatmapOptions.className = 'inline-options';
+  heatmapOptions.setAttribute('role', 'radiogroup');
+  heatmapOptions.setAttribute('aria-label', heatmapLabel.textContent);
   const currentMetric = state.settings?.heatmapMetric || 'cost';
   for (const metric of ['tokens', 'cost']) {
     const option = document.createElement('label');
@@ -6372,16 +6828,46 @@ function renderHomeActivitySettings() {
     const text = document.createElement('span');
     text.textContent = t(metric === 'tokens' ? 'dashboard.heatmap.tokens' : 'dashboard.heatmap.cost');
     option.append(input, text);
-    options.append(option);
+    heatmapOptions.append(option);
   }
-  row.append(label, options);
-  return row;
+  heatmapRow.append(heatmapLabel, heatmapOptions);
+  frag.append(heatmapRow);
+
+  const daysRow = document.createElement('div');
+  daysRow.className = 'home-activity-settings';
+  const daysLabel = document.createElement('span');
+  daysLabel.textContent = t('settings.home.activeDaysWindow');
+  const daysOptions = document.createElement('div');
+  daysOptions.className = 'inline-options';
+  daysOptions.setAttribute('role', 'radiogroup');
+  daysOptions.setAttribute('aria-label', daysLabel.textContent);
+  const currentDaysWindow = state.settings?.homeActiveDaysWindow || 'all';
+  for (const mode of ['all', 'year']) {
+    const option = document.createElement('label');
+    option.className = 'inline-option';
+    const input = document.createElement('input');
+    input.type = 'radio';
+    input.name = 'homeActiveDaysWindow';
+    input.value = mode;
+    input.checked = currentDaysWindow === mode;
+    input.addEventListener('change', () => {
+      if (input.checked) void saveSettings({ homeActiveDaysWindow: mode }).then(renderHomeIfVisible);
+    });
+    const text = document.createElement('span');
+    text.textContent = t(`settings.home.activeDaysWindow.${mode}`);
+    option.append(input, text);
+    daysOptions.append(option);
+  }
+  daysRow.append(daysLabel, daysOptions);
+  frag.append(daysRow);
+
+  return frag;
 }
 
 function renderTrendSettingsList() {
   const wrap = document.createElement('div');
   wrap.id = 'trendSettingsList';
-  wrap.className = 'trend-settings-list';
+  wrap.className = 'settings-nested-list trend-settings-list';
   const label = document.createElement('label');
   label.className = 'checkbox-label trend-settings-row';
   const input = document.createElement('input');
@@ -6426,7 +6912,7 @@ function renderTrendSettingsList() {
 function renderProjectSettingsList() {
   const wrap = document.createElement('div');
   wrap.id = 'projectSettingsList';
-  wrap.className = 'trend-settings-list';
+  wrap.className = 'settings-nested-list trend-settings-list';
   const label = document.createElement('label');
   label.className = 'checkbox-label trend-settings-row';
   const input = document.createElement('input');
@@ -6467,7 +6953,7 @@ async function setProjectsEnabled(enabled) {
 function renderServiceProviderList() {
   const wrap = document.createElement('div');
   wrap.id = 'serviceProviderList';
-  wrap.className = 'status-provider-list';
+  wrap.className = 'settings-nested-list status-provider-list';
   const hidden = hiddenServiceProviderSet();
   const providers = serviceStatusProviderPreferencesApi.orderedOptions(SERVICE_PROVIDER_OPTIONS, state.settings?.serviceProviderDisplayOrder);
   const hasCustomOrder = serviceStatusProviderPreferencesApi.hasCustomOrder(state.settings?.serviceProviderDisplayOrder);
@@ -7096,6 +7582,13 @@ if (typeof ResizeObserver === 'function') {
 
 els.viewSwitcher?.addEventListener('pointerenter', clearViewSwitcherHoverClose);
 els.viewSwitcher?.addEventListener('pointerleave', scheduleViewSwitcherHoverClose);
+els.backHomeButton?.addEventListener('click', (event) => {
+  if (state.viewSwitcherOpen) setViewSwitcherOpen(false);
+  if (!renderBreakdownChange('home')) return;
+  if (event.detail === 0) {
+    requestAnimationFrame(() => els.viewSwitcher?.querySelector('.view-switcher-current')?.focus());
+  }
+});
 
 window.addEventListener('blur', () => {
   clearViewSwitcherLongPress();
@@ -7118,6 +7611,7 @@ async function init() {
     state.appUpdate = payload;
     renderAppUpdatePill();
     renderSettingsAppUpdateRow();
+    renderAutomaticAppUpdateControl();
     if (els.appUpdatePopover.matches(':popover-open')) renderAppUpdatePopover(payload);
   });
   if (state.appInfo?.loginItemSupported) {
@@ -7280,9 +7774,11 @@ els.maskLimitAccountEmailsInput.addEventListener('change', async () => {
   await saveSettings({ maskLimitAccountEmails: els.maskLimitAccountEmailsInput.checked });
   renderLimits();
 });
-els.showLimitUsedInput.addEventListener('change', async () => {
-  await saveSettings({ showLimitUsed: els.showLimitUsedInput.value === 'used' });
-});
+for (const input of els.showLimitUsedInputs || []) {
+  input.addEventListener('change', async () => {
+    if (input.checked) await saveSettings({ showLimitUsed: input.value === 'used' });
+  });
+}
 els.syncUploadIntervalInput?.addEventListener('change', async () => {
   await saveSettings({ syncUploadIntervalMs: Number(els.syncUploadIntervalInput.value) });
 });
@@ -7414,33 +7910,52 @@ els.swapSettingsRefreshInput.addEventListener('change', () => {
 els.discordRpcInput.addEventListener('change', saveAppearanceFromControls);
 els.windowBehaviorInput.addEventListener('change', () => saveSettings({ windowBehavior: els.windowBehaviorInput.value }));
 els.floatingBubbleInput.addEventListener('change', () => {
+  state.settings.floatingBubbleEnabled = els.floatingBubbleInput.checked;
   els.floatingBubbleOptions?.classList.toggle('hidden', !els.floatingBubbleInput.checked);
+  refreshTrayComposers();
   saveSettings({ floatingBubbleEnabled: els.floatingBubbleInput.checked });
 });
-els.floatingBubbleTriggerInput?.addEventListener('change', () => saveSettings({ floatingBubbleTrigger: els.floatingBubbleTriggerInput.value }));
+for (const input of els.floatingBubbleTriggerInputs || []) {
+  input.addEventListener('change', () => {
+    if (input.checked) void saveSettings({ floatingBubbleTrigger: input.value });
+  });
+}
 els.floatingBubbleContentInput?.addEventListener('change', async () => {
+  state.settings.floatingBubbleContent = els.floatingBubbleContentInput.value;
+  refreshTrayComposers();
   await saveSettings({ floatingBubbleContent: els.floatingBubbleContentInput.value });
   renderFloatingBubbleContent();
 });
 els.showTrayIconInput?.addEventListener('change', () => {
   const showTrayIcon = els.showTrayIconInput.checked;
+  state.settings.showTrayIcon = showTrayIcon;
   els.trayModeInput.disabled = !showTrayIcon;
   if (!showTrayIcon) els.trayModeInput.checked = false;
   els.trayContentInput.disabled = !showTrayIcon;
   els.showTrayProviderBadgeInput.disabled = !showTrayIcon;
   els.trayIconOptions?.classList.toggle('hidden', !showTrayIcon);
   els.trayOptions?.classList.toggle('hidden', !showTrayIcon || !els.trayModeInput.checked);
+  refreshTrayComposers();
   saveSettings({ showTrayIcon, trayMode: showTrayIcon ? els.trayModeInput.checked : false });
 });
 els.trayModeInput.addEventListener('change', () => {
   els.trayOptions?.classList.toggle('hidden', !els.showTrayIconInput?.checked || !els.trayModeInput.checked);
   saveSettings({ trayMode: els.trayModeInput.checked });
 });
-els.trayContentInput.addEventListener('change', () => saveSettings({ trayContent: els.trayContentInput.value }));
-els.showTrayProviderBadgeInput.addEventListener('change', () => saveSettings({ showTrayProviderBadge: els.showTrayProviderBadgeInput.checked }));
+els.trayContentInput.addEventListener('change', () => {
+  state.settings.trayContent = els.trayContentInput.value;
+  refreshTrayComposers();
+  saveSettings({ trayContent: els.trayContentInput.value });
+});
+els.showTrayProviderBadgeInput.addEventListener('change', () => {
+  state.settings.showTrayProviderBadge = els.showTrayProviderBadgeInput.checked;
+  void maybeUpdateBarsIcon();
+  saveSettings({ showTrayProviderBadge: els.showTrayProviderBadgeInput.checked });
+});
 els.windowToggleShortcutValue?.addEventListener('click', startWindowShortcutRecording);
 els.windowToggleShortcutClearButton?.addEventListener('click', () => setWindowToggleShortcut('').catch(() => {}));
 els.startAtLoginInput?.addEventListener('change', () => saveSettings({ startAtLogin: els.startAtLoginInput.checked }));
+els.automaticAppUpdatesInput?.addEventListener('change', () => saveSettings({ automaticAppUpdates: els.automaticAppUpdatesInput.checked }));
 els.glassInput.addEventListener('change', saveAppearanceFromControls);
 els.blurInput.addEventListener('change', saveAppearanceFromControls);
 els.zoomInput.addEventListener('change', saveAppearanceFromControls);
@@ -7506,17 +8021,22 @@ async function runAppUpdateAction() {
 }
 
 els.appUpdatePillAction.addEventListener('click', async () => {
-  if (appUpdateActionMode(state.appUpdate) === 'install') {
-    await runAppUpdateAction();
-    return;
-  }
   if (!renderAppUpdatePopover(state.appUpdate) || typeof els.appUpdatePopover.showPopover !== 'function') {
+    if (appUpdateActionMode(state.appUpdate) === 'install') {
+      const url = state.appUpdate?.latest?.htmlUrl;
+      if (url) await window.tokenMonitor.openExternal(url);
+      return;
+    }
     await runAppUpdateAction();
     return;
   }
   positionAppUpdatePopover();
   els.appUpdatePopover.showPopover();
   els.appUpdatePopoverAction.focus();
+});
+
+els.appUpdatePillRestart.addEventListener('click', async () => {
+  await runAppUpdateAction();
 });
 
 els.appUpdatePillDismiss.addEventListener('click', async () => {
@@ -7650,8 +8170,11 @@ window.tokenMonitor.onStatsPush?.((payload) => {
     renderLimitProviderCheckboxes();
     renderToolPreferences();
     renderWslPanel();
+    updateOpenRouterProfilesStatus();
+    updateThirdPartyProfilesStatus();
     renderDeepseekStatus();
     renderMinimaxStatus();
+    renderExternalProviderStatus('claude');
     renderExternalProviderStatus('zai');
     renderExternalProviderStatus('zaiteam');
     renderExternalProviderStatus('volcengine');
@@ -7689,18 +8212,98 @@ function roundedRectPath(ctx, x, y, w, h, r) {
 }
 
 const trayProviderImages = {};
+const trayProviderImageIds = new WeakMap();
+const trayProviderImageOpticalSamples = new WeakMap();
 const trayProviderIconDeliveryGuard = window.TokenMonitorTrayProviderIcons.createTrayProviderIconDeliveryGuard();
+const trayComposers = {};
+let customTrayClockTimer = null;
 
-function drawProviderImage(ctx, image, x, y, size, contrastHalo = false) {
+function providerImageOpticalSample(image) {
+  const cached = trayProviderImageOpticalSamples.get(image);
+  if (cached) return cached;
+
+  const sampleSize = 128;
+  const canvas = document.createElement('canvas');
+  canvas.width = sampleSize;
+  canvas.height = sampleSize;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  ctx.drawImage(image, 0, 0, sampleSize, sampleSize);
+
+  let bounds = { x: 0, y: 0, width: sampleSize, height: sampleSize };
+  try {
+    const pixels = ctx.getImageData(0, 0, sampleSize, sampleSize).data;
+    let minX = sampleSize;
+    let minY = sampleSize;
+    let maxX = -1;
+    let maxY = -1;
+    for (let y = 0; y < sampleSize; y += 1) {
+      for (let x = 0; x < sampleSize; x += 1) {
+        if (pixels[(y * sampleSize + x) * 4 + 3] <= 12) continue;
+        minX = Math.min(minX, x);
+        minY = Math.min(minY, y);
+        maxX = Math.max(maxX, x);
+        maxY = Math.max(maxY, y);
+      }
+    }
+    if (maxX >= minX && maxY >= minY) {
+      bounds = {
+        x: minX,
+        y: minY,
+        width: maxX - minX + 1,
+        height: maxY - minY + 1
+      };
+    }
+  } catch (_) {
+    // Keep the original frame if a future non-local image cannot be inspected.
+  }
+
+  const sample = { canvas, bounds };
+  trayProviderImageOpticalSamples.set(image, sample);
+  return sample;
+}
+
+function paintProviderImage(ctx, image, x, y, size, templateColor = '') {
+  const {
+    trayProviderOpticalLayout,
+    trayProviderOpticalRatio
+  } = window.TokenMonitorTrayProviderIcons;
+  const sample = providerImageOpticalSample(image);
+  const opticalRatio = trayProviderOpticalRatio(trayProviderImageIds.get(image));
+  const layout = trayProviderOpticalLayout(sample.bounds, size, opticalRatio);
+  const maskSize = Math.max(1, Math.round(size));
+  const mask = document.createElement('canvas');
+  mask.width = maskSize;
+  mask.height = maskSize;
+  const maskCtx = mask.getContext('2d');
+  maskCtx.drawImage(
+    sample.canvas,
+    sample.bounds.x,
+    sample.bounds.y,
+    sample.bounds.width,
+    sample.bounds.height,
+    layout.x,
+    layout.y,
+    layout.width,
+    layout.height
+  );
+  if (templateColor) {
+    maskCtx.globalCompositeOperation = 'source-in';
+    maskCtx.fillStyle = templateColor;
+    maskCtx.fillRect(0, 0, maskSize, maskSize);
+  }
+  ctx.drawImage(mask, x, y, size, size);
+}
+
+function drawProviderImage(ctx, image, x, y, size, contrastHalo = false, templateColor = '') {
   if (contrastHalo) {
     const lightSurface = themePresetsApi.isLightHex(resolvedThemeColor('bg'));
     ctx.save();
     ctx.shadowColor = lightSurface ? 'rgba(0, 0, 0, 0.58)' : 'rgba(255, 255, 255, 0.82)';
     ctx.shadowBlur = Math.max(2, Math.round(size * 0.1));
-    ctx.drawImage(image, x, y, size, size);
+    paintProviderImage(ctx, image, x, y, size, templateColor);
     ctx.restore();
   }
-  ctx.drawImage(image, x, y, size, size);
+  paintProviderImage(ctx, image, x, y, size, templateColor);
 }
 
 function renderBarsIcon(stats, height = 44, picker = pickWorstProvider, colors = {}, options = {}) {
@@ -7708,7 +8311,7 @@ function renderBarsIcon(stats, height = 44, picker = pickWorstProvider, colors =
   const fillColor = colors.fill || 'rgba(0, 0, 0, 1)';
   const selection = picker(stats);
   if (!selection) return null;
-  const { providerRecord, primaryWindow, secondaryWindow } = selection;
+  const { providerRecord } = selection;
   const providerImage = trayProviderImages[providerRecord.provider];
   const { trayBarFillWidth, trayBarsLayout } = window.TokenMonitorTrayBars;
   const layout = trayBarsLayout(height);
@@ -7720,7 +8323,15 @@ function renderBarsIcon(stats, height = 44, picker = pickWorstProvider, colors =
   ctx.clearRect(0, 0, layout.width, layout.height);
 
   if (providerImage) {
-    drawProviderImage(ctx, providerImage, layout.padX, layout.iconY, layout.iconSize, options.providerContrastHalo === true);
+    drawProviderImage(
+      ctx,
+      providerImage,
+      layout.padX,
+      layout.iconY,
+      layout.iconSize,
+      options.providerContrastHalo === true,
+      options.templateIconColor || ''
+    );
   }
 
   function drawBar(y, percent) {
@@ -7738,8 +8349,10 @@ function renderBarsIcon(stats, height = 44, picker = pickWorstProvider, colors =
     ctx.restore();
   }
 
-  drawBar(layout.barsStartY, primaryWindow?.remainingPercent);
-  drawBar(layout.barsStartY + layout.barHeight + layout.barGap, secondaryWindow?.remainingPercent);
+  // Read the selection's resolved percentages, not the raw windows: a balance
+  // window carries no wire percentage and would draw an empty (exhausted) bar.
+  drawBar(layout.barsStartY, selection.primaryPercent);
+  drawBar(layout.barsStartY + layout.barHeight + layout.barGap, selection.secondaryPercent);
   return canvas.toDataURL('image/png');
 }
 
@@ -7784,8 +8397,11 @@ function renderAllSessionsIcon(stats, height = 44, configOrder, colors = {}, opt
     ctx.restore();
   }
 
-  drawBar(layout.barsStartY, picks[0].primaryWindow.remainingPercent);
-  drawBar(layout.barsStartY + layout.barHeight + layout.barGap, picks[1].primaryWindow.remainingPercent);
+  // The picker's resolved remaining percentage, not the raw window: drawBar
+  // applies the used-mode flip itself, and a balance window has no wire
+  // percentage to read.
+  drawBar(layout.barsStartY, picks[0].remaining);
+  drawBar(layout.barsStartY + layout.barHeight + layout.barGap, picks[1].remaining);
   return canvas.toDataURL('image/png');
 }
 
@@ -7802,22 +8418,23 @@ function renderLimitSessionsIcon(stats, height = 44, configOrder, colors = {}, o
   const padX = options.contentOnly === true ? 0 : layout.padX;
   const fontSize = Math.round(height * 0.68);
   const font = `500 ${fontSize}px -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif`;
-  const showUsed = Boolean(state.settings?.showLimitUsed);
 
   const measureCanvas = document.createElement('canvas');
   const measureCtx = measureCanvas.getContext('2d');
   measureCtx.font = font;
+  // `percent` / `secondaryPercent` are already mode-adjusted by the picker and
+  // handle balance windows, which carry no wire percentage of their own.
   const visiblePicks = picks.length === 1
     ? [{
         ...picks[0],
-        text: [picks[0].primaryWindow, picks[0].secondaryWindow]
-          .filter(Boolean)
-          .map((window) => formatPercent(limitFillPercent(window.remainingPercent, window.usedPercent, showUsed)))
+        text: [picks[0].percent, picks[0].secondaryPercent]
+          .filter((percent) => percent !== null && percent !== undefined)
+          .map((percent) => formatPercent(percent))
           .join(separator)
       }]
     : picks.map((pick) => ({
         ...pick,
-        text: formatPercent(limitFillPercent(pick.primaryWindow.remainingPercent, pick.primaryWindow.usedPercent, showUsed))
+        text: formatPercent(pick.percent)
       }));
   const entries = visiblePicks.map((pick) => {
     const text = pick.text;
@@ -7847,7 +8464,10 @@ function renderLimitSessionsIcon(stats, height = 44, configOrder, colors = {}, o
   const centerY = height / 2;
   entries.forEach((entry, index) => {
     if (entry.image) {
-      drawProviderImage(ctx, entry.image, x, layout.iconY, iconSize, options.providerContrastHalo === true);
+      drawProviderImage(ctx, entry.image, x, layout.iconY, iconSize,
+        options.providerContrastHalo === true,
+        options.templateIconColor || ''
+      );
       x += iconSize + gap;
     }
     ctx.fillText(entry.text, x, centerY + 1);
@@ -7860,23 +8480,748 @@ function renderLimitSessionsIcon(stats, height = 44, configOrder, colors = {}, o
   return canvas.toDataURL('image/png');
 }
 
+function trayComposerSampleStats() {
+  const resetSoon = new Date(Date.now() + 3 * 60 * 60 * 1000 + 7 * 60 * 1000).toISOString();
+  const resetLater = new Date(Date.now() + 6 * 24 * 60 * 60 * 1000 + 2 * 60 * 60 * 1000).toISOString();
+  return {
+    periods: {
+      today: { totalTokens: 1_240_000, costUsd: 12.34 },
+      month: { totalTokens: 18_600_000, costUsd: 184.2 },
+      allTime: { totalTokens: 225_437_666, costUsd: 1502.72 }
+    },
+    limits: {
+      providers: [
+        {
+          provider: 'codex',
+          status: 'ok',
+          accountKey: 'preview-codex',
+          accountEmail: 'you@example.com',
+          sourceDetail: 'app',
+          windows: [
+            { kind: 'session', label: '', remainingPercent: 64, resetsAt: resetSoon },
+            { kind: 'weekly', label: '', remainingPercent: 42, resetsAt: resetLater }
+          ]
+        },
+        {
+          provider: 'claude',
+          status: 'ok',
+          accountKey: 'preview-claude',
+          accountEmail: 'work@example.com',
+          sourceDetail: 'oauth',
+          windows: [
+            { kind: 'session', label: '', remainingPercent: 78, resetsAt: resetSoon },
+            { kind: 'weekly', label: '', remainingPercent: 57, resetsAt: resetLater }
+          ]
+        }
+      ]
+    }
+  };
+}
+
+function statsForTrayComposer() {
+  const sample = trayComposerSampleStats();
+  const liveProviders = state.stats?.limits?.providers;
+  return {
+    ...sample,
+    ...state.stats,
+    periods: {
+      ...sample.periods,
+      ...(state.stats?.periods || {})
+    },
+    limits: Array.isArray(liveProviders) && liveProviders.some((provider) => provider?.status === 'ok' && !provider?.stale)
+      ? state.stats.limits
+      : sample.limits
+  };
+}
+
+function drawTrayFallbackMark(ctx, value, x, y, size, color) {
+  ctx.save();
+  ctx.fillStyle = color;
+  ctx.font = `600 ${Math.round(size * 0.46)}px -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(value === 'app' ? 'Σ' : String(value || '?').slice(0, 1).toUpperCase(), x + size / 2, y + size / 2 + 1);
+  ctx.restore();
+}
+
+function trayTextCanvasFont(item, fontSize, defaultWeight) {
+  const style = item?.fontStyle || 'normal';
+  const family = style === 'compactMono'
+    ? 'ui-monospace, ".AppleSystemUIFontMonospaced", "SFMono-Regular", "SF Mono", Menlo, monospace'
+    : '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif';
+  const weight = style === 'menubar' ? 700 : style === 'compactMono' ? 600 : defaultWeight;
+  return `${weight} ${fontSize}px ${family}`;
+}
+
+function trayTextHorizontalScale(item) {
+  if (item?.fontStyle === 'condensed') return 0.86;
+  if (item?.fontStyle === 'menubar') return 0.92;
+  return 1;
+}
+
+function trayTextSpaceScale(item) {
+  return item?.fontStyle === 'compactMono' ? 0.55 : 1;
+}
+
+function trayTextRuns(ctx, text, item) {
+  const spaceScale = trayTextSpaceScale(item);
+  return (String(text).match(/\s+|\S+/g) || ['']).map((value) => {
+    const blank = /^\s+$/.test(value);
+    return {
+      value,
+      blank,
+      width: ctx.measureText(value).width * (blank ? spaceScale : 1)
+    };
+  });
+}
+
+function measureTrayText(ctx, text, item, horizontalScale = 1) {
+  return trayTextRuns(ctx, text, item)
+    .reduce((width, run) => width + run.width, 0) * horizontalScale;
+}
+
+function drawTrayText(ctx, text, x, y, item, horizontalScale = 1) {
+  const spaceScale = trayTextSpaceScale(item);
+  if (spaceScale === 1 && horizontalScale === 1) {
+    ctx.fillText(text, x, y);
+    return;
+  }
+
+  const runs = trayTextRuns(ctx, text, item);
+  const rawWidth = runs.reduce((width, run) => width + run.width, 0);
+  const alignment = ctx.textAlign;
+  const startX = alignment === 'right' || alignment === 'end'
+    ? -rawWidth
+    : alignment === 'center'
+      ? -rawWidth / 2
+      : 0;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(horizontalScale, 1);
+  ctx.textAlign = 'left';
+  let cursor = startX;
+  for (const run of runs) {
+    if (!run.blank) ctx.fillText(run.value, cursor, 0);
+    cursor += run.width;
+  }
+  ctx.restore();
+}
+
+function drawCustomTrayProviderBadge(ctx, x, y, size, color) {
+  const { trayProviderBadgeLayout } = window.TokenMonitorTrayProviderIcons;
+  const layout = trayProviderBadgeLayout(size);
+  const badgeX = x + layout.x;
+  const badgeY = y + layout.y;
+  const { badgeSize, radius, borderWidth } = layout;
+  ctx.save();
+  roundedRectPath(ctx, badgeX, badgeY, badgeSize, badgeSize, radius);
+  ctx.fillStyle = color;
+  ctx.fill();
+  ctx.lineWidth = borderWidth;
+  ctx.strokeStyle = color;
+  ctx.stroke();
+
+  // Custom tray images remain macOS template images. Cut the sigma out of the
+  // badge alpha so the mark survives the menu-bar tint as negative space.
+  const left = badgeX + badgeSize * 0.29;
+  const right = badgeX + badgeSize * 0.72;
+  const top = badgeY + badgeSize * 0.27;
+  const middle = badgeY + badgeSize * 0.5;
+  const bottom = badgeY + badgeSize * 0.73;
+  ctx.globalCompositeOperation = 'destination-out';
+  ctx.beginPath();
+  ctx.moveTo(right, top);
+  ctx.lineTo(left, top);
+  ctx.lineTo(badgeX + badgeSize * 0.56, middle);
+  ctx.lineTo(left, bottom);
+  ctx.lineTo(right, bottom);
+  ctx.lineWidth = Math.max(1, badgeSize * 0.13);
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = '#000000';
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawCustomTrayProviderImage(ctx, img, provider, x, y, size, options = {}) {
+  const showBadge = options.showProviderBadge === true && provider && provider !== 'app';
+  const inset = showBadge ? Math.max(1, Math.round(size * 0.07)) : 0;
+  const imageSize = size - inset * 2;
+  drawProviderImage(
+    ctx,
+    img,
+    x + inset,
+    y + inset,
+    imageSize,
+    options.providerContrastHalo === true,
+    options.templateIconColor || ''
+  );
+  if (showBadge) {
+    drawCustomTrayProviderBadge(
+      ctx,
+      x,
+      y,
+      size,
+      options.templateIconColor || options.textColor || '#000000'
+    );
+  }
+}
+
+function renderCustomTrayItemCanvas(item, height = 44, colors = {}, options = {}) {
+  const trackColor = colors.track || 'rgba(0, 0, 0, 0.32)';
+  const fillColor = colors.fill || 'rgba(0, 0, 0, 1)';
+  const textColor = colors.text || fillColor;
+  const h = Math.max(16, Math.round(height));
+
+  if (item.type === 'spacer') {
+    const isDot = item.variant === 'dot';
+    const ratios = isDot
+      ? { narrow: 0.18, regular: 0.24, wide: 0.34 }
+      : { narrow: 0.07, regular: 0.14, wide: 0.27 };
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(2, Math.round(h * (ratios[item.size] || ratios.regular)));
+    canvas.height = h;
+    if (isDot) {
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = textColor;
+      ctx.beginPath();
+      ctx.arc(canvas.width / 2, h / 2, Math.max(1, h * 0.055), 0, Math.PI * 2);
+      ctx.fill();
+    } else if (options.spacerGuide) {
+      const ctx = canvas.getContext('2d');
+      ctx.strokeStyle = trackColor;
+      ctx.setLineDash([1, 2]);
+      ctx.beginPath();
+      ctx.moveTo(0.5, h * 0.2);
+      ctx.lineTo(0.5, h * 0.8);
+      ctx.moveTo(canvas.width - 0.5, h * 0.2);
+      ctx.lineTo(canvas.width - 0.5, h * 0.8);
+      ctx.stroke();
+    }
+    return canvas;
+  }
+
+  if (item.type === 'icon') {
+    const canvas = document.createElement('canvas');
+    canvas.width = h;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    const provider = item.provider || 'app';
+    const providerImage = trayProviderImages[provider];
+    if (providerImage) {
+      drawCustomTrayProviderImage(
+        ctx,
+        providerImage,
+        provider,
+        0,
+        0,
+        h,
+        { ...options, textColor }
+      );
+    } else {
+      drawTrayFallbackMark(ctx, provider, 0, 0, h, textColor);
+    }
+    return canvas;
+  }
+
+  if (item.type === 'bars') {
+    const { trayBarFillWidth, trayBarsLayout } = window.TokenMonitorTrayBars;
+    const showIcon = item.icon !== 'none';
+    const barLayout = trayBarsLayout(h, { contentOnly: !showIcon });
+    const canvas = document.createElement('canvas');
+    canvas.width = barLayout.width;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    const rows = item.rows.length > 1 ? item.rows.slice(0, 2) : item.rows.slice(0, 1);
+    const drawBar = (row, y) => {
+      roundedRectPath(ctx, barLayout.barsX, y, barLayout.barsWidth, barLayout.barHeight, barLayout.radius);
+      ctx.fillStyle = trackColor;
+      ctx.fill();
+      const fillWidth = trayBarFillWidth(row.percent, barLayout.barsWidth);
+      if (!fillWidth) return;
+      ctx.save();
+      roundedRectPath(ctx, barLayout.barsX, y, barLayout.barsWidth, barLayout.barHeight, barLayout.radius);
+      ctx.clip();
+      ctx.fillStyle = fillColor;
+      ctx.fillRect(barLayout.barsX, y, fillWidth, barLayout.barHeight);
+      ctx.restore();
+    };
+    if (showIcon) {
+      const preferredIndex = item.icon === 'second' ? 1 : 0;
+      const iconRow = rows[preferredIndex]?.selection ? rows[preferredIndex] : rows.find((row) => row.selection);
+      const provider = item.icon === 'app' ? 'app' : iconRow?.selection?.provider || '';
+      const providerImage = trayProviderImages[provider];
+      if (providerImage) {
+        drawCustomTrayProviderImage(
+          ctx,
+          providerImage,
+          provider,
+          barLayout.padX,
+          barLayout.iconY,
+          barLayout.iconSize,
+          { ...options, textColor }
+        );
+      } else {
+        drawTrayFallbackMark(ctx, provider || '?', barLayout.padX, barLayout.iconY, barLayout.iconSize, textColor);
+      }
+    }
+    const ys = rows.length > 1
+      ? [barLayout.barsStartY, barLayout.barsStartY + barLayout.barHeight + barLayout.barGap]
+      : [Math.round((h - barLayout.barHeight) / 2)];
+    rows.forEach((row, index) => {
+      drawBar(row, ys[index]);
+    });
+    return canvas;
+  }
+
+  if (item.type === 'stack') {
+    const rows = item.rows.slice(0, 2);
+    const showIcon = item.icon !== 'none';
+    const preferredIndex = item.icon === 'second' ? 1 : 0;
+    const iconRow = rows[preferredIndex]?.selection ? rows[preferredIndex] : rows.find((row) => row.selection);
+    const provider = item.icon === 'app' ? 'app' : iconRow?.selection?.provider || '';
+    const iconSize = h;
+    const iconGap = Math.max(2, Math.round(h * 0.08));
+    const fontSize = Math.max(8, Math.round(h * 0.43));
+    const font = trayTextCanvasFont(item, fontSize, 600);
+    const horizontalScale = trayTextHorizontalScale(item);
+    const measure = document.createElement('canvas').getContext('2d');
+    measure.font = font;
+    const textWidth = Math.max(
+      ...rows.map((row) => measureTrayText(measure, row.text || '--', item, horizontalScale)),
+      1
+    );
+    const padX = Math.max(1, Math.round(h * 0.04));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.ceil(textWidth) + padX * 2 + (showIcon ? iconSize + iconGap : 0);
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    const alignment = item.alignment === 'left' ? 'left' : 'right';
+    let textX = alignment === 'right' ? canvas.width - padX : padX;
+    if (showIcon) {
+      const providerImage = trayProviderImages[provider];
+      if (providerImage) {
+        drawCustomTrayProviderImage(
+          ctx,
+          providerImage,
+          provider,
+          0,
+          0,
+          iconSize,
+          { ...options, textColor }
+        );
+      } else {
+        drawTrayFallbackMark(ctx, provider || '?', 0, 0, iconSize, textColor);
+      }
+      if (alignment === 'left') textX += iconSize + iconGap;
+    }
+    ctx.font = font;
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = alignment;
+    const textBaselineOffset = Math.max(1, Math.round(h * 0.025));
+    rows.forEach((row, index) => {
+      ctx.fillStyle = row.available === false ? trackColor : textColor;
+      drawTrayText(
+        ctx,
+        row.text || '--',
+        textX,
+        h * (index === 0 ? 0.28 : 0.72) + textBaselineOffset,
+        item,
+        horizontalScale
+      );
+    });
+    return canvas;
+  }
+
+  const text = item.text || '--';
+  const fontSize = Math.round(h * 0.68);
+  const font = trayTextCanvasFont(item, fontSize, 500);
+  const horizontalScale = trayTextHorizontalScale(item);
+  const measure = document.createElement('canvas').getContext('2d');
+  measure.font = font;
+  const padX = Math.max(1, Math.round(h * 0.04));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.ceil(measureTrayText(measure, text, item, horizontalScale)) + padX * 2);
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  ctx.font = font;
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = item.available === false ? trackColor : textColor;
+  drawTrayText(ctx, text, padX, h / 2 + 1, item, horizontalScale);
+  return canvas;
+}
+
+function renderCustomTrayLayout(stats, layout, height = 44, colors = {}, options = {}) {
+  const activeCodex = localLiveCodexProvider();
+  const activeCodexKey = activeCodex?.accountKey
+    && (stats?.limits?.providers || []).some((provider) => (
+      provider?.provider === 'codex' && provider?.accountKey === activeCodex.accountKey
+    ))
+    ? activeCodex.accountKey
+    : '';
+  const resolved = trayLayoutApi.resolveTrayLayout(layout, stats, {
+    currency: currentCurrency(),
+    nowMs: Date.now(),
+    activeAccountKeys: activeCodexKey ? { codex: activeCodexKey } : {},
+    availableProviderIds: Object.keys(trayProviderImages)
+  });
+  const items = resolved.items.map((item) => (
+    item.type === 'text'
+      && item.metric === 'account'
+      && limitAccountEmailsMasked()
+      ? { ...item, text: accountIdentityApi.maskEmailAddress(item.text) }
+      : item
+  ));
+  const segments = items.map((item) => renderCustomTrayItemCanvas(item, height, colors, options));
+  if (!segments.length) return null;
+  const gap = Math.max(1, Math.round(height * 0.03));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, segments.reduce((width, segment) => width + segment.width, 0) + gap * Math.max(0, segments.length - 1));
+  canvas.height = Math.max(16, Math.round(height));
+  const ctx = canvas.getContext('2d');
+  let x = 0;
+  for (const segment of segments) {
+    ctx.drawImage(segment, x, 0);
+    x += segment.width + gap;
+  }
+  return canvas.toDataURL('image/png');
+}
+
 function barsDataUrlForMode(mode, size = 44, colors, options = {}) {
-  if (mode === 'barsAllSessions') return renderAllSessionsIcon(state.stats, size, configuredLimitProviderOrder(), colors, options);
+  const stats = options.stats || state.stats;
+  if (mode === 'barsAllSessions') return renderAllSessionsIcon(stats, size, configuredLimitProviderOrder(), colors, options);
   const pickers = { barsSession: pickWorstSessionProvider, barsWeekly: pickWorstWeeklyProvider };
-  return renderBarsIcon(state.stats, size, pickers[mode] || pickWorstProvider, colors, options);
+  return renderBarsIcon(stats, size, pickers[mode] || pickWorstProvider, colors, options);
 }
 
 function trayDataUrlForMode(mode, size = 44, colors, options = {}) {
-  if (mode === 'limitsAllSessions') return renderLimitSessionsIcon(state.stats, size, configuredLimitProviderOrder(), colors, options);
+  if (mode === 'custom') {
+    return renderCustomTrayLayout(
+      options.stats || state.stats || statsForTrayComposer(),
+      options.layout || state.settings?.trayCustomLayout,
+      size,
+      colors,
+      {
+        showProviderBadge: state.settings?.showTrayProviderBadge === true,
+        ...options
+      }
+    );
+  }
+  if (mode === 'limitsAllSessions') {
+    return renderLimitSessionsIcon(options.stats || state.stats, size, configuredLimitProviderOrder(), colors, options);
+  }
   return barsDataUrlForMode(mode, size, colors, options);
 }
 
-async function maybeUpdateBarsIcon() {
+async function maybeUpdateBarsIcon(options = {}) {
+  if (options.refreshComposers !== false) refreshTrayComposers();
   const mode = state.settings?.trayContent;
   if (!window.TokenMonitorTrayText.isGeneratedTrayIconMode(mode)) return;
   if (!window.tokenMonitor.setTrayIcons) return;
   const dataUrl = trayDataUrlForMode(mode, 44);
   try { await window.tokenMonitor.setTrayIcons({ [mode]: dataUrl || null }); } catch (_) {}
+}
+
+function trayComposerProviderIcon(provider) {
+  const id = provider === 'auto' ? 'app' : provider;
+  const cached = trayProviderImages[id];
+  if (cached) {
+    try {
+      return providerImageToPngDataUrl(cached, 44, false, {
+        templateColor: floatingBubbleGeneratedColors().text
+      });
+    } catch (_) {}
+  }
+  if (id === 'app') return '../../../assets/icons/tray-token-monitor.png';
+  return window.TokenMonitorTrayProviderIcons.trayProviderIconSources([id])[id] || '';
+}
+
+function trayComposerProviderChoices(currentProviders = [], options = {}) {
+  const current = new Set(
+    (Array.isArray(currentProviders) ? currentProviders : [currentProviders])
+      .map((provider) => String(provider || '').trim().toLowerCase())
+      .filter((provider) => provider && provider !== 'auto')
+  );
+  const available = new Set(
+    trayLayoutApi.providerOptions(state.stats || {}).map((entry) => entry.value)
+  );
+  const includeAll = options.includeAll === true;
+  const catalogue = includeAll ? TRAY_ICON_PROVIDERS : LIMIT_PROVIDERS;
+  return [
+    {
+      value: 'auto',
+      label: t('trayComposer.provider.auto'),
+      detail: t('trayComposer.provider.autoDetail'),
+      icon: trayComposerProviderIcon('auto')
+    },
+    ...catalogue
+      .filter((provider) => includeAll || available.has(provider.id) || current.has(provider.id))
+      .map((provider) => ({
+        value: provider.id,
+        label: provider.label,
+        detail: includeAll || available.has(provider.id) ? '' : t('trayComposer.provider.unavailable'),
+        icon: trayComposerProviderIcon(provider.id)
+      }))
+  ];
+}
+
+function trayComposerAccountChoices(provider) {
+  const stats = state.stats || {};
+  const raw = provider === 'auto'
+    ? LIMIT_PROVIDERS.flatMap((entry) => trayLayoutApi.accountOptions(stats, entry.id))
+    : trayLayoutApi.accountOptions(stats, provider);
+  return raw.map((entry) => ({
+    value: entry.value,
+    label: entry.label,
+    detail: LIMIT_PROVIDERS.find((providerEntry) => providerEntry.id === entry.provider?.provider)?.label || entry.provider?.provider || '',
+    icon: trayComposerProviderIcon(entry.provider?.provider)
+  }));
+}
+
+function trayComposerSourcePreview(source) {
+  const item = trayLayoutApi.createTrayLayoutItem('singleBar');
+  item.rows = [{ ...item.rows[0], ...source }];
+  return renderCustomTrayLayout(
+    statsForTrayComposer(),
+    { version: trayLayoutApi.VERSION, items: [item] },
+    32,
+    floatingBubbleGeneratedColors(),
+    { templateIconColor: floatingBubbleGeneratedColors().text }
+  );
+}
+
+function trayComposerWindowChoices(source) {
+  const choices = trayLayoutApi.sourceWindowOptions(
+    state.stats || {},
+    source
+  ).map((entry) => ({
+    value: entry.value,
+    label: trayComposerWindowLabel(entry),
+    preview: trayComposerSourcePreview({ ...source, window: entry.value })
+  }));
+  if (choices.length) return choices;
+  return [{
+    value: 'primary',
+    label: t('trayComposer.window.primary'),
+    preview: trayComposerSourcePreview({ ...source, window: 'primary' })
+  }];
+}
+
+function trayComposerWindowLabel(entry) {
+  const kind = String(entry.kind || 'other').toLowerCase();
+  const kindKey = `trayComposer.window.${kind}`;
+  const translatedKind = t(kindKey);
+  const kindLabel = translatedKind === kindKey ? t('trayComposer.window.primary') : translatedKind;
+  const rawLabel = String(entry.label || '').trim();
+  const normalizedLabel = rawLabel.toLowerCase();
+  const redundantLabels = new Set([kind, 'session', 'weekly', 'billing', 'total']);
+  if (!rawLabel || redundantLabels.has(normalizedLabel)) return kindLabel;
+  return `${kindLabel} · ${rawLabel}`;
+}
+
+function previewItemForStyle(style) {
+  return trayLayoutApi.createTrayLayoutItem(style);
+}
+
+function renderTrayComposerItem(item, options = {}) {
+  return renderCustomTrayLayout(
+    statsForTrayComposer(),
+    { version: trayLayoutApi.VERSION, items: [item] },
+    36,
+    floatingBubbleGeneratedColors(),
+    { templateIconColor: floatingBubbleGeneratedColors().text, ...options }
+  );
+}
+
+function renderTrayComposerFontPreview(item, fontStyle, options = {}) {
+  return renderTrayComposerItem({ ...item, fontStyle }, options);
+}
+
+function trayPreviewUsageIconId(stats, mode) {
+  if (mode === 'icon') return 'app';
+  const period = ['tokensAll', 'costAll', 'bothAll'].includes(mode) ? 'allTime' : 'today';
+  const metric = ['cost', 'costAll'].includes(mode) ? 'cost' : 'tokens';
+  return window.TokenMonitorTrayText.pickUsageProviderId(
+    stats,
+    metric,
+    period,
+    Object.keys(trayProviderImages)
+  ) || 'app';
+}
+
+function joinTrayPreviewCanvases(segments, height = 44, gap = Math.max(1, Math.round(height * 0.03))) {
+  const visible = segments.filter(Boolean);
+  if (!visible.length) return '';
+  const canvas = document.createElement('canvas');
+  canvas.width = visible.reduce((width, segment) => width + segment.width, 0) + gap * Math.max(0, visible.length - 1);
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  let x = 0;
+  for (const segment of visible) {
+    ctx.drawImage(segment, x, 0);
+    x += segment.width + gap;
+  }
+  return canvas.toDataURL('image/png');
+}
+
+function renderStandardUsageTrayPreview(mode, stats) {
+  const height = 44;
+  const colors = floatingBubbleGeneratedColors();
+  const showProviderBadge = state.settings?.showTrayProviderBadge === true;
+  const icon = renderCustomTrayItemCanvas(
+    { type: 'icon', provider: trayPreviewUsageIconId(stats, mode) },
+    height,
+    colors,
+    {
+      showProviderBadge,
+      templateIconColor: showProviderBadge ? '' : colors.text
+    }
+  );
+  // Windows and Linux only get the icon; their text lives in the tooltip, so
+  // previewing a title there would advertise something the tray never draws.
+  if (mode === 'icon' || !window.TokenMonitorTrayText.trayShowsTitle(state.appInfo?.platform)) {
+    return joinTrayPreviewCanvases([icon], height);
+  }
+
+  const text = window.TokenMonitorTrayText.formatTrayText(
+    stats,
+    mode,
+    currentCurrency(),
+    state.settings
+  );
+  const title = text
+    ? renderCustomTrayItemCanvas({ type: 'text', text, fontStyle: 'normal' }, height, colors)
+    : null;
+  return joinTrayPreviewCanvases([icon, title], height);
+}
+
+function renderStandardTrayPreview(mode, stats) {
+  if (window.TokenMonitorTrayText.isGeneratedTrayIconMode(mode)) {
+    const colors = floatingBubbleGeneratedColors();
+    return {
+      // Match the same high-resolution source that main resizes to the tray's 20 px height.
+      generatedSrc: trayDataUrlForMode(mode, 44, colors, {
+        stats,
+        templateIconColor: colors.text
+      })
+    };
+  }
+  return { src: renderStandardUsageTrayPreview(mode, stats) };
+}
+
+function trayComposerPreview(surface) {
+  const isTray = surface === 'tray';
+  const contentKey = isTray ? 'trayContent' : 'floatingBubbleContent';
+  const layoutKey = isTray ? 'trayCustomLayout' : 'floatingBubbleCustomLayout';
+  const mode = state.settings?.[contentKey] || (isTray ? 'tokens' : 'icon');
+  const stats = statsForTrayComposer();
+  if (isTray) return renderStandardTrayPreview(mode, stats);
+  if (window.TokenMonitorTrayText.isGeneratedTrayIconMode(mode)) {
+    // Mirror renderFloatingBubbleContent exactly: the bubble draws provider
+    // icons in colour, so no templateIconColor here — that is a menu-bar-only
+    // requirement and would preview the bubble as monochrome.
+    return {
+      src: trayDataUrlForMode(mode, 44, floatingBubbleGeneratedColors(), {
+        stats,
+        layout: state.settings?.[layoutKey],
+        contentOnly: mode === 'barsAllSessions' || mode === 'limitsAllSessions',
+        providerContrastHalo: true,
+        showProviderBadge: false
+      })
+    };
+  }
+  if (mode === 'icon') return { text: 'Σ' };
+  return {
+    text: window.TokenMonitorTrayText.formatTrayText(
+      stats,
+      mode,
+      currentCurrency(),
+      state.settings
+    ) || '—'
+  };
+}
+
+function activateTrayComposer(surface) {
+  const isTray = surface === 'tray';
+  const contentKey = isTray ? 'trayContent' : 'floatingBubbleContent';
+  const input = isTray ? els.trayContentInput : els.floatingBubbleContentInput;
+  state.settings[contentKey] = 'custom';
+  if (input) input.value = 'custom';
+  if (isTray) void maybeUpdateBarsIcon();
+  else renderFloatingBubbleContent();
+  refreshTrayComposers();
+  void saveSettings({ [contentKey]: 'custom' });
+}
+
+function createTrayComposer(surface) {
+  const isTray = surface === 'tray';
+  const root = isTray ? els.trayComposer : els.floatingBubbleComposer;
+  const layoutKey = isTray ? 'trayCustomLayout' : 'floatingBubbleCustomLayout';
+  const contentKey = isTray ? 'trayContent' : 'floatingBubbleContent';
+  return window.TokenMonitorTrayComposer.createTrayComposer({
+    root,
+    surface,
+    layoutApi: trayLayoutApi,
+    getLayout: () => state.settings?.[layoutKey],
+    getStylePreview: (style) => renderTrayComposerItem(
+      previewItemForStyle(style),
+      {
+        showProviderBadge: isTray && state.settings?.showTrayProviderBadge === true,
+        spacerGuide: style === 'spacer'
+      }
+    ),
+    getFontStylePreview: (item, fontStyle) => renderTrayComposerFontPreview(item, fontStyle, {
+      showProviderBadge: isTray && state.settings?.showTrayProviderBadge === true
+    }),
+    renderItem: (item) => renderTrayComposerItem(item, {
+      showProviderBadge: isTray && state.settings?.showTrayProviderBadge === true
+    }),
+    getPreview: () => trayComposerPreview(surface),
+    isEditable: () => state.settings?.[contentKey] === 'custom',
+    onCustomize: () => activateTrayComposer(surface),
+    providerChoices: trayComposerProviderChoices,
+    accountChoices: trayComposerAccountChoices,
+    windowChoices: trayComposerWindowChoices,
+    label: t,
+    onLayoutChange: (nextLayout, { commit }) => {
+      state.settings[layoutKey] = trayLayoutApi.normalizeTrayLayout(nextLayout);
+      if (isTray) void maybeUpdateBarsIcon({ refreshComposers: commit });
+      else {
+        renderFloatingBubbleContent();
+        if (commit) refreshTrayComposers();
+      }
+      if (commit) void saveSettings({ [layoutKey]: state.settings[layoutKey] });
+    }
+  });
+}
+
+function refreshTrayComposers() {
+  const surfaces = [
+    { id: 'tray', root: els.trayComposer, visible: state.settings?.showTrayIcon !== false },
+    { id: 'floatingBubble', root: els.floatingBubbleComposer, visible: state.settings?.floatingBubbleEnabled === true }
+  ];
+  window.TokenMonitorTrayComposer.syncTrayComposerSurfaces(
+    surfaces,
+    trayComposers,
+    createTrayComposer
+  );
+  Object.values(trayComposers).forEach((composer) => composer?.refresh());
+  const clockNeeded = (
+    state.settings?.trayContent === 'custom'
+      && trayLayoutApi.trayLayoutNeedsClock(state.settings?.trayCustomLayout)
+  ) || (
+    state.settings?.floatingBubbleContent === 'custom'
+      && trayLayoutApi.trayLayoutNeedsClock(state.settings?.floatingBubbleCustomLayout)
+  );
+  if (clockNeeded && !customTrayClockTimer) {
+    customTrayClockTimer = setInterval(() => {
+      void maybeUpdateBarsIcon({ refreshComposers: false });
+      renderFloatingBubbleContent();
+    }, 30 * 1000);
+  } else if (!clockNeeded && customTrayClockTimer) {
+    clearInterval(customTrayClockTimer);
+    customTrayClockTimer = null;
+  }
 }
 
 function loadImage(src) {
@@ -7888,7 +9233,7 @@ function loadImage(src) {
   });
 }
 
-function providerImageToPngDataUrl(img, size, showBadge = false) {
+function providerImageToPngDataUrl(img, size, showBadge = false, options = {}) {
   const { trayProviderBadgeLayout } = window.TokenMonitorTrayProviderIcons;
   const layout = trayProviderBadgeLayout(size);
   const canvas = document.createElement('canvas');
@@ -7901,10 +9246,18 @@ function providerImageToPngDataUrl(img, size, showBadge = false) {
     ctx.save();
     ctx.shadowColor = 'rgba(255, 255, 255, 0.95)';
     ctx.shadowBlur = Math.max(2, Math.round(layout.iconSize * 0.1));
-    ctx.drawImage(img, imageInset, imageInset, imageSize, imageSize);
+    paintProviderImage(ctx, img, imageInset, imageInset, imageSize);
     ctx.restore();
   }
-  ctx.drawImage(img, imageInset, imageInset, imageSize, imageSize);
+  drawProviderImage(
+    ctx,
+    img,
+    imageInset,
+    imageInset,
+    imageSize,
+    false,
+    showBadge ? '' : options.templateColor || ''
+  );
 
   if (!showBadge) return canvas.toDataURL('image/png');
 
@@ -7939,12 +9292,14 @@ function providerImageToPngDataUrl(img, size, showBadge = false) {
 async function deliverTrayProviderIcons(showBadge = state.settings?.showTrayProviderBadge === true) {
   if (!window.tokenMonitor.setTrayIcons) return;
   const deliveryId = trayProviderIconDeliveryGuard.begin();
-  const sources = window.TokenMonitorTrayProviderIcons.trayProviderIconSources(clientsWithIcon);
+  const sources = window.TokenMonitorTrayProviderIcons.trayProviderIconSources(trayIconProviderIds);
+  sources.app = '../../../assets/icons/tray-token-monitor.png';
   const icons = {};
   for (const [id, path] of Object.entries(sources)) {
     try {
       const img = await loadImage(path);
       trayProviderImages[id] = img;
+      trayProviderImageIds.set(img, id);
       icons[id] = providerImageToPngDataUrl(img, 44, showBadge);
     } catch (_) { /* skip missing */ }
   }
@@ -7979,6 +9334,61 @@ function setOpencodeCookieExpanded(expanded) {
   setAccountGroupExpanded('opencode', expanded, 'opencodeCookieExpanded');
 }
 
+function setOpenrouterAccountExpanded(expanded) {
+  setAccountGroupExpanded('openrouter', expanded, 'openrouterAccountExpanded');
+}
+
+function setThirdPartyAccountExpanded(expanded) {
+  setAccountGroupExpanded('thirdparty', expanded, 'thirdPartyAccountExpanded');
+}
+
+function selectedThirdPartyAdapter() {
+  const platform = String(document.getElementById('thirdpartyPlatformInput')?.value || 'newapi');
+  const mode = String(document.getElementById('thirdpartyModeInput')?.value || 'account');
+  if (platform === 'custom') return 'custom';
+  return mode === 'token' ? 'newapi-token' : 'newapi-account';
+}
+
+function updateThirdPartyHttpWarning() {
+  const input = document.getElementById('thirdpartyBaseUrlInput');
+  const warning = document.getElementById('thirdpartyHttpWarning');
+  if (!warning) return;
+  let insecure;
+  try {
+    insecure = new URL(String(input?.value || '').trim()).protocol === 'http:';
+  } catch {
+    warning.classList.add('hidden');
+    return;
+  }
+  warning.classList.toggle('hidden', !insecure);
+}
+
+function setThirdPartyAdapterFields() {
+  const adapter = selectedThirdPartyAdapter();
+  const customMode = adapter === 'custom';
+  const accountMode = adapter === 'newapi-account';
+  const newApiAccountMode = adapter === 'newapi-account';
+  document.getElementById('thirdpartyChoiceGrid')?.classList.toggle('single-field', customMode);
+  document.getElementById('thirdpartyModeField')?.classList.toggle('hidden', customMode);
+  document.getElementById('thirdpartyCredentialGrid')?.classList.toggle(
+    'single-field',
+    !newApiAccountMode
+  );
+  document.getElementById('thirdpartyAccessTokenRow')?.classList.toggle('hidden', !accountMode);
+  document.getElementById('thirdpartyUserIdRow')?.classList.toggle('hidden', !newApiAccountMode);
+  document.getElementById('thirdpartyApiKeyRow')?.classList.toggle('hidden', accountMode);
+  document.getElementById('thirdpartyCustomConfig')?.classList.toggle('hidden', !customMode);
+  const hint = document.getElementById('thirdpartyModeHint');
+  if (hint) {
+    const hintKey = customMode
+      ? 'settings.thirdparty.hintCustom'
+      : adapter === 'newapi-token'
+      ? 'settings.thirdparty.hintNewApiToken'
+      : 'settings.thirdparty.hintNewApiAccount';
+    hint.textContent = t(hintKey);
+  }
+}
+
 function setDeepseekAccountExpanded(expanded) {
   setAccountGroupExpanded('deepseek', expanded, 'deepseekAccountExpanded');
 }
@@ -8011,16 +9421,28 @@ function renderCodexLoginStatus() {
   const openButton = document.getElementById('codexOpenLoginUrlButton');
   const copyButton = document.getElementById('codexCopyLoginUrlButton');
   const statusEl = document.getElementById('codexLoginStatus');
+  const workspaceSelection = document.getElementById('codexWorkspaceSelection');
+  const workspaceSelect = document.getElementById('codexWorkspaceSelect');
   const urlActions = document.getElementById('codexLoginUrlActions');
   const details = document.getElementById('codexLoginDetails');
   const output = document.getElementById('codexLoginOutput');
-  if (!addButton || !cancelButton || !refreshButton || !openButton || !copyButton || !statusEl || !urlActions || !details || !output) return;
+  if (!addButton || !cancelButton || !refreshButton || !openButton || !copyButton || !statusEl || !workspaceSelection || !workspaceSelect || !urlActions || !details || !output) return;
 
   addButton.classList.toggle('hidden', state.codexSignInBusy);
   cancelButton.classList.toggle('hidden', !state.codexSignInBusy);
   refreshButton.classList.toggle('hidden', state.codexSignInBusy);
   statusEl.textContent = state.codexLoginStatus;
   statusEl.classList.toggle('hidden', !state.codexLoginStatus);
+  workspaceSelection.classList.toggle('hidden', state.codexWorkspaceChoices.length === 0);
+  workspaceSelect.replaceChildren(...state.codexWorkspaceChoices.map((workspace) => {
+    const option = document.createElement('option');
+    option.value = workspace.id;
+    option.textContent = workspace.workspaceKind === 'personal'
+      ? t('settings.codex.personalWorkspace')
+      : workspace.label || workspace.id;
+    option.selected = workspace.id === state.codexWorkspaceId;
+    return option;
+  }));
   urlActions.classList.toggle('hidden', !state.codexSignInBusy);
   openButton.classList.toggle('hidden', !state.codexLoginUrl);
   copyButton.classList.toggle('hidden', !state.codexLoginUrl);
@@ -8083,7 +9505,15 @@ function renderCodexAccounts() {
       right.className = 'managed-account-right';
       const info = document.createElement('span');
       info.className = 'managed-account-info';
-      info.textContent = enabled ? limitProviderPresentationApi.limitProviderDisplayLabel(account.accountLabel) : t('settings.codex.disabled');
+      const workspaceLabel = account.workspaceKind === 'personal'
+        ? t('settings.codex.personalWorkspace')
+        : account.workspaceLabel;
+      const accountMetadata = [
+        workspaceLabel,
+        enabled ? limitProviderPresentationApi.limitProviderDisplayLabel(account.accountLabel) : t('settings.codex.disabled')
+      ].filter((value, index, values) => value && values.indexOf(value) === index);
+      info.textContent = accountMetadata.join(' · ');
+      info.title = accountMetadata.join(' · ');
       const remove = document.createElement('button');
       remove.type = 'button';
       remove.className = 'managed-account-remove';
@@ -8154,6 +9584,14 @@ function localProviderStatus(name) {
     return localProviders.find((provider) => provider.provider === name) || null;
   }
   return (state.stats?.limits?.providers || []).find((provider) => provider.provider === name) || null;
+}
+
+function localProviderStatuses(name) {
+  const localProviders = localDeviceLimitsProviders();
+  const providers = localProviders !== null
+    ? localProviders
+    : (state.stats?.limits?.providers || []);
+  return providers.filter((provider) => provider.provider === name);
 }
 
 function deepseekAccountLinked() {
@@ -8356,6 +9794,11 @@ function clearCopilotProviderStatus() {
 }
 
 const externalLimitAccountConfig = {
+  claude: {
+    configuredKey: 'claudeWebCookieConfigured',
+    sourceKey: 'claudeWebCookieSource',
+    pendingKey: 'claudePendingCheckSince'
+  },
   zai: {
     configuredKey: 'zaiApiKeyConfigured',
     sourceKey: 'zaiApiKeySource',
@@ -8529,6 +9972,10 @@ function volcenginePlatformUrl() {
   return 'https://console.volcengine.com/ark/region:ark+cn-beijing/openManagement?LLM=%7B%7D&advancedActiveKey=subscribe';
 }
 
+function claudePlatformUrl() {
+  return 'https://claude.ai/settings/usage';
+}
+
 function selectedQoderSite() {
   const selectedSite = document.getElementById('qoderSiteInput')?.value;
   return selectedSite || (state.settings?.qoderSite === 'cn' ? 'cn' : 'global');
@@ -8607,7 +10054,8 @@ function renderExternalProviderStatus(providerName) {
   );
   manualPanel.classList.toggle('hidden', linked);
   openBtn.classList.toggle('hidden', linked);
-  logoutBtn.classList.toggle('hidden', !linked || source !== 'settings');
+  const canClearConfiguredClaude = providerName === 'claude' && configured;
+  logoutBtn.classList.toggle('hidden', source !== 'settings' || (!linked && !canClearConfiguredClaude));
   refreshBtn.classList.toggle('hidden', !configured);
   renderSettingsSummaries();
 }
@@ -8861,6 +10309,348 @@ async function updateOpenCodeProfilesStatus() {
       totalEl.textContent = t('settings.opencode.statusNotSet');
     }
   }
+}
+
+function openrouterProfileStatusText(provider, options = {}) {
+  const status = limitProviderPresentationApi.namedApiProfileStatus(provider, options);
+  if (status === 'disabled') return t('settings.profiles.disabled');
+  if (status === 'hidden') return '';
+  if (status === 'checking') return t('settings.openrouter.checking');
+  if (status === 'invalid') return t('settings.openrouter.invalidKey');
+  if (status !== 'linked') return t('settings.openrouter.unavailable');
+  const balance = optionalFiniteNumber(provider.balance?.amount);
+  if (balance !== null) return `✓ ${formatMoney(balance, 'USD')}`;
+  const quota = (provider.windows || []).find((window) => window?.showMeter !== false);
+  const remaining = optionalFiniteNumber(quota?.remaining);
+  if (remaining !== null) return `✓ ${formatMoney(remaining, 'USD')} left`;
+  return '✓';
+}
+
+function thirdPartyProfileStatusText(provider, options = {}) {
+  const status = limitProviderPresentationApi.namedApiProfileStatus(provider, options);
+  if (status === 'disabled') return t('settings.profiles.disabled');
+  if (status === 'hidden') return '';
+  if (status === 'checking') return t('settings.thirdparty.checking');
+  if (status === 'invalid') return t('settings.thirdparty.invalidKey');
+  if (status !== 'linked') return t('settings.thirdparty.unavailable');
+  const balance = optionalFiniteNumber(provider.balance?.amount);
+  if (balance !== null) return `✓ ${formatCompactMoney(balance, provider.balance?.currency || 'USD')}`;
+  const unlimited = (provider.windows || []).some((window) => (
+    window?.showMeter === false && String(window?.detail || '').toLowerCase() === 'unlimited'
+  ));
+  return unlimited ? `✓ ${t('settings.thirdparty.unlimited')}` : '✓';
+}
+
+function updateNamedApiProfilesStatus({
+  providerId,
+  profileSettingsKey,
+  profileCountStateKey,
+  statusText
+}) {
+  const providerEnabled = limitProviderEnabled(providerId);
+  const providers = localProviderStatuses(providerId);
+  const byName = new Map(providers.map((provider) => [
+    String(provider.accountName || provider.accountLabel || ''),
+    provider
+  ]));
+  for (const infoEl of document.querySelectorAll(`[data-managed-profile-provider="${providerId}"][data-managed-profile-name]`)) {
+    const name = infoEl.dataset.managedProfileName || '';
+    const profile = state.settings?.[profileSettingsKey]?.[name];
+    infoEl.textContent = statusText(byName.get(name), {
+      providerEnabled,
+      profileEnabled: profile?.enabled !== false
+    });
+  }
+  const envInfo = document.querySelector(
+    `[data-managed-profile-provider="${providerId}"][data-managed-profile-environment]`
+  );
+  if (envInfo) envInfo.textContent = statusText(byName.get('environment'), { providerEnabled });
+  const statusEl = document.getElementById(`${providerId}Status`);
+  if (!statusEl) return;
+  const total = state[profileCountStateKey] || 0;
+  const linked = providers.filter((provider) => provider.status === 'ok').length;
+  statusEl.textContent = total === 0
+    ? t(`settings.${providerId}.statusNotSet`)
+    : !providerEnabled
+      ? t(`settings.${providerId}.nAccounts`, { count: total })
+      : t(`settings.${providerId}.connected`, { linked, total });
+}
+
+function updateOpenRouterProfilesStatus() {
+  updateNamedApiProfilesStatus({
+    providerId: 'openrouter',
+    profileSettingsKey: 'openrouterProfiles',
+    profileCountStateKey: 'openrouterProfileCount',
+    statusText: openrouterProfileStatusText
+  });
+}
+
+function updateThirdPartyProfilesStatus() {
+  updateNamedApiProfilesStatus({
+    providerId: 'thirdparty',
+    profileSettingsKey: 'thirdPartyProfiles',
+    profileCountStateKey: 'thirdPartyProfileCount',
+    statusText: thirdPartyProfileStatusText
+  });
+}
+
+function openrouterProfileErrorText(result) {
+  if (result?.errorCode === 'invalidName') return t('settings.openrouter.invalidName');
+  if (result?.errorCode === 'missingApiKey') return t('settings.openrouter.statusNotSet');
+  return result?.error || t('settings.openrouter.saveFailedShort');
+}
+
+function thirdPartyProfileErrorText(result) {
+  if (result?.errorCode === 'invalidName') return t('settings.thirdparty.invalidName');
+  if (result?.errorCode === 'invalidAdapter') return t('settings.thirdparty.invalidAdapter');
+  if (result?.errorCode === 'invalidBaseUrl') return t('settings.thirdparty.invalidBaseUrl');
+  if (result?.errorCode === 'missingAccessToken') return t('settings.thirdparty.missingAccessToken');
+  if (result?.errorCode === 'missingApiKey') return t('settings.thirdparty.missingApiKey');
+  if (result?.errorCode === 'invalidEndpointPath') return t('settings.thirdparty.invalidEndpointPath');
+  if (result?.errorCode === 'invalidAuthMode') return t('settings.thirdparty.invalidAuthMode');
+  if (result?.errorCode === 'invalidJsonPath') return t('settings.thirdparty.invalidJsonPath');
+  if (result?.errorCode === 'invalidCurrency') return t('settings.thirdparty.invalidCurrency');
+  if (result?.errorCode === 'invalidDivisor') return t('settings.thirdparty.invalidDivisor');
+  if (result?.errorCode === 'invalidCredential') return t('settings.thirdparty.invalidCredential');
+  if (result?.errorCode === 'unavailable') return t('settings.thirdparty.unavailable');
+  return result?.error || t('settings.thirdparty.saveFailedShort');
+}
+
+function appendNamedApiProfileRow(listEl, config) {
+  const {
+    api,
+    providerId,
+    name = '',
+    profile = { enabled: true },
+    env = false,
+    rerender,
+    updateStatus,
+    errorText,
+    detail = ''
+  } = config;
+  const item = document.createElement('div');
+  item.className = 'opencode-profile-item';
+  if (!env) {
+    const toggle = document.createElement('input');
+    toggle.className = 'profile-toggle';
+    toggle.type = 'checkbox';
+    toggle.checked = profile.enabled !== false;
+    toggle.setAttribute('aria-label', name);
+    toggle.addEventListener('change', async () => {
+      const previousEnabled = profile.enabled !== false;
+      profile.enabled = toggle.checked;
+      toggle.disabled = true;
+      updateStatus();
+      try {
+        const result = await api.setProfileEnabled(name, toggle.checked);
+        if (!result?.ok) {
+          toggle.checked = previousEnabled;
+          profile.enabled = previousEnabled;
+          updateStatus();
+        }
+      } catch (_) {
+        toggle.checked = previousEnabled;
+        profile.enabled = previousEnabled;
+        updateStatus();
+      } finally {
+        toggle.disabled = false;
+        renderSettingsSummaries();
+      }
+    });
+    item.append(toggle);
+  } else {
+    const spacer = document.createElement('span');
+    spacer.className = 'profile-toggle';
+    spacer.setAttribute('aria-hidden', 'true');
+    item.append(spacer);
+  }
+
+  const nameBox = document.createElement('span');
+  nameBox.className = 'profile-name-box';
+  const nameSpan = document.createElement('span');
+  nameSpan.className = 'profile-name';
+  nameSpan.textContent = env ? t(`settings.${providerId}.environment`) : name;
+  nameBox.append(nameSpan);
+  if (detail) {
+    const detailSpan = document.createElement('span');
+    detailSpan.className = 'profile-detail';
+    detailSpan.textContent = detail;
+    detailSpan.title = detail;
+    nameBox.append(detailSpan);
+  }
+
+  if (!env) {
+    const nameInput = document.createElement('input');
+    nameInput.className = 'profile-name-input hidden';
+    nameInput.type = 'text';
+    nameInput.value = name;
+    const renameBtn = document.createElement('button');
+    renameBtn.className = 'profile-rename-btn';
+    renameBtn.textContent = '✎';
+    renameBtn.title = t('settings.profiles.rename');
+    let editing = false;
+    const finishRename = async (save) => {
+      if (!editing) return;
+      editing = false;
+      nameInput.classList.add('hidden');
+      nameSpan.classList.remove('hidden');
+      const nextName = nameInput.value.trim();
+      if (save && nextName && nextName !== name) {
+        const result = await api.renameProfile(name, nextName);
+        if (result?.ok) {
+          rerender();
+        } else {
+          nameInput.value = name;
+          const errorEl = document.getElementById(`${providerId}ErrorMessage`);
+          if (errorEl) {
+            errorEl.textContent = errorText(result);
+            errorEl.classList.remove('hidden');
+          }
+        }
+      }
+    };
+    renameBtn.addEventListener('click', () => {
+      editing = true;
+      nameSpan.classList.add('hidden');
+      nameInput.classList.remove('hidden');
+      nameInput.focus();
+      nameInput.select();
+    });
+    nameInput.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') void finishRename(true);
+      if (event.key === 'Escape') void finishRename(false);
+    });
+    nameInput.addEventListener('blur', () => void finishRename(true));
+    nameBox.append(nameInput, renameBtn);
+  }
+
+  const rightBox = document.createElement('span');
+  rightBox.className = 'profile-right';
+  const info = document.createElement('span');
+  info.className = 'profile-info';
+  info.dataset.managedProfileProvider = providerId;
+  if (env) info.dataset.managedProfileEnvironment = 'true';
+  else info.dataset.managedProfileName = name;
+  info.textContent = t(`settings.${providerId}.checking`);
+  rightBox.append(info);
+
+  if (!env) {
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'profile-delete';
+    deleteBtn.textContent = '✕';
+    deleteBtn.title = t('settings.profiles.delete');
+    let confirming = false;
+    deleteBtn.addEventListener('click', async () => {
+      if (!confirming) {
+        confirming = true;
+        deleteBtn.classList.add('confirming');
+        deleteBtn.textContent = '✓';
+        deleteBtn.title = t('settings.profiles.deleteConfirm', { name });
+        return;
+      }
+      const result = await api.deleteProfile(name);
+      if (result?.ok) rerender();
+    });
+    rightBox.append(deleteBtn);
+  }
+  item.append(nameBox, rightBox);
+  listEl.append(item);
+}
+
+function renderNamedApiProfiles(config) {
+  const {
+    providerId,
+    profileSettingsKey,
+    envConfiguredKey,
+    profileCountStateKey,
+    api,
+    rerender,
+    updateStatus,
+    errorText,
+    detailForProfile = () => ''
+  } = config;
+  const listEl = document.getElementById(`${providerId}ProfileList`);
+  if (!listEl || !api) return;
+  api.getProfiles().then(({ profiles, hasEnvVar }) => {
+    listEl.replaceChildren();
+    state.settings[profileSettingsKey] = profiles;
+    state.settings[envConfiguredKey] = Boolean(hasEnvVar);
+    const entries = Object.entries(profiles);
+    state[profileCountStateKey] = entries.length + (hasEnvVar ? 1 : 0);
+    if (state[profileCountStateKey] === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'opencode-empty';
+      empty.textContent = t(`settings.${providerId}.emptyList`);
+      listEl.append(empty);
+      updateStatus();
+      renderSettingsSummaries();
+      return;
+    }
+
+    for (const [name, profile] of entries) {
+      appendNamedApiProfileRow(listEl, {
+        api,
+        providerId,
+        name,
+        profile,
+        rerender,
+        updateStatus,
+        errorText,
+        detail: detailForProfile(profile)
+      });
+    }
+    if (hasEnvVar) {
+      appendNamedApiProfileRow(listEl, {
+        api,
+        providerId,
+        env: true,
+        rerender,
+        updateStatus,
+        errorText
+      });
+    }
+    updateStatus();
+    renderSettingsSummaries();
+  }).catch(() => {
+    const statusEl = document.getElementById(`${providerId}Status`);
+    if (statusEl) statusEl.textContent = t(`settings.${providerId}.unavailable`);
+  });
+}
+
+function renderOpenRouterProfiles() {
+  renderNamedApiProfiles({
+    providerId: 'openrouter',
+    profileSettingsKey: 'openrouterProfiles',
+    envConfiguredKey: 'openrouterEnvConfigured',
+    profileCountStateKey: 'openrouterProfileCount',
+    api: window.tokenMonitor.openrouter,
+    rerender: renderOpenRouterProfiles,
+    updateStatus: updateOpenRouterProfilesStatus,
+    errorText: openrouterProfileErrorText
+  });
+}
+
+function renderThirdPartyProfiles() {
+  renderNamedApiProfiles({
+    providerId: 'thirdparty',
+    profileSettingsKey: 'thirdPartyProfiles',
+    envConfiguredKey: 'thirdPartyEnvConfigured',
+    profileCountStateKey: 'thirdPartyProfileCount',
+    api: window.tokenMonitor.thirdparty,
+    rerender: renderThirdPartyProfiles,
+    updateStatus: updateThirdPartyProfilesStatus,
+    errorText: thirdPartyProfileErrorText,
+    detailForProfile: (profile) => {
+      const adapter = profile?.adapter === 'newapi-token'
+        ? t('settings.thirdparty.detailNewApiKey')
+        : profile?.adapter === 'custom'
+          ? t('settings.thirdparty.detailCustom')
+          : t('settings.thirdparty.detailNewApiAccount');
+      let host = '';
+      try { host = new URL(String(profile?.baseUrl || '')).host; } catch (_) {}
+      return [adapter, host].filter(Boolean).join(' · ');
+    }
+  });
 }
 
 function renderCursorStatus() {
@@ -9154,9 +10944,21 @@ function setupCursorAccountUI() {
     const codexCancelButton = document.getElementById('codexCancelLoginButton');
     const codexOpenUrlButton = document.getElementById('codexOpenLoginUrlButton');
     const codexCopyUrlButton = document.getElementById('codexCopyLoginUrlButton');
+    const codexWorkspaceSelect = document.getElementById('codexWorkspaceSelect');
+    const codexConfirmWorkspaceButton = document.getElementById('codexConfirmWorkspaceButton');
     const codexLoginDetails = document.getElementById('codexLoginDetails');
     window.tokenMonitor.codex.onLoginStatus((status) => {
-      if (!status || !isCurrentCodexSignInFlow(status.flowId) || status.phase !== 'output') return;
+      if (!status || !isCurrentCodexSignInFlow(status.flowId)) return;
+      if (status.phase === 'workspaceSelection') {
+        state.codexWorkspaceChoices = Array.isArray(status.workspaces) ? status.workspaces : [];
+        state.codexWorkspaceId = state.codexWorkspaceChoices.some((workspace) => workspace.id === status.currentWorkspaceId)
+          ? status.currentWorkspaceId
+          : state.codexWorkspaceChoices[0]?.id || '';
+        state.codexLoginStatus = t('settings.codex.chooseWorkspace');
+        renderCodexLoginStatus();
+        return;
+      }
+      if (status.phase !== 'output') return;
       state.codexLoginOutput = (state.codexLoginOutput + String(status.text || '')).slice(-3000);
       if (status.loginUrl) state.codexLoginUrl = status.loginUrl;
       state.codexLoginStatus = t(state.codexLoginUrl ? 'settings.codex.loginWaiting' : 'settings.codex.loginStarting');
@@ -9169,6 +10971,8 @@ function setupCursorAccountUI() {
       state.codexSignInBusy = true;
       state.codexLoginUrl = '';
       state.codexLoginOutput = '';
+      state.codexWorkspaceChoices = [];
+      state.codexWorkspaceId = '';
       state.codexLoginStatus = t('settings.codex.loginStarting');
       state.codexAccountError = '';
       if (codexLoginDetails) codexLoginDetails.open = false;
@@ -9191,6 +10995,8 @@ function setupCursorAccountUI() {
           await refreshStats({ force: true });
           state.codexLoginStatus = '';
           state.codexLoginOutput = '';
+          state.codexWorkspaceChoices = [];
+          state.codexWorkspaceId = '';
         }
       } catch (err) {
         if (!isCurrentCodexSignInFlow(flowId)) return;
@@ -9202,6 +11008,8 @@ function setupCursorAccountUI() {
           state.codexSignInBusy = false;
           state.codexSignInFlowId = '';
           state.codexLoginUrl = '';
+          state.codexWorkspaceChoices = [];
+          state.codexWorkspaceId = '';
           renderCodexLoginStatus();
           renderCodexAccounts();
         }
@@ -9218,10 +11026,33 @@ function setupCursorAccountUI() {
       state.codexLoginUrl = '';
       state.codexLoginStatus = '';
       state.codexLoginOutput = '';
+      state.codexWorkspaceChoices = [];
+      state.codexWorkspaceId = '';
       state.codexAccountError = '';
       if (codexLoginDetails) codexLoginDetails.open = false;
       renderCodexLoginStatus();
       renderCodexAccounts();
+    });
+
+    codexWorkspaceSelect.addEventListener('change', () => {
+      state.codexWorkspaceId = codexWorkspaceSelect.value;
+    });
+
+    codexConfirmWorkspaceButton.addEventListener('click', async () => {
+      const flowId = state.codexSignInFlowId;
+      const workspaceId = state.codexWorkspaceId;
+      if (!isCurrentCodexSignInFlow(flowId) || !workspaceId) return;
+      codexConfirmWorkspaceButton.disabled = true;
+      try {
+        const result = await window.tokenMonitor.codex.selectWorkspace({ flowId, workspaceId });
+        if (!result?.ok || !isCurrentCodexSignInFlow(flowId)) return;
+        state.codexWorkspaceChoices = [];
+        state.codexWorkspaceId = '';
+        state.codexLoginStatus = t('settings.codex.loginLoadingAccount');
+        renderCodexLoginStatus();
+      } finally {
+        codexConfirmWorkspaceButton.disabled = false;
+      }
     });
 
     codexOpenUrlButton.addEventListener('click', async () => {
@@ -9321,6 +11152,136 @@ function setupCursorAccountUI() {
         renderSettingsSummaries();
       } else {
         errorEl.textContent = result.error || t('settings.opencode.saveFailedShort');
+        errorEl.classList.remove('hidden');
+      }
+    });
+  }
+
+  const openrouterToggle = document.getElementById('openrouterSettingsToggle');
+  if (openrouterToggle) {
+    openrouterToggle.addEventListener('click', () => {
+      const expanding = !state.openrouterAccountExpanded;
+      setOpenrouterAccountExpanded(expanding);
+      if (expanding) renderOpenRouterProfiles();
+    });
+    setOpenrouterAccountExpanded(false);
+
+    const addToggle = document.getElementById('openrouterAddToggle');
+    const addDetails = document.getElementById('openrouterAddDetails');
+    addToggle?.addEventListener('click', () => {
+      const expanded = addDetails?.classList.contains('hidden');
+      addToggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+      addDetails?.classList.toggle('hidden', !expanded);
+      document.getElementById('openrouterAddForm')?.classList.toggle('expanded', expanded);
+    });
+    document.getElementById('openrouterOpenBrowser')?.addEventListener('click', () => {
+      window.tokenMonitor.openExternal('https://openrouter.ai/settings/keys');
+    });
+    document.getElementById('openrouterProfileSubmit')?.addEventListener('click', async () => {
+      const nameInput = document.getElementById('openrouterProfileName');
+      const keyInput = document.getElementById('openrouterApiKeyInput');
+      const errorEl = document.getElementById('openrouterErrorMessage');
+      const name = String(nameInput?.value || '').trim() || 'default';
+      const apiKey = String(keyInput?.value || '').trim();
+      errorEl?.classList.add('hidden');
+      if (!apiKey) {
+        if (errorEl) {
+          errorEl.textContent = t('settings.openrouter.statusNotSet');
+          errorEl.classList.remove('hidden');
+        }
+        return;
+      }
+      const result = await window.tokenMonitor.openrouter.saveProfile(name, apiKey);
+      if (result?.ok) {
+        nameInput.value = '';
+        keyInput.value = '';
+        renderOpenRouterProfiles();
+        await refreshStats({ force: true });
+      } else if (errorEl) {
+        errorEl.textContent = openrouterProfileErrorText(result);
+        errorEl.classList.remove('hidden');
+      }
+    });
+  }
+
+  const thirdpartyToggle = document.getElementById('thirdpartySettingsToggle');
+  if (thirdpartyToggle) {
+    thirdpartyToggle.addEventListener('click', () => {
+      const expanding = !state.thirdPartyAccountExpanded;
+      setThirdPartyAccountExpanded(expanding);
+      if (expanding) renderThirdPartyProfiles();
+    });
+    setThirdPartyAccountExpanded(false);
+
+    const addToggle = document.getElementById('thirdpartyAddToggle');
+    const addDetails = document.getElementById('thirdpartyAddDetails');
+    const platformInput = document.getElementById('thirdpartyPlatformInput');
+    const modeInput = document.getElementById('thirdpartyModeInput');
+    const baseUrlInput = document.getElementById('thirdpartyBaseUrlInput');
+    platformInput?.addEventListener('change', setThirdPartyAdapterFields);
+    modeInput?.addEventListener('change', setThirdPartyAdapterFields);
+    baseUrlInput?.addEventListener('input', updateThirdPartyHttpWarning);
+    setThirdPartyAdapterFields();
+    updateThirdPartyHttpWarning();
+    addToggle?.addEventListener('click', () => {
+      const expanded = addDetails?.classList.contains('hidden');
+      addToggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+      addDetails?.classList.toggle('hidden', !expanded);
+      document.getElementById('thirdpartyAddForm')?.classList.toggle('expanded', expanded);
+    });
+    document.getElementById('thirdpartyProfileSubmit')?.addEventListener('click', async () => {
+      const nameInput = document.getElementById('thirdpartyProfileName');
+      const accessTokenInput = document.getElementById('thirdpartyAccessTokenInput');
+      const userIdInput = document.getElementById('thirdpartyUserIdInput');
+      const keyInput = document.getElementById('thirdpartyApiKeyInput');
+      const endpointPathInput = document.getElementById('thirdpartyEndpointPathInput');
+      const authModeInput = document.getElementById('thirdpartyAuthModeInput');
+      const remainingPathInput = document.getElementById('thirdpartyRemainingPathInput');
+      const usedPathInput = document.getElementById('thirdpartyUsedPathInput');
+      const totalPathInput = document.getElementById('thirdpartyTotalPathInput');
+      const currencyInput = document.getElementById('thirdpartyCurrencyInput');
+      const divisorInput = document.getElementById('thirdpartyDivisorInput');
+      const errorEl = document.getElementById('thirdpartyErrorMessage');
+      const name = String(nameInput?.value || '').trim() || 'default';
+      const adapter = selectedThirdPartyAdapter();
+      const baseUrl = String(baseUrlInput?.value || '').trim();
+      const accessToken = String(accessTokenInput?.value || '').trim();
+      const userId = String(userIdInput?.value || '').trim();
+      const apiKey = String(keyInput?.value || '').trim();
+      errorEl?.classList.add('hidden');
+      const result = await window.tokenMonitor.thirdparty.saveProfile({
+        name,
+        adapter,
+        baseUrl,
+        accessToken,
+        userId,
+        apiKey,
+        endpointPath: String(endpointPathInput?.value || '').trim(),
+        authMode: String(authModeInput?.value || '').trim(),
+        remainingPath: String(remainingPathInput?.value || '').trim(),
+        usedPath: String(usedPathInput?.value || '').trim(),
+        totalPath: String(totalPathInput?.value || '').trim(),
+        currency: String(currencyInput?.value || '').trim(),
+        divisor: String(divisorInput?.value || '').trim()
+      });
+      if (result?.ok) {
+        nameInput.value = '';
+        baseUrlInput.value = '';
+        updateThirdPartyHttpWarning();
+        accessTokenInput.value = '';
+        userIdInput.value = '';
+        keyInput.value = '';
+        endpointPathInput.value = '/user/balance';
+        authModeInput.value = 'bearer';
+        remainingPathInput.value = '';
+        usedPathInput.value = '';
+        totalPathInput.value = '';
+        currencyInput.value = 'USD';
+        divisorInput.value = '1';
+        renderThirdPartyProfiles();
+        await refreshStats({ force: true });
+      } else if (errorEl) {
+        errorEl.textContent = thirdPartyProfileErrorText(result);
         errorEl.classList.remove('hidden');
       }
     });
@@ -9578,6 +11539,83 @@ function setupCursorAccountUI() {
         clearExternalProviderCheckPending('volcengine');
         errorEl.textContent = t('settings.volcengine.saveFailed', { message: err.message });
         errorEl.classList.remove('hidden');
+      }
+    });
+  }
+
+  const claudeToggle = document.getElementById('claudeSettingsToggle');
+  if (claudeToggle) {
+    claudeToggle.addEventListener('click', () => setExternalAccountExpanded('claude', !state.claudeAccountExpanded));
+    setExternalAccountExpanded('claude', false);
+    renderExternalProviderStatus('claude');
+
+    document.getElementById('claudeOpenBrowser').addEventListener('click', () => {
+      window.tokenMonitor.openExternal(claudePlatformUrl());
+    });
+
+    document.getElementById('claudeLogoutButton').addEventListener('click', async () => {
+      await saveSettings({ claudeWebCookie: '' });
+      clearExternalProviderCheckPending('claude');
+      clearExternalProviderPendingStatus('claude');
+      renderExternalProviderStatus('claude');
+      await refreshStats({ force: true });
+    });
+
+    document.getElementById('claudeRefreshButton').addEventListener('click', async () => {
+      await refreshStats({ force: true });
+    });
+
+    document.getElementById('claudeWebCookieSubmit').addEventListener('click', async () => {
+      const input = document.getElementById('claudeWebCookieInput');
+      const submitButton = document.getElementById('claudeWebCookieSubmit');
+      const errorEl = document.getElementById('claudeErrorMessage');
+      errorEl.classList.add('hidden');
+      if (!String(input.value || '').trim()) {
+        errorEl.textContent = t('settings.claude.cookieRequired');
+        errorEl.classList.remove('hidden');
+        return;
+      }
+      if (/[\r\n]/.test(input.value)) {
+        errorEl.textContent = t('settings.claude.cookieInvalidFormat');
+        errorEl.classList.remove('hidden');
+        return;
+      }
+      if (submitButton.disabled) return;
+      submitButton.disabled = true;
+      submitButton.textContent = t('settings.common.checking');
+      try {
+        const result = await window.tokenMonitor.claude.saveCookie(input.value);
+        if (result?.superseded) return;
+        if (!result?.ok) {
+          if (result?.errorCode === 'INVALID_CLAUDE_WEB_SESSION_KEY') {
+            errorEl.textContent = t('settings.claude.cookieInvalidFormat');
+          } else if (result?.errorCode === 'CLAUDE_WEB_SOURCE_CHALLENGE') {
+            errorEl.textContent = t('settings.claude.sourceChallenge');
+          } else if (result?.status === 'unauthorized') {
+            errorEl.textContent = t('settings.claude.cookieRejected');
+          } else {
+            errorEl.textContent = t('settings.claude.cookieCheckFailed');
+          }
+          errorEl.classList.remove('hidden');
+          return;
+        }
+        markExternalProviderCheckPending('claude');
+        await saveSettings({
+          limitProviders: limitProviderSelectionIncluding('claude'),
+          limitsEnabled: true
+        });
+        input.value = '';
+        renderExternalProviderStatus('claude');
+        await refreshStats({ force: true });
+        setExternalAccountExpanded('claude', !externalProviderAccountLinked('claude'));
+        renderExternalProviderStatus('claude');
+      } catch (err) {
+        clearExternalProviderCheckPending('claude');
+        errorEl.textContent = t('settings.claude.saveFailed', { message: err.message });
+        errorEl.classList.remove('hidden');
+      } finally {
+        submitButton.disabled = false;
+        submitButton.textContent = t('settings.claude.saveCookie');
       }
     });
   }
@@ -10030,6 +12068,7 @@ function initSettingsAnimationWrappers() {
     '.cursor-settings-details',
     '.hub-mode-fields',
     '.presence-feature-body',
+    '#claudeManualPanel',
     '#cursorManualPanel',
     '#opencodeManualPanel',
     '#deepseekManualPanel',
@@ -10062,6 +12101,7 @@ function initSettingsAnimationWrappers() {
   });
 }
 
+orderAccountProviderGroups();
 initSettingsAnimationWrappers();
 setupSettingsSections();
 setupCursorAccountUI();

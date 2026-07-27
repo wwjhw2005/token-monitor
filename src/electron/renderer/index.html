@@ -65,6 +65,13 @@
             </div>
             <div class="settings-subgroup">
               <div class="settings-group-header"><span data-i18n="settings.appUpdate.title">App Updates</span><span data-i18n="settings.appUpdate.source">GitHub releases</span></div>
+              <label id="automaticAppUpdatesRow" class="checkbox-label settings-item">
+                <span class="settings-item-text">
+                  <span class="settings-item-title" data-i18n="settings.appUpdate.automatic">Download updates automatically</span>
+                </span>
+                <input id="automaticAppUpdatesInput" type="checkbox" aria-describedby="automaticAppUpdatesNote" />
+                <span id="automaticAppUpdatesNote" class="settings-note settings-item-desc" data-i18n="settings.appUpdate.automaticDescription">Download new versions in the background. You'll be prompted to restart when ready.</span>
+              </label>
               <div class="tokscale-lines">
                 <div><span data-i18n="settings.appUpdate.installed">Installed</span><strong id="appUpdateInstalled">—</strong></div>
                 <div><span data-i18n="settings.appUpdate.latest">Latest</span><strong id="appUpdateLatest" data-i18n="settings.common.notChecked">Not checked</strong></div>
@@ -187,12 +194,13 @@
                 <label class="checkbox-label settings-item"><span class="settings-item-text"><span class="settings-item-title" data-i18n="settings.display.floatingBubble">Floating Bubble</span></span><input id="floatingBubbleInput" type="checkbox" /></label>
                 <div id="floatingBubbleOptions" class="presence-feature-body hidden">
                   <p class="settings-note" data-i18n="settings.display.floatingBubbleNote">Collapse the widget into a slim draggable mini-window; click it to reopen.</p>
-                  <label id="floatingBubbleTriggerRow" class="settings-item"><span class="settings-item-text"><span class="settings-item-title" data-i18n="settings.display.floatingBubbleTrigger">Open on</span></span>
-                    <select id="floatingBubbleTriggerInput">
-                      <option value="click" data-i18n="settings.floatingBubbleTrigger.click">Click</option>
-                      <option value="hover" data-i18n="settings.floatingBubbleTrigger.hover">Hover (preview)</option>
-                    </select>
-                  </label>
+                  <div id="floatingBubbleTriggerRow" class="settings-item">
+                    <span id="floatingBubbleTriggerLabel" class="settings-item-text"><span class="settings-item-title" data-i18n="settings.display.floatingBubbleTrigger">Open on</span></span>
+                    <div class="inline-options" role="radiogroup" aria-labelledby="floatingBubbleTriggerLabel">
+                      <label class="inline-option"><input type="radio" name="floatingBubbleTrigger" value="click" id="floatingBubbleTriggerClick" /><span data-i18n="settings.floatingBubbleTrigger.click">Click</span></label>
+                      <label class="inline-option"><input type="radio" name="floatingBubbleTrigger" value="hover" id="floatingBubbleTriggerHover" /><span data-i18n="settings.floatingBubbleTrigger.hover">Hover (preview)</span></label>
+                    </div>
+                  </div>
                   <label id="floatingBubbleContentRow" class="settings-item"><span class="settings-item-text"><span class="settings-item-title" data-i18n="settings.display.floatingBubbleContent">Bubble display</span></span>
                     <select id="floatingBubbleContentInput">
                       <option value="icon" data-i18n="settings.tray.iconOnly">Icon only</option>
@@ -207,8 +215,10 @@
                       <option value="barsWeekly" data-i18n="settings.tray.barsWeekly">Limit bars: lowest weekly remaining</option>
                       <option value="barsAllSessions" data-i18n="settings.tray.barsAllSessions">Limit bars: first two tools' primary quotas</option>
                       <option value="bars" data-i18n="settings.tray.barsWindow">Limit bars: lowest remaining limit</option>
+                      <option value="custom" data-i18n="settings.tray.custom">Custom…</option>
                     </select>
                   </label>
+                  <div id="floatingBubbleComposer" class="tray-composer hidden" data-surface="floatingBubble"></div>
                 </div>
               </div>
               <div class="presence-feature">
@@ -228,8 +238,10 @@
                       <option value="barsAllSessions" data-i18n="settings.tray.barsAllSessions">Limit bars: first two tools' primary quotas</option>
                       <option value="bars" data-i18n="settings.tray.barsWindow">Limit bars: lowest remaining limit</option>
                       <option value="icon" data-i18n="settings.tray.iconOnly">Icon only</option>
+                      <option value="custom" data-i18n="settings.tray.custom">Custom…</option>
                     </select>
                   </label>
+                  <div id="trayComposer" class="tray-composer hidden" data-surface="tray"></div>
                   <label class="checkbox-label settings-item"><span class="settings-item-text"><span class="settings-item-title" data-i18n="settings.display.trayProviderBadge">Show Token Monitor badge on provider icons</span></span><input id="showTrayProviderBadgeInput" type="checkbox" /></label>
                   <label class="checkbox-label settings-item"><span class="settings-item-text"><span class="settings-item-title" data-i18n="settings.display.trayMode">Tray-only mode</span></span><input id="trayModeInput" type="checkbox" /></label>
                   <div id="trayOptions" class="presence-feature-body hidden">
@@ -472,12 +484,13 @@
             </label>
             <label class="checkbox-label settings-item"><span class="settings-item-text"><span class="settings-item-title" data-i18n="settings.limits.showSource">Show Source</span></span><input id="showLimitSourceInput" type="checkbox" /></label>
             <label class="checkbox-label settings-item"><span class="settings-item-text"><span class="settings-item-title" data-i18n="settings.limits.maskAccountEmails">Mask account emails</span></span><input id="maskLimitAccountEmailsInput" type="checkbox" /></label>
-            <label class="settings-item"><span class="settings-item-text"><span class="settings-item-title" data-i18n="settings.limits.barsShow">Bars show</span></span>
-              <select id="showLimitUsedInput">
-                <option value="remaining" data-i18n="settings.limits.barsRemaining">Remaining</option>
-                <option value="used" data-i18n="settings.limits.barsUsed">Used</option>
-              </select>
-            </label>
+            <div class="settings-item">
+              <span id="showLimitUsedLabel" class="settings-item-text"><span class="settings-item-title" data-i18n="settings.limits.barsShow">Bars show</span></span>
+              <div class="inline-options" role="radiogroup" aria-labelledby="showLimitUsedLabel">
+                <label class="inline-option"><input type="radio" name="showLimitUsed" value="remaining" id="showLimitUsedRemaining" /><span data-i18n="settings.limits.barsRemaining">Remaining</span></label>
+                <label class="inline-option"><input type="radio" name="showLimitUsed" value="used" id="showLimitUsedUsed" /><span data-i18n="settings.limits.barsUsed">Used</span></label>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -487,6 +500,36 @@
             <span class="settings-section-meta"><span id="accountsSettingsSummary" class="settings-section-summary"></span><span class="settings-section-disclosure" aria-hidden="true"></span></span>
           </button>
           <div id="accountsSettingsDetails" class="settings-section-details hidden">
+            <div id="claudeAccountGroup" class="settings-group cursor-account-group">
+              <button id="claudeSettingsToggle" class="settings-group-header cursor-settings-toggle" type="button" aria-expanded="false" aria-controls="claudeSettingsDetails">
+                <span data-i18n="settings.claude.title">Claude Account</span>
+                <span class="cursor-settings-summary">
+                  <span id="claudeAccountStatus" class="cursor-status-pill" data-i18n="settings.claude.statusNotSet">Not configured</span>
+                  <span class="cursor-disclosure-icon" aria-hidden="true"></span>
+                </span>
+              </button>
+              <div id="claudeSettingsDetails" class="cursor-settings-details hidden">
+                <div class="settings-actions">
+                  <button id="claudeOpenBrowser" data-i18n="settings.claude.openBrowser">Open Claude usage in browser</button>
+                  <button id="claudeLogoutButton" class="hidden" data-i18n="settings.claude.clearCookie">Clear cookie</button>
+                  <button id="claudeRefreshButton" data-i18n="settings.common.refresh">Refresh</button>
+                </div>
+                <div id="claudeManualPanel">
+                  <p class="settings-note" data-i18n="settings.claude.note">Claude Code OAuth and CLI are detected automatically when Web login is not configured. Adding Web login makes it the local Claude source. The cookie stays on this device.</p>
+                  <p class="settings-note">
+                    <strong>1.</strong> <span data-i18n="settings.claude.step1">Open Claude usage in your browser (button above) and sign in.</span><br>
+                    <strong>2.</strong> <span data-i18n="settings.claude.step2">Open DevTools (F12 or Cmd+Opt+I) -> Application/Storage -> Cookies -> https://claude.ai.</span><br>
+                    <strong>3.</strong> <span data-i18n="settings.claude.step3">Copy the sessionKey value.</span><br>
+                    <strong>4.</strong> <span data-i18n="settings.claude.step4">Paste it below and click Save cookie.</span>
+                  </p>
+                  <textarea id="claudeWebCookieInput" rows="3" autocomplete="off" spellcheck="false" placeholder="sessionKey=..." data-i18n-placeholder="settings.claude.cookiePlaceholder"></textarea>
+                  <div class="settings-actions">
+                    <button id="claudeWebCookieSubmit" data-i18n="settings.claude.saveCookie">Save cookie</button>
+                  </div>
+                </div>
+                <div id="claudeErrorMessage" class="settings-note error hidden"></div>
+              </div>
+            </div>
             <div id="codexAccountGroup" class="settings-group cursor-account-group">
               <button id="codexSettingsToggle" class="settings-group-header cursor-settings-toggle" type="button" aria-expanded="false" aria-controls="codexSettingsDetails">
                 <span data-i18n="settings.codex.title">Codex Accounts</span>
@@ -503,6 +546,13 @@
                   <button id="codexRefreshAccountsButton" data-i18n="settings.codex.refresh">Refresh</button>
                 </div>
                 <div id="codexLoginStatus" class="settings-note hidden" role="status" aria-live="polite"></div>
+                <div id="codexWorkspaceSelection" class="codex-workspace-selection hidden">
+                  <label>
+                    <span data-i18n="settings.codex.workspace">Workspace</span>
+                    <select id="codexWorkspaceSelect"></select>
+                  </label>
+                  <button id="codexConfirmWorkspaceButton" type="button" data-i18n="settings.codex.addWorkspace">Add this workspace</button>
+                </div>
                 <div id="codexLoginUrlActions" class="settings-actions hidden">
                   <button id="codexOpenLoginUrlButton" type="button" data-i18n="settings.codex.openLoginUrl">Open browser</button>
                   <button id="codexCopyLoginUrlButton" type="button" data-i18n="settings.codex.copyLoginUrl">Copy link</button>
@@ -588,6 +638,43 @@
                 </div>
 
                 <div id="opencodeErrorMessage" class="settings-note error hidden"></div>
+              </div>
+            </div>
+            <div id="openrouterAccountGroup" class="settings-group cursor-account-group">
+              <button id="openrouterSettingsToggle" class="settings-group-header cursor-settings-toggle" type="button" aria-expanded="false" aria-controls="openrouterSettingsDetails">
+                <span data-i18n="settings.openrouter.title">OpenRouter Accounts</span>
+                <span class="cursor-settings-summary">
+                  <span id="openrouterStatus" class="cursor-status-pill" data-i18n="settings.openrouter.statusNotSet">Not configured</span>
+                  <span class="cursor-disclosure-icon" aria-hidden="true"></span>
+                </span>
+              </button>
+              <div id="openrouterSettingsDetails" class="cursor-settings-details hidden">
+                <div id="openrouterProfileList" class="opencode-profile-list"></div>
+                <div id="openrouterAddForm" class="opencode-add-form">
+                  <button id="openrouterAddToggle" class="opencode-add-summary" type="button" aria-expanded="false" aria-controls="openrouterAddDetails">
+                    <svg class="add-icon" width="14" height="14" viewBox="0 0 14 14" fill="none">
+                      <path d="M7 1v12M1 7h12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                    <span data-i18n="settings.openrouter.addProfile">Add account</span>
+                  </button>
+                  <div id="openrouterAddDetails" class="opencode-add-details accordion-animated-container hidden">
+                    <div class="accordion-animation-inner opencode-add-body">
+                      <div class="settings-actions">
+                        <button id="openrouterOpenBrowser" data-i18n="settings.openrouter.openBrowser">Open OpenRouter API keys</button>
+                      </div>
+                      <p class="settings-note" data-i18n="settings.openrouter.note">Add an OpenRouter API key to view usage, the key limit, and available balance. Both regular and Management API keys are supported. Keys stay on this device and only official OpenRouter endpoints are used.</p>
+                      <div class="settings-row">
+                        <label for="openrouterProfileName" data-i18n="settings.openrouter.profileName">Account name</label>
+                        <input id="openrouterProfileName" type="text" data-i18n-placeholder="settings.openrouter.profileNamePlaceholder" placeholder="e.g. work, personal">
+                      </div>
+                      <input id="openrouterApiKeyInput" type="password" spellcheck="false" placeholder="sk-or-v1-..." data-i18n-placeholder="settings.openrouter.apiKeyPlaceholder" />
+                      <div class="settings-actions">
+                        <button id="openrouterProfileSubmit" data-i18n="settings.openrouter.saveProfile">Save</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div id="openrouterErrorMessage" class="settings-note error hidden"></div>
               </div>
             </div>
             <div id="deepseekAccountGroup" class="settings-group cursor-account-group">
@@ -955,6 +1042,118 @@
                 <div id="copilotErrorMessage" class="settings-note error hidden"></div>
               </div>
             </div>
+            <div id="thirdpartyAccountGroup" class="settings-group cursor-account-group">
+              <button id="thirdpartySettingsToggle" class="settings-group-header cursor-settings-toggle" type="button" aria-expanded="false" aria-controls="thirdpartySettingsDetails">
+                <span data-i18n="settings.thirdparty.title">Third-party API Accounts</span>
+                <span class="cursor-settings-summary">
+                  <span id="thirdpartyStatus" class="cursor-status-pill" data-i18n="settings.thirdparty.statusNotSet">Not configured</span>
+                  <span class="cursor-disclosure-icon" aria-hidden="true"></span>
+                </span>
+              </button>
+              <div id="thirdpartySettingsDetails" class="cursor-settings-details hidden">
+                <div id="thirdpartyProfileList" class="opencode-profile-list thirdparty-profile-list"></div>
+                <div id="thirdpartyAddForm" class="opencode-add-form">
+                  <button id="thirdpartyAddToggle" class="opencode-add-summary" type="button" aria-expanded="false" aria-controls="thirdpartyAddDetails">
+                    <svg class="add-icon" width="14" height="14" viewBox="0 0 14 14" fill="none">
+                      <path d="M7 1v12M1 7h12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                    <span data-i18n="settings.thirdparty.addProfile">Add account</span>
+                  </button>
+                  <div id="thirdpartyAddDetails" class="opencode-add-details accordion-animated-container hidden">
+                    <div class="accordion-animation-inner opencode-add-body thirdparty-add-body">
+                      <p class="settings-note thirdparty-intro" data-i18n="settings.thirdparty.note">Connect a compatible relay or balance API. Credentials stay on this device and are sent only to the Base URL below.</p>
+                      <div id="thirdpartyChoiceGrid" class="thirdparty-choice-grid">
+                        <div class="thirdparty-field">
+                          <label for="thirdpartyPlatformInput" data-i18n="settings.thirdparty.preset">Preset</label>
+                          <select id="thirdpartyPlatformInput">
+                            <option value="newapi" data-i18n="settings.thirdparty.presetNewApi">New API-compatible</option>
+                            <option value="custom" data-i18n="settings.thirdparty.presetCustom">Custom</option>
+                          </select>
+                        </div>
+                        <div id="thirdpartyModeField" class="thirdparty-field">
+                          <label for="thirdpartyModeInput" data-i18n="settings.thirdparty.scope">Balance scope</label>
+                          <select id="thirdpartyModeInput">
+                            <option value="account" data-i18n="settings.thirdparty.scopeAccount">Account</option>
+                            <option value="token" data-i18n="settings.thirdparty.scopeApiKey">API key</option>
+                          </select>
+                        </div>
+                      </div>
+                      <p id="thirdpartyModeHint" class="settings-note thirdparty-mode-hint" data-i18n="settings.thirdparty.hintNewApiAccount">Shows the whole account balance. New API requires a User ID; compatible One API forks can leave it blank.</p>
+                      <div class="thirdparty-field">
+                        <label for="thirdpartyProfileName" data-i18n="settings.thirdparty.profileName">Account name</label>
+                        <input id="thirdpartyProfileName" type="text" data-i18n-placeholder="settings.thirdparty.profileNamePlaceholder" placeholder="e.g. work, personal">
+                      </div>
+                      <div class="thirdparty-field">
+                        <label for="thirdpartyBaseUrlInput" data-i18n="settings.thirdparty.baseUrl">Base URL</label>
+                        <input id="thirdpartyBaseUrlInput" type="url" inputmode="url" spellcheck="false" data-i18n-placeholder="settings.thirdparty.baseUrlPlaceholder" placeholder="https://api.example.com">
+                      </div>
+                      <p id="thirdpartyHttpWarning" class="settings-note hub-warning hidden" role="status" data-i18n="settings.thirdparty.httpWarning">HTTP sends credentials without transport encryption. Use HTTPS unless you trust the network.</p>
+                      <div id="thirdpartyCredentialGrid" class="thirdparty-credential-grid">
+                        <div id="thirdpartyAccessTokenRow" class="thirdparty-field">
+                          <label for="thirdpartyAccessTokenInput" data-i18n="settings.thirdparty.accessToken">Access token</label>
+                          <input id="thirdpartyAccessTokenInput" type="password" spellcheck="false" data-i18n-placeholder="settings.thirdparty.accessTokenPlaceholder" placeholder="Account access token">
+                        </div>
+                        <div id="thirdpartyUserIdRow" class="thirdparty-field">
+                          <label for="thirdpartyUserIdInput" data-i18n="settings.thirdparty.userId">User ID (New API only)</label>
+                          <input id="thirdpartyUserIdInput" type="text" inputmode="numeric" spellcheck="false" data-i18n-placeholder="settings.thirdparty.userIdPlaceholder" placeholder="e.g. 1">
+                        </div>
+                        <div id="thirdpartyApiKeyRow" class="thirdparty-field hidden">
+                          <label for="thirdpartyApiKeyInput" data-i18n="settings.thirdparty.apiKey">API key</label>
+                          <input id="thirdpartyApiKeyInput" type="password" spellcheck="false" data-i18n-placeholder="settings.thirdparty.apiKeyPlaceholder" placeholder="sk-...">
+                        </div>
+                      </div>
+                      <div id="thirdpartyCustomConfig" class="thirdparty-custom-config hidden">
+                        <div class="thirdparty-custom-request-grid">
+                          <div class="thirdparty-field">
+                            <label for="thirdpartyEndpointPathInput" data-i18n="settings.thirdparty.endpointPath">Endpoint path</label>
+                            <input id="thirdpartyEndpointPathInput" type="text" spellcheck="false" value="/user/balance" data-i18n-placeholder="settings.thirdparty.endpointPathPlaceholder" placeholder="/user/balance">
+                          </div>
+                          <div class="thirdparty-field">
+                            <label for="thirdpartyAuthModeInput" data-i18n="settings.thirdparty.authMode">Authentication</label>
+                            <select id="thirdpartyAuthModeInput">
+                              <option value="bearer" data-i18n="settings.thirdparty.authBearer">Bearer token</option>
+                              <option value="x-api-key" data-i18n="settings.thirdparty.authXApiKey">x-api-key header</option>
+                            </select>
+                          </div>
+                        </div>
+                        <div class="thirdparty-custom-mapping">
+                          <div class="thirdparty-custom-mapping-heading">
+                            <span data-i18n="settings.thirdparty.responseMapping">Response mapping</span>
+                            <span data-i18n="settings.thirdparty.responseMappingHint">Dot-separated JSON paths</span>
+                          </div>
+                          <div class="thirdparty-custom-mapping-grid">
+                            <div class="thirdparty-field">
+                              <label for="thirdpartyRemainingPathInput" data-i18n="settings.thirdparty.remainingPath">Remaining balance</label>
+                              <input id="thirdpartyRemainingPathInput" type="text" spellcheck="false" data-i18n-placeholder="settings.thirdparty.remainingPathPlaceholder" placeholder="data.balance">
+                            </div>
+                            <div class="thirdparty-field">
+                              <label for="thirdpartyUsedPathInput" data-i18n="settings.thirdparty.usedPath">Used amount (optional)</label>
+                              <input id="thirdpartyUsedPathInput" type="text" spellcheck="false" data-i18n-placeholder="settings.thirdparty.usedPathPlaceholder" placeholder="data.used">
+                            </div>
+                            <div class="thirdparty-field">
+                              <label for="thirdpartyTotalPathInput" data-i18n="settings.thirdparty.totalPath">Total quota (optional)</label>
+                              <input id="thirdpartyTotalPathInput" type="text" spellcheck="false" data-i18n-placeholder="settings.thirdparty.totalPathPlaceholder" placeholder="data.total">
+                            </div>
+                            <div class="thirdparty-field">
+                              <label for="thirdpartyDivisorInput" data-i18n="settings.thirdparty.divisor">Divisor</label>
+                              <input id="thirdpartyDivisorInput" type="number" min="0.000000000000001" max="1000000000000000" step="any" value="1" inputmode="decimal">
+                            </div>
+                            <div class="thirdparty-field">
+                              <label for="thirdpartyCurrencyInput" data-i18n="settings.thirdparty.currency">Currency</label>
+                              <input id="thirdpartyCurrencyInput" type="text" maxlength="8" value="USD" spellcheck="false" data-i18n-placeholder="settings.thirdparty.currencyPlaceholder" placeholder="USD">
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="settings-actions">
+                        <button id="thirdpartyProfileSubmit" data-i18n="settings.thirdparty.saveProfile">Save account</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div id="thirdpartyErrorMessage" class="settings-note error hidden"></div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -1025,6 +1224,13 @@
         <div id="cost" class="cost">$0.00</div>
       </section>
 
+      <div id="viewBackRow" class="view-back-row hidden">
+        <button id="backHomeButton" type="button" class="back-home-button" title="Back to Home" aria-label="Back to Home" data-i18n-title="views.backHome" data-i18n-aria-label="views.backHome">
+          <span class="back-home-icon" aria-hidden="true"></span>
+          <span data-i18n="views.backHome">Back to Home</span>
+        </button>
+      </div>
+
       <section id="homePanel" class="home-panel hidden"></section>
       <section id="breakdown" class="breakdown"></section>
       <div id="session-detail-head" class="detail-head hidden"></div>
@@ -1037,6 +1243,10 @@
         <div id="appUpdatePill" class="update-pill hidden" title="">
           <button id="appUpdatePillAction" type="button" class="update-pill-action">
             <span id="appUpdatePillLabel" class="update-pill-label"></span>
+          </button>
+          <button id="appUpdatePillRestart" type="button" class="update-pill-restart hidden">
+            <span aria-hidden="true">↻</span>
+            <span id="appUpdatePillRestartLabel" class="update-pill-restart-label"></span>
           </button>
           <button id="appUpdatePillDismiss" type="button" class="update-pill-dismiss" data-i18n-title="settings.appUpdate.dismiss" data-i18n-aria-label="settings.appUpdate.dismiss" title="Dismiss this version" aria-label="Dismiss this version">×</button>
         </div>
@@ -1062,6 +1272,7 @@
     <button id="floatingBubbleTab" class="floating-bubble-tab" type="button" title="Show Token Monitor" aria-label="Show Token Monitor" data-i18n-title="floatingBubble.expand" data-i18n-aria-label="floatingBubble.expand">
       <span id="floatingBubbleContent" aria-hidden="true">Σ</span>
     </button>
+    <script src="../../shared/limitBalanceDisplay.js"></script>
     <script src="trayBars.js"></script>
     <script src="usageCharts.js"></script>
     <script src="homeOverview.js"></script>
@@ -1069,6 +1280,7 @@
     <script src="trayProviderIcons.js"></script>
     <script src="limitProviderOrder.js"></script>
     <script src="accountIdentity.js"></script>
+    <script src="appUpdatePresentation.js"></script>
     <script src="limitProviderPresentation.js"></script>
     <script src="limitDisplayMode.js"></script>
     <script src="clientStatusPresentation.js"></script>
@@ -1090,10 +1302,12 @@
     <script src="../windowShortcut.js"></script>
     <script src="../../shared/currency.js"></script>
     <script src="../../shared/trayText.js"></script>
+    <script src="../../shared/trayLayout.js"></script>
     <script src="../motionPreference.js"></script>
     <script src="../windowsBackdropMode.js"></script>
     <script src="windowsGlass.js"></script>
     <script src="glassRendering.js"></script>
+    <script src="trayComposer.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

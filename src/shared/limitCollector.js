@@ -18,9 +18,11 @@ const cursorProbe = require('./cursorProbe');
 const antigravityProbe = require('./antigravityProbe');
 const opencodeLimits = require('./opencodeLimits');
 const opencodeWeb = require('./opencodeWeb');
+const openrouterLimits = require('./openrouterLimits');
+const thirdPartyLimits = require('./thirdPartyLimits');
 const { sharedDataDir } = require('./config');
 const { recordConsumption } = require('./deepseekBalanceHistory');
-const { codexAuthIdentity } = require('./codexAuth');
+const { codexAccountKey, codexAuthIdentity } = require('./codexAuth');
 const minimaxLimits = require('./minimaxLimits');
 const { minimaxToken, minimaxBaseUrl, parseMinimaxTiers, fetchMinimaxLimits } = minimaxLimits;
 const mimoLimits = require('./mimoLimits');
@@ -54,14 +56,19 @@ const {
   fetchGrokLimits
 } = grokLimits;
 
-const LIMIT_PROVIDER_IDS = ['claude', 'codex', 'cursor', 'antigravity', 'opencode', 'deepseek', 'minimax', 'mimo', 'grok', 'copilot', 'kiro', 'zai', 'volcengine', 'qoder', 'zaiteam', 'kimi', 'ollama', 'wecode'];
+const LIMIT_PROVIDER_IDS = ['claude', 'codex', 'opencode', 'cursor', 'antigravity', 'kimi', 'grok', 'copilot', 'mimo', 'zai', 'zaiteam', 'kiro', 'deepseek', 'openrouter', 'minimax', 'volcengine', 'qoder', 'ollama', 'wecode', 'thirdparty'];
 const DEFAULT_PROVIDER_PHYSICAL_BOUND_MS = 120_000;
 const PROVIDER_CLEANUP_GRACE_MS = 5_000;
 const LIMIT_REFRESH_VALUES = new Set([60_000, 120_000, 300_000, 900_000, 1_800_000]);
 const CLAUDE_USAGE_URL = 'https://api.anthropic.com/api/oauth/usage';
+const CLAUDE_PROFILE_URL = 'https://api.anthropic.com/api/oauth/profile';
+const CLAUDE_WEB_BASE_URL = 'https://claude.ai';
 const CLAUDE_OAUTH_TOKEN_URL = 'https://console.anthropic.com/v1/oauth/token';
 const CLAUDE_OAUTH_CLIENT_ID = '9d1c250a-e61b-44d9-88ed-5944d1962f5e';
 const CLAUDE_REFRESH_LEEWAY_MS = 5 * 60 * 1000;
+const CLAUDE_IDENTITY_CACHE_TTL_MS = 60 * 60 * 1000;
+const CLAUDE_IDENTITY_CACHE_MAX_ENTRIES = 16;
+const CLAUDE_IDENTITY_CACHE_STATE_KEY = 'claude.identity-cache';
 const CLAUDE_SESSION_WINDOW_MINUTES = 5 * 60;
 const CLAUDE_WEEKLY_WINDOW_MINUTES = 7 * 24 * 60;
 const CODEX_CHATGPT_BASE_URL = 'https://chatgpt.com/backend-api';
@@ -116,6 +123,34 @@ function errorWithStatus(status, message) {
 
 function shouldTryClaudeCliFallback(error) {
   return ['notConfigured', 'sourceRateLimited', 'unavailable', 'error'].includes(error?.status);
+}
+
+function normalizeClaudeWebCookie(value) {
+  const raw = typeof value === 'string' ? value.trim() : '';
+  if (!raw) return '';
+  if (/[\s;]/.test(raw)) return '';
+  const sessionKey = raw.startsWith('sessionKey=') ? raw.slice('sessionKey='.length) : raw;
+  return sessionKey.startsWith('sk-ant-') && sessionKey.length > 'sk-ant-'.length
+    ? `sessionKey=${sessionKey}`
+    : '';
+}
+
+function normalizeClaudeWebCookieInput(value) {
+  const raw = typeof value === 'string' ? value : String(value || '');
+  const normalized = normalizeClaudeWebCookie(raw);
+  if (raw.trim() && !normalized) {
+    const error = new Error('Claude Web sessionKey must be an sk-ant- value');
+    error.code = 'INVALID_CLAUDE_WEB_SESSION_KEY';
+    throw error;
+  }
+  return normalized;
+}
+
+function claudeWebCookie(env = process.env, options = {}) {
+  if (Object.prototype.hasOwnProperty.call(options, 'claudeWebCookie')) {
+    return normalizeClaudeWebCookie(options.claudeWebCookie);
+  }
+  return normalizeClaudeWebCookie(env.CLAUDE_WEB_COOKIE);
 }
 
 async function readJsonFile(filePath, deps) {
@@ -561,16 +596,26 @@ function runProcessText(command, args = [], options = {}) {
   });
 }
 
-async function fetchJson(url, headers, deps = {}) {
+async function fetchJson(url, headers, deps = {}, options = {}) {
   const fetchFn = deps.fetch || fetch;
   const timeoutMs = Number(deps.fetchTimeoutMs || 12000);
   const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
   const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
   try {
     const response = await fetchFn(url, { headers, ...(controller ? { signal: controller.signal } : {}) });
+    if (typeof options.onResponse === 'function') await options.onResponse(response);
     if (!response.ok) {
-      const status = response.status === 401 ? 'unauthorized' : response.status === 429 ? 'sourceRateLimited' : 'unavailable';
-      throw errorWithStatus(status, `${url} returned ${response.status}`);
+      const sourceChallenge = response.status === 403
+        && String(response.headers?.get?.('cf-mitigated') || '').toLowerCase() === 'challenge';
+      const status = response.status === 401
+        || (options.forbiddenIsUnauthorized && response.status === 403 && !sourceChallenge)
+        ? 'unauthorized'
+        : response.status === 429
+          ? 'sourceRateLimited'
+          : 'unavailable';
+      const error = errorWithStatus(status, `${url} returned ${response.status}`);
+      if (sourceChallenge) error.code = 'CLAUDE_WEB_SOURCE_CHALLENGE';
+      throw error;
     }
     return response.json();
   } catch (error) {
@@ -579,6 +624,16 @@ async function fetchJson(url, headers, deps = {}) {
   } finally {
     if (timer) clearTimeout(timer);
   }
+}
+
+function fetchClaudeWebJson(url, headers, deps = {}, options = {}) {
+  const webDeps = typeof deps.claudeWebFetch === 'function'
+    ? { ...deps, fetch: deps.claudeWebFetch }
+    : deps;
+  return fetchJson(url, headers, webDeps, {
+    forbiddenIsUnauthorized: true,
+    onResponse: options.onResponse
+  });
 }
 
 function valueFromAliases(object, aliases) {
@@ -641,6 +696,8 @@ function mapClaudeUsageToProvider(usage, meta = {}) {
     provider: 'claude',
     accountKey: meta.accountKey || '',
     accountLabel: meta.accountLabel || '',
+    accountName: meta.accountName || '',
+    accountEmail: meta.accountEmail || '',
     source: meta.source || 'oauth',
     status: 'ok',
     updatedAt: meta.updatedAt,
@@ -731,6 +788,348 @@ function callClaudeUsage(accessToken, deps = {}) {
   }, deps);
 }
 
+function callClaudeProfile(accessToken, deps = {}) {
+  return fetchJson(CLAUDE_PROFILE_URL, {
+    accept: 'application/json',
+    authorization: `Bearer ${accessToken}`,
+    'user-agent': TOKEN_MONITOR_USER_AGENT
+  }, deps);
+}
+
+function claudeWebOrganizations(body) {
+  if (Array.isArray(body)) return body;
+  if (Array.isArray(body?.organizations)) return body.organizations;
+  if (Array.isArray(body?.data)) return body.data;
+  return [];
+}
+
+function claudeWebOrganizationId(organization) {
+  return String(organization?.uuid || organization?.id || organization?.organization_uuid || '').trim();
+}
+
+function claudeWebOrganizationCapabilities(organization) {
+  if (!Array.isArray(organization?.capabilities)) return new Set();
+  return new Set(
+    organization.capabilities
+      .map((capability) => String(capability || '').trim().toLowerCase())
+      .filter(Boolean)
+  );
+}
+
+function selectClaudeWebOrganization(organizations) {
+  const candidates = organizations.filter((candidate) => claudeWebOrganizationId(candidate));
+  const hasChatCapability = (candidate) => (
+    claudeWebOrganizationCapabilities(candidate).has('chat')
+  );
+  const isApiOnly = (candidate) => {
+    const capabilities = claudeWebOrganizationCapabilities(candidate);
+    return capabilities.size === 1 && capabilities.has('api');
+  };
+  return candidates.find(hasChatCapability)
+    || candidates.find((candidate) => !isApiOnly(candidate))
+    || candidates[0]
+    || null;
+}
+
+function claudeWebMembership(accountBody, organizationId) {
+  const account = accountBody?.account && typeof accountBody.account === 'object'
+    ? accountBody.account
+    : accountBody;
+  const memberships = Array.isArray(account?.memberships)
+    ? account.memberships
+    : Array.isArray(accountBody?.memberships)
+      ? accountBody.memberships
+      : [];
+  return memberships.find((membership) => (
+    claudeWebOrganizationId(membership?.organization || membership) === organizationId
+  )) || memberships[0] || null;
+}
+
+function claudeStableIdentity(accountId, organizationId, accountEmail) {
+  if (accountId) return `account:${accountId}`;
+  if (organizationId) return `organization:${organizationId}`;
+  return accountEmail;
+}
+
+function claudeWebAccountIdentity(accountBody, organization) {
+  const organizationId = claudeWebOrganizationId(organization);
+  const membership = claudeWebMembership(accountBody, organizationId);
+  const account = accountBody?.account && typeof accountBody.account === 'object'
+    ? accountBody.account
+    : accountBody || {};
+  const memberOrganization = membership?.organization && typeof membership.organization === 'object'
+    ? membership.organization
+    : {};
+  const accountId = String(account.uuid || account.id || account.account_uuid || '').trim();
+  const accountEmail = String(
+    account.email_address || account.email || accountBody?.email_address || accountBody?.email || ''
+  ).trim().toLowerCase();
+  const accountName = String(
+    memberOrganization.name
+      || memberOrganization.display_name
+      || organization?.name
+      || organization?.display_name
+      || account.name
+      || account.display_name
+      || ''
+  ).trim();
+  const stableIdentity = claudeStableIdentity(accountId, organizationId, accountEmail);
+  if (!stableIdentity) {
+    throw claudeIdentityUnavailable('Claude Web account did not include a stable account identity');
+  }
+  const accountLabel = claudePlanLabelFromParts(
+    membership?.seat_tier || membership?.billing_type || account?.subscription_type,
+    membership?.rate_limit_tier || account?.rate_limit_tier
+  );
+  return {
+    accountKey: hashKey('claude-account', stableIdentity),
+    accountEmail,
+    accountName,
+    accountLabel
+  };
+}
+
+function claudeIdentityCache(deps = {}) {
+  if (!(deps.providerRuntimeState instanceof Map)) return null;
+  let cache = deps.providerRuntimeState.get(CLAUDE_IDENTITY_CACHE_STATE_KEY);
+  if (!(cache instanceof Map)) {
+    cache = new Map();
+    deps.providerRuntimeState.set(CLAUDE_IDENTITY_CACHE_STATE_KEY, cache);
+  }
+  return cache;
+}
+
+function claudeIdentityCacheTtlMs(deps = {}) {
+  const configured = Number(deps.claudeIdentityCacheTtlMs);
+  return Number.isFinite(configured) && configured >= 0
+    ? configured
+    : CLAUDE_IDENTITY_CACHE_TTL_MS;
+}
+
+function claudeCachedIdentity(fingerprint, deps = {}, options = {}) {
+  const cache = claudeIdentityCache(deps);
+  if (!cache || !fingerprint) return null;
+  const entry = cache.get(fingerprint);
+  if (!entry) return null;
+  cache.delete(fingerprint);
+  cache.set(fingerprint, entry);
+  if (options.allowStale) return entry;
+  const nowMs = (deps.now || Date.now)();
+  return nowMs - entry.resolvedAt <= claudeIdentityCacheTtlMs(deps) ? entry : null;
+}
+
+function cacheClaudeIdentity(fingerprint, entry, deps = {}) {
+  const cache = claudeIdentityCache(deps);
+  if (!cache || !fingerprint || !entry?.identity?.accountKey) return entry;
+  const previous = cache.get(fingerprint);
+  const resolved = {
+    ...entry,
+    identity: {
+      ...entry.identity,
+      ...(previous?.identity?.accountKey ? { accountKey: previous.identity.accountKey } : {})
+    },
+    resolvedAt: (deps.now || Date.now)()
+  };
+  cache.delete(fingerprint);
+  cache.set(fingerprint, resolved);
+  while (cache.size > CLAUDE_IDENTITY_CACHE_MAX_ENTRIES) {
+    cache.delete(cache.keys().next().value);
+  }
+  return resolved;
+}
+
+function claudeWebIdentityFingerprint(cookie) {
+  return cookie ? hashKey('claude-web-identity-cache', cookie) : '';
+}
+
+function claudeWebSessionKey(cookie) {
+  return String(cookie || '').replace(/^sessionKey=/, '');
+}
+
+function claudeWebSetCookieValues(response) {
+  const headers = response?.headers;
+  if (!headers) return [];
+  if (typeof headers.getSetCookie === 'function') {
+    const values = headers.getSetCookie();
+    if (Array.isArray(values)) return values;
+  }
+  const value = typeof headers.get === 'function' ? headers.get('set-cookie') : '';
+  return value ? [value] : [];
+}
+
+function claudeWebRenewedSessionKey(response) {
+  if (!response?.ok) return '';
+  let latest = '';
+  for (const header of claudeWebSetCookieValues(response)) {
+    const pattern = /(?:^|[,\r\n])\s*sessionKey=([^;,\r\n]+)/ig;
+    for (const match of String(header || '').matchAll(pattern)) {
+      const value = String(match[1] || '').trim();
+      if (value.startsWith('sk-ant-')) latest = value;
+    }
+  }
+  return latest;
+}
+
+function createClaudeWebSession(cookie) {
+  const initialCookie = normalizeClaudeWebCookieInput(cookie);
+  let sessionKey = claudeWebSessionKey(initialCookie);
+  return {
+    headers() {
+      return {
+        accept: 'application/json',
+        cookie: `sessionKey=${sessionKey}`
+      };
+    },
+    observe(response) {
+      sessionKey = claudeWebRenewedSessionKey(response) || sessionKey;
+    },
+    cookie() {
+      return `sessionKey=${sessionKey}`;
+    },
+    initialCookie
+  };
+}
+
+function claudeOauthIdentityFingerprint(credentials) {
+  const secret = credentials?.refreshToken || credentials?.accessToken;
+  return secret
+    ? hashKey('claude-oauth-identity-cache', credentials?.source || '', secret)
+    : '';
+}
+
+function carryClaudeCachedIdentity(previousCredentials, nextCredentials, deps = {}) {
+  const previousFingerprint = claudeOauthIdentityFingerprint(previousCredentials);
+  const nextFingerprint = claudeOauthIdentityFingerprint(nextCredentials);
+  if (!previousFingerprint || !nextFingerprint || previousFingerprint === nextFingerprint) return;
+  const cached = claudeCachedIdentity(previousFingerprint, deps, { allowStale: true });
+  if (cached) cacheClaudeIdentity(nextFingerprint, cached, deps);
+}
+
+async function fetchClaudeWebLimits(cookie, deps = {}) {
+  const nowMs = (deps.now || Date.now)();
+  const baseUrl = String(deps.claudeWebBaseUrl || CLAUDE_WEB_BASE_URL).replace(/\/$/, '');
+  const session = createClaudeWebSession(cookie);
+  let reportedCookie = session.initialCookie;
+  const observeResponse = async (response) => {
+    session.observe(response);
+    const renewedCookie = session.cookie();
+    if (renewedCookie === reportedCookie) return;
+    const previousCookie = reportedCookie;
+    try {
+      const persisted = await deps.onClaudeWebCookieRenewed?.({
+        previousCookie,
+        cookie: renewedCookie
+      });
+      if (persisted !== false) reportedCookie = renewedCookie;
+    } catch (error) {
+      deps.logger?.(`[limits] Claude Web session renewal could not be persisted: ${error.message}`);
+    }
+  };
+  const fetchWebJson = (url) => fetchClaudeWebJson(url, session.headers(), deps, {
+    onResponse: observeResponse
+  });
+  const fingerprint = claudeWebIdentityFingerprint(cookie);
+  let context = claudeCachedIdentity(fingerprint, deps);
+  let usage;
+  if (!context) {
+    const stale = claudeCachedIdentity(fingerprint, deps, { allowStale: true });
+    const organizationsBody = await fetchWebJson(`${baseUrl}/api/organizations`);
+    const organizations = claudeWebOrganizations(organizationsBody);
+    const organization = selectClaudeWebOrganization(organizations);
+    const organizationId = claudeWebOrganizationId(organization);
+    if (!organizationId) throw errorWithStatus('unavailable', 'Claude Web organization not found');
+    usage = await fetchWebJson(
+      `${baseUrl}/api/organizations/${encodeURIComponent(organizationId)}/usage`
+    );
+    try {
+      const accountBody = await fetchWebJson(`${baseUrl}/api/account`);
+      context = cacheClaudeIdentity(fingerprint, {
+        organizationId,
+        identity: claudeWebAccountIdentity(accountBody, organization)
+      }, deps);
+    } catch (error) {
+      if (!stale) {
+        throw claudeIdentityUnavailable('Claude Web usage is available, but stable account identity could not be resolved', error);
+      }
+      context = {
+        organizationId,
+        identity: stale.identity,
+        resolvedAt: stale.resolvedAt
+      };
+    }
+  } else {
+    usage = await fetchWebJson(
+      `${baseUrl}/api/organizations/${encodeURIComponent(context.organizationId)}/usage`
+    );
+  }
+  const renewedCookie = session.cookie();
+  if (renewedCookie !== session.initialCookie) {
+    const renewedFingerprint = claudeWebIdentityFingerprint(renewedCookie);
+    if (renewedFingerprint !== fingerprint) cacheClaudeIdentity(renewedFingerprint, context, deps);
+  }
+  return mapClaudeUsageToProvider(usage, {
+    ...context.identity,
+    updatedAt: nowIso(nowMs),
+    source: 'web'
+  });
+}
+
+function claudeIdentityUnavailable(message, cause) {
+  const error = errorWithStatus('unavailable', message);
+  error.code = 'CLAUDE_IDENTITY_UNAVAILABLE';
+  if (cause) error.cause = cause;
+  return error;
+}
+
+function claudeOauthAccountIdentity(profile) {
+  const account = profile?.account && typeof profile.account === 'object' ? profile.account : {};
+  const organization = profile?.organization && typeof profile.organization === 'object'
+    ? profile.organization
+    : {};
+  const accountId = String(account.uuid || account.id || profile?.account_uuid || '').trim();
+  const organizationId = String(
+    organization.uuid || organization.id || profile?.organization_uuid || ''
+  ).trim();
+  const accountEmail = String(
+    account.email || account.email_address || profile?.email || profile?.email_address || ''
+  ).trim().toLowerCase();
+  const accountName = String(
+    account.display_name
+      || account.full_name
+      || account.name
+      || organization.display_name
+      || organization.name
+      || ''
+  ).trim();
+  const stableIdentity = claudeStableIdentity(accountId, organizationId, accountEmail);
+  if (!stableIdentity) {
+    throw claudeIdentityUnavailable('Claude profile did not include a stable account identity');
+  }
+
+  return {
+    accountKey: hashKey('claude-account', stableIdentity),
+    accountEmail,
+    accountName
+  };
+}
+
+async function resolveClaudeOauthIdentity(credentials, deps = {}) {
+  const fingerprint = claudeOauthIdentityFingerprint(credentials);
+  const fresh = claudeCachedIdentity(fingerprint, deps);
+  if (fresh) return fresh.identity;
+  const stale = claudeCachedIdentity(fingerprint, deps, { allowStale: true });
+  try {
+    const identity = claudeOauthAccountIdentity(
+      await callClaudeProfile(credentials.accessToken, deps)
+    );
+    return cacheClaudeIdentity(fingerprint, { identity }, deps).identity;
+  } catch (error) {
+    if (stale) return stale.identity;
+    if (error?.code === 'CLAUDE_IDENTITY_UNAVAILABLE') throw error;
+    throw claudeIdentityUnavailable('Claude profile lookup failed', error);
+  }
+}
+
 async function delegatedClaudeRefresh(currentCredentials, deps = {}) {
   // Spawn `claude /status` in a PTY and let Claude Code itself refresh the token.
   // Matches CodexBar's strategy — Claude Code is a native Anthropic application,
@@ -755,18 +1154,28 @@ async function refreshClaudeCredentials(currentCredentials, deps = {}) {
   return { ...currentCredentials, ...refreshed };
 }
 
-async function fetchClaudeLimits(_options = {}, deps = {}) {
+async function fetchClaudeLimits(options = {}, deps = {}) {
   const nowMs = (deps.now || Date.now)();
   const platform = deps.platform || process.platform;
+  const webCookie = claudeWebCookie(deps.env || process.env, options);
+  if (webCookie) return fetchClaudeWebLimits(webCookie, deps);
+  let oauthIdentity = null;
   try {
     let credentials = await readClaudeCredentials(deps);
+    oauthIdentity = claudeCachedIdentity(
+      claudeOauthIdentityFingerprint(credentials),
+      deps,
+      { allowStale: true }
+    )?.identity || null;
 
     // Proactive refresh only on non-darwin: mac uses delegated (spawning Claude Code)
     // which is expensive; CodexBar's design likewise refreshes reactively, not on expiry.
     if (platform !== 'darwin' && credentials.refreshToken && credentials.expiresAt
       && credentials.expiresAt - nowMs < CLAUDE_REFRESH_LEEWAY_MS) {
       try {
+        const previousCredentials = credentials;
         credentials = await refreshClaudeCredentials(credentials, deps);
+        carryClaudeCachedIdentity(previousCredentials, credentials, deps);
       } catch (_) { /* fall through; reactive retry below may still succeed */ }
     }
 
@@ -775,25 +1184,47 @@ async function fetchClaudeLimits(_options = {}, deps = {}) {
       usage = await callClaudeUsage(credentials.accessToken, deps);
     } catch (error) {
       if (error?.status !== 'unauthorized') throw error;
+      const previousCredentials = credentials;
       credentials = await refreshClaudeCredentials(credentials, deps);
+      carryClaudeCachedIdentity(previousCredentials, credentials, deps);
       usage = await callClaudeUsage(credentials.accessToken, deps);
     }
 
+    try {
+      oauthIdentity = await resolveClaudeOauthIdentity(credentials, deps);
+    } catch (error) {
+      if (error?.cause?.status !== 'unauthorized') throw error;
+      const previousCredentials = credentials;
+      credentials = await refreshClaudeCredentials(credentials, deps);
+      carryClaudeCachedIdentity(previousCredentials, credentials, deps);
+      oauthIdentity = await resolveClaudeOauthIdentity(credentials, deps);
+    }
     const provider = mapClaudeUsageToProvider(usage, {
-      accountKey: hashKey('claude', credentials.identity),
+      ...oauthIdentity,
       accountLabel: credentials.accountLabel,
       updatedAt: nowIso(nowMs),
       source: 'oauth'
     });
     return provider;
   } catch (error) {
+    // A successful quota response without a stable account identity must not
+    // create a new row keyed by credential storage location or a different
+    // fallback source. Let LimitsRuntime retain the previous account row.
+    if (error?.code === 'CLAUDE_IDENTITY_UNAVAILABLE') throw error;
     if (!shouldTryClaudeCliFallback(error)) throw error;
     try {
       const text = await runClaudeUsageCli(deps);
-      return mapClaudeCliUsageToProvider(text, {
+      const provider = mapClaudeCliUsageToProvider(text, {
         updatedAt: nowIso(nowMs),
         now: new Date(nowMs)
       });
+      if (!oauthIdentity) return provider;
+      return {
+        ...provider,
+        accountKey: oauthIdentity.accountKey,
+        accountEmail: oauthIdentity.accountEmail,
+        accountName: oauthIdentity.accountName
+      };
     } catch (_) {
       throw error;
     }
@@ -955,6 +1386,8 @@ function parseClaudeCliUsageText(text, now = new Date()) {
     secondaryResetDescription,
     primaryResetsAt: parseClaudeResetDate(primaryResetDescription, now),
     secondaryResetsAt: parseClaudeResetDate(secondaryResetDescription, now),
+    accountEmail,
+    accountName: accountOrganization,
     accountLabel,
     accountKey: [accountEmail, accountOrganization].filter(Boolean).join('|') || 'claude-cli'
   };
@@ -981,6 +1414,8 @@ function mapClaudeCliUsageToProvider(text, meta = {}) {
     provider: 'claude',
     accountKey: hashKey('claude-cli', parsed.accountKey),
     accountLabel: parsed.accountLabel,
+    accountName: parsed.accountName,
+    accountEmail: parsed.accountEmail,
     source: 'cli',
     status: 'ok',
     updatedAt: meta.updatedAt,
@@ -1506,7 +1941,9 @@ function mapCodexRateLimitsToProvider(payload, meta = {}) {
     provider: 'codex',
     accountKey: meta.accountKey || '',
     accountLabel: meta.accountLabel || codexAccountLabel(payload),
+    accountName: meta.accountName || '',
     accountEmail: meta.accountEmail || payload.account?.email || '',
+    workspaceKind: meta.workspaceKind || '',
     source: meta.source || 'rpc',
     sourceDetail: meta.sourceDetail || payload.sourceDetail,
     status: 'ok',
@@ -2052,6 +2489,9 @@ function normalizeCodexManagedAccounts(value) {
       email: String(account.email || '').trim().toLowerCase(),
       accountKey: String(account.accountKey || '').trim(),
       accountLabel: String(account.accountLabel || account.plan || '').trim(),
+      workspaceAccountId: String(account.workspaceAccountId || account.providerAccountId || '').trim().toLowerCase(),
+      workspaceLabel: String(account.workspaceLabel || '').trim(),
+      workspaceKind: account.workspaceKind === 'personal' ? 'personal' : '',
       enabled: account.enabled !== false
     };
   }).filter(Boolean);
@@ -2060,6 +2500,31 @@ function normalizeCodexManagedAccounts(value) {
 function codexAccountKeyFromSeed(seed) {
   const raw = String(seed || '').trim();
   return raw.startsWith('sha256:') ? raw : hashKey('codex', raw || 'account');
+}
+
+function resolvedCodexAccountKey(email, workspaceAccountId, fallbackSeed) {
+  const normalizedEmail = String(email || '').trim().toLowerCase();
+  const normalizedWorkspaceAccountId = String(workspaceAccountId || '').trim().toLowerCase();
+  if (normalizedEmail && normalizedWorkspaceAccountId) {
+    return codexAccountKey(normalizedEmail, normalizedWorkspaceAccountId);
+  }
+  return codexAccountKeyFromSeed(fallbackSeed || normalizedEmail || normalizedWorkspaceAccountId);
+}
+
+function managedCodexAccountKey(account, authIdentity = {}, resolvedEmail = '') {
+  const email = String(resolvedEmail || authIdentity.email || account.email || '').trim().toLowerCase();
+  const workspaceAccountId = String(
+    authIdentity.workspaceAccountId
+    || authIdentity.providerAccountId
+    || account.workspaceAccountId
+    || account.providerAccountId
+    || ''
+  ).trim().toLowerCase();
+  return resolvedCodexAccountKey(
+    email,
+    workspaceAccountId,
+    account.accountKey || authIdentity.accountKey || email || account.id || account.homePath
+  );
 }
 
 async function fetchManagedCodexAccountLimits(account, _options = {}, deps = {}) {
@@ -2075,25 +2540,29 @@ async function fetchManagedCodexAccountLimits(account, _options = {}, deps = {})
     codexAuthPath: account.authPath || pathApi.join(account.homePath, 'auth.json')
   };
   const reader = deps.readCodexRpc || readCodexRpc;
-  const accountKeySeed = account.accountKey || account.email || account.id || account.homePath;
+  const authIdentity = readLiveCodexIdentity(accountDeps);
   try {
     const payload = await withCodexOAuthResetCredits(await reader(accountDeps), accountDeps);
-    const email = payload.account?.email || account.email;
-    const identity = account.accountKey || email || account.id || account.homePath;
+    const email = authIdentity.email || payload.account?.email || account.email;
     return mapCodexRateLimitsToProvider(payload, {
-      accountKey: codexAccountKeyFromSeed(identity),
+      accountKey: managedCodexAccountKey(account, authIdentity, email),
       accountEmail: email,
       accountLabel: account.accountLabel || codexAccountLabel(payload),
+      accountName: account.workspaceLabel,
+      workspaceKind: account.workspaceKind,
       updatedAt: nowIso(nowMs),
       source: 'rpc',
       sourceDetail: 'managed'
     });
   } catch (error) {
+    const email = authIdentity.email || account.email;
     return normalizeLimitProvider({
       provider: 'codex',
-      accountKey: codexAccountKeyFromSeed(accountKeySeed),
-      accountEmail: account.email,
+      accountKey: managedCodexAccountKey(account, authIdentity, email),
+      accountEmail: email,
       accountLabel: account.accountLabel,
+      accountName: account.workspaceLabel,
+      workspaceKind: account.workspaceKind,
       source: 'rpc',
       sourceDetail: 'managed',
       status: providerStatusFromError(error),
@@ -2103,10 +2572,10 @@ async function fetchManagedCodexAccountLimits(account, _options = {}, deps = {})
   }
 }
 
-// Reads the live login's identity (email + stable account id) from its
+// Reads the live login's identity (email + selected workspace id) from its
 // auth.json. The RPC `account/read` often omits the email, so the JWT in
-// auth.json is the reliable source — and keying on the account id keeps the
-// live account consistent with managed accounts for cross-device dedup.
+// auth.json is the reliable source. The shared composite key keeps the live
+// account consistent with managed accounts for cross-device dedup.
 function readLiveCodexIdentity(deps = {}) {
   const read = deps.readFileSync || fs.readFileSync;
   const authPath = deps.codexAuthPath || codexAuthPath(deps.env || process.env);
@@ -2117,16 +2586,26 @@ function readLiveCodexIdentity(deps = {}) {
   }
 }
 
-async function fetchLiveCodexAccount(deps = {}, nowMs = Date.now()) {
+async function fetchLiveCodexAccount(deps = {}, nowMs = Date.now(), managedAccounts = []) {
   const reader = deps.readCodexRpc || readCodexRpc;
   const payload = await withCodexOAuthResetCredits(await reader(deps), deps);
   const authIdentity = readLiveCodexIdentity(deps);
   const email = authIdentity.email || payload.account?.email || '';
   const fallbackSeed = payload.account?.email || `${payload.account?.type || 'account'}:${payload.account?.planType || ''}:${deps.codexAuthPath || codexAuthPath(deps.env || process.env)}`;
+  const accountKey = resolvedCodexAccountKey(
+    email,
+    authIdentity.workspaceAccountId || authIdentity.providerAccountId,
+    authIdentity.accountKey || fallbackSeed
+  );
+  const matchingManagedAccount = managedAccounts.find(
+    (account) => managedCodexAccountKey(account, {}, account.email) === accountKey
+  );
   return mapCodexRateLimitsToProvider(payload, {
-    accountKey: authIdentity.accountKey || hashKey('codex', fallbackSeed),
+    accountKey,
     accountEmail: email,
     accountLabel: codexAccountLabel(payload),
+    accountName: matchingManagedAccount?.workspaceLabel || '',
+    workspaceKind: matchingManagedAccount?.workspaceKind || '',
     updatedAt: nowIso(nowMs),
     source: 'rpc',
     sourceDetail: payload.sourceDetail
@@ -2143,7 +2622,7 @@ async function fetchCodexLimits(options = {}, deps = {}) {
     .filter((account) => {
       if (!scope) return true;
       if (scope.sourceDetail && scope.sourceDetail !== 'managed') return false;
-      const accountKey = codexAccountKeyFromSeed(account.accountKey || account.email || account.id || account.homePath);
+      const accountKey = managedCodexAccountKey(account, {}, account.email);
       if (scope.accountKey) return accountKey === scope.accountKey;
       if (scope.accountEmail) return account.email === scope.accountEmail;
       if (scope.accountLabel) return account.accountLabel === scope.accountLabel;
@@ -2164,15 +2643,14 @@ async function fetchCodexLimits(options = {}, deps = {}) {
   }
 
   const providers = [];
-  // Dedupe by account id (accountKey) first, then email — so signing in the
-  // account that's already the live login shows ONE row, even if one side has
-  // no email. Both paths key on the stable account id, so the same account
-  // matches regardless of how it was added.
+  // Prefer the composite account key; use email only for legacy providers that
+  // do not expose one. This keeps same-email workspaces distinct while still
+  // collapsing the live and managed views of the exact same login.
   const seen = new Set();
-  const identityKeys = (provider) => [
-    provider.accountKey ? `key:${provider.accountKey}` : '',
-    provider.accountEmail ? `email:${provider.accountEmail}` : ''
-  ].filter(Boolean);
+  const identityKeys = (provider) => {
+    if (provider.accountKey) return [`key:${provider.accountKey}`];
+    return provider.accountEmail ? [`email:${provider.accountEmail}`] : [];
+  };
   const markSeen = (provider) => { for (const key of identityKeys(provider)) seen.add(key); };
   const alreadySeen = (provider) => identityKeys(provider).some((key) => seen.has(key));
   // The live system account (the one the Codex app/CLI is currently signed into)
@@ -2181,7 +2659,7 @@ async function fetchCodexLimits(options = {}, deps = {}) {
   // only live account just drops out, leaving the managed accounts.
   if (includeLiveAccount) {
     try {
-      const live = await fetchLiveCodexAccount(deps, nowMs);
+      const live = await fetchLiveCodexAccount(deps, nowMs, managedAccounts);
       providers.push(live);
       markSeen(live);
     } catch (_) {}
@@ -2498,9 +2976,12 @@ async function fetchDeepSeekLimits(options = {}, deps = {}) {
     }
     const row = selectFundedRow(data.balance_infos);
     const accountKey = hashKey('deepseek', key);
-    const storePath = deps.deepseekStorePath || path.join(sharedDataDir({ env }), 'deepseek-balance.json');
+    const dataDir = sharedDataDir({ env });
+    const storePath = deps.deepseekStorePath || path.join(dataDir, 'deepseek-balance-v2.json');
+    const legacyStorePath = deps.deepseekLegacyStorePath
+      || (deps.deepseekStorePath ? null : path.join(dataDir, 'deepseek-balance.json'));
     const spend = recordConsumption(
-      { accountKey, currency: row.currency, paid: row.paid, now, storePath },
+      { accountKey, currency: row.currency, paid: row.paid, now, storePath, legacyStorePath },
       deps
     );
     return normalizeLimitProvider({
@@ -2510,12 +2991,22 @@ async function fetchDeepSeekLimits(options = {}, deps = {}) {
       source: 'api',
       status: 'ok',
       updatedAt: nowIso(now),
-      windows: [],
+      // DeepSeek has no rate-limit windows. The balance is the only quota it
+      // exposes, so it ships as a credits window: money, no wire percentage.
+      windows: [{
+        kind: 'billing',
+        metric: 'credits',
+        label: 'Balance',
+        remaining: row.amount,
+        currency: row.currency
+      }],
       balance: {
         amount: row.amount,
         currency: row.currency,
         todaySpend: spend.todaySpend,
         monthSpend: spend.monthSpend,
+        allTimeSpend: spend.allTimeSpend,
+        trackingSince: spend.trackingSince,
         monthSinceTracking: spend.monthSinceTracking
       }
     });
@@ -2537,6 +3028,7 @@ function providerFetchers(deps = {}) {
     cursor: (providerOptions, probeDeps) => fetchCursorLimits(providerOptions, probeDeps),
     antigravity: (providerOptions, probeDeps) => fetchAntigravityLimits(providerOptions, probeDeps),
     opencode: (providerOptions, probeDeps) => fetchOpenCodeLimits(providerOptions, probeDeps),
+    openrouter: (providerOptions, probeDeps) => openrouterLimits.fetchOpenRouterLimits(providerOptions, probeDeps),
     deepseek: (providerOptions, probeDeps) => fetchDeepSeekLimits(providerOptions, probeDeps),
     minimax: (providerOptions, probeDeps) => minimaxLimits.fetchMinimaxLimits(providerOptions, probeDeps),
     mimo: (providerOptions, probeDeps) => fetchMimoLimits(providerOptions, probeDeps),
@@ -2550,6 +3042,7 @@ function providerFetchers(deps = {}) {
     ollama: (providerOptions, probeDeps) => ollamaLimits.fetchOllamaLimits(providerOptions, probeDeps),
     kimi: (providerOptions, probeDeps) => kimiLimits.fetchKimiLimits(providerOptions, probeDeps),
     wecode: (providerOptions, probeDeps) => wecodeLimits.fetchWecodeLimits(providerOptions, probeDeps),
+    thirdparty: (providerOptions, probeDeps) => thirdPartyLimits.fetchThirdPartyLimits(providerOptions, probeDeps),
     ...(deps.providerFetchers || {})
   };
 }
@@ -2857,7 +3350,11 @@ module.exports = {
   providerPhysicalBoundMs,
   fetchAntigravityLimits,
   fetchOpenCodeLimits,
+  fetchOpenRouterLimits: openrouterLimits.fetchOpenRouterLimits,
+  fetchThirdPartyLimits: thirdPartyLimits.fetchThirdPartyLimits,
   fetchSingleOpenCodeProfile,
+  claudeWebCookie,
+  normalizeClaudeWebCookieInput,
   fetchClaudeLimits,
   fetchCodexLimits,
   fetchCursorLimits,

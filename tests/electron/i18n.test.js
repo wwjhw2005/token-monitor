@@ -53,8 +53,23 @@ test('resolveLocale maps auto to Chinese variants from browser languages', () =>
 
 test('translate falls back to English and interpolates values', () => {
   assert.equal(translate('zh-TW', 'settings.sync.title'), '多裝置同步');
+  assert.equal(translate('zh-TW', 'settings.codex.personalWorkspace'), '個人');
+  assert.equal(translate('zh-CN', 'settings.codex.personalWorkspace'), '个人');
   assert.equal(translate('zh-CN', 'settings.appUpdate.latestWithStatus', { version: '0.2.1', status: '已是最新' }), 'v0.2.1（已是最新）');
   assert.equal(translate('zh-TW', 'missing.key'), 'missing.key');
+});
+
+test('automatic app update copy describes background downloads, not update checks', () => {
+  assert.equal(translate('en', 'settings.appUpdate.automatic'), 'Download updates automatically');
+  assert.equal(
+    translate('en', 'settings.appUpdate.automaticDescription'),
+    "Download new versions in the background. You'll be prompted to restart when ready."
+  );
+  assert.equal(translate('zh-TW', 'settings.appUpdate.automatic'), '自動下載更新');
+  assert.equal(
+    translate('zh-TW', 'settings.appUpdate.automaticUnsupportedWindowsPortable'),
+    'Portable 版本不支援自動下載，請透過「查看 release」手動更新。'
+  );
 });
 
 test('every bundled locale defines every English key', () => {
@@ -180,4 +195,7 @@ test('view switcher actions are localized', () => {
   assert.equal(translate('zh-TW', 'views.switcher.choose'), '選擇視圖');
   assert.equal(translate('zh-CN', 'views.switcher.next', { view: '模型' }), '下一个：模型');
   assert.equal(translate('zh-CN', 'views.switcher.choose'), '选择视图');
+  assert.equal(translate('en', 'views.backHome'), 'Back to Home');
+  assert.equal(translate('zh-TW', 'views.backHome'), '返回主頁');
+  assert.equal(translate('zh-CN', 'views.backHome'), '返回主页');
 });
