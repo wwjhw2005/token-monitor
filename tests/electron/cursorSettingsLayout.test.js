@@ -794,15 +794,10 @@ test('Claude Web account panel stores a redacted cookie and opens only the usage
   assert.match(allowlist, /parsed\.hostname === 'claude\.ai' && parsed\.pathname\.startsWith\('\/settings'\)/);
 });
 
-test('DeepSeek account linked state requires a validated API key', () => {
+test('DeepSeek account pill keeps its validated API key state after moving into Limits', () => {
   const app = readRendererFile('app.js');
-  const summaryBody = functionBody(app, 'settingsSectionSummary', 'renderSettingsSummaries');
-  assert.match(summaryBody, /const deepseekLinked = deepseekAccountLinked\(\);/);
-  assert.doesNotMatch(
-    summaryBody,
-    /const deepseekLinked = Boolean\(state\.settings\?\.deepseekApiKeyConfigured\);/,
-    'the account summary should not count an unverified stored API key as linked'
-  );
+  assert.match(app, /deepseek: 'deepseekAccountGroup'/);
+  assert.match(app, /deepseek: 'deepseekApiKeyStatus'/);
 
   const linkedBody = functionBody(app, 'deepseekAccountLinked', 'deepseekProviderStatus');
   assert.match(linkedBody, /Boolean\(state\.settings\?\.deepseekApiKeyConfigured\)/);
@@ -1057,9 +1052,6 @@ test('main settings normalize the Z.ai API region', () => {
     main.indexOf("ipcMain.handle('customPricing:list'")
   );
   assert.match(handler, /if \(patch\.zaiApiRegion !== undefined\) normalizedPatch\.zaiApiRegion = normalizeZaiApiRegion\(patch\.zaiApiRegion\);/);
-  assert.match(handler, /const runtimeChange = classifySettingsChange\(previousRuntimeSettings, settings\);/);
-  assert.match(handler, /for \(const scope of runtimeChange\.limitScopes\)/);
-  assert.match(handler, /queueLimitInvalidation\(scope, 'settings-change'/);
 });
 
 test('main settings migration preserves explicit AI limit provider selections', () => {
@@ -1105,9 +1097,12 @@ test('active Codex account labels are always shown for multi-account limits rows
 
 test('collection cadence setting is exposed in the Collection panel', () => {
   const html = readRendererFile('index.html');
+  const i18n = readRendererFile('i18n.js');
   const controls = html.match(/<div class="settings-subgroup settings-collection-cadence"[\s\S]*?<select id="collectionCadenceInput"[\s\S]*?<\/select>[\s\S]*?<\/div>/)?.[0] || '';
   assert.match(controls, /data-i18n="settings\.collection\.cadence"/);
   assert.match(controls, /value="live"/);
+  assert.match(controls, /value="smart"[\s\S]*data-i18n="settings\.collection\.mode\.smart"/);
+  assert.match(i18n, /'settings\.collection\.modeDesc': 'Smart mode collects after agent activity, with an hourly reconciliation; fixed intervals turn off file watching\.'/);
   assert.match(controls, /<option value="300000"/);
   assert.match(controls, /<option value="900000"/);
   assert.match(controls, /<option value="1800000"/);
@@ -1127,6 +1122,8 @@ test('collection cadence setting is exposed in the Collection panel', () => {
   );
   assert.match(listenerSlice, /saveSettings\(\{[\s\S]*collectionMode:/);
   assert.match(listenerSlice, /collectionIntervalMs:/);
+  assert.match(listenerSlice, /value === 'smart'/);
+  assert.match(listenerSlice, /600000/);
 });
 
 test('sync upload interval setting is exposed in the Multi-device Sync panel', () => {
@@ -1156,8 +1153,14 @@ test('sync upload interval setting is exposed in the Multi-device Sync panel', (
 
 test('main settings normalize collection cadence and restart only the device runtime when it changes', () => {
   const main = fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'electron', 'main.js'), 'utf8');
+  const collector = fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'shared', 'collector.js'), 'utf8');
   assert.match(main, /function normalizeCollectionMode/);
   assert.match(main, /function normalizeCollectionIntervalMs/);
+  assert.match(main, /COLLECTION_MODE_VALUES = new Set\(\[[^\]]*'smart'/);
+  assert.match(main, /SMART_COLLECTION_INTERVAL_MS = 10 \* 60 \* 1000/);
+  // Smart's fixed cadence must not enter the persisted-interval allowlist, or a
+  // smart-mode value survives a switch back to live and changes its backstop.
+  assert.doesNotMatch(main, /COLLECTION_INTERVAL_OPTIONS = \[[^\]]*10 \* 60 \* 1000/);
 
   const defaults = main.slice(main.indexOf('function defaultSettings'), main.indexOf('function defaultLimitProviders'));
   assert.match(defaults, /collectionMode: 'live'/);
@@ -1166,6 +1169,20 @@ test('main settings normalize collection cadence and restart only the device run
   const usageConfig = functionBody(main, 'electronUsageConfig', 'electronLimitsConfig');
   assert.match(usageConfig, /intervalMs: collectorIntervalMs\(\)/);
   assert.match(usageConfig, /watchEnabled: collectorWatchEnabled\(\)/);
+  assert.match(usageConfig, /watchTriggersCollection: collectorWatchTriggersCollection\(\)/);
+  assert.match(usageConfig, /intervalRequiresActivity: collectorIntervalRequiresActivity\(\)/);
+
+  // Every mode watches with native events on every platform, so the widget must
+  // state no preference at all: the moment it passes one it can drift from the
+  // headless agent, which passes none. The shared resolver owns the default and
+  // the TOKEN_MONITOR_WATCH_POLLING override, and degrades to polling itself
+  // when the kernel refuses watch descriptors. Behaviour is covered in
+  // tests/shared/collectorLoadGuards.test.js.
+  assert.doesNotMatch(usageConfig, /^\s*watchUsePolling:/m);
+  assert.doesNotMatch(main, /function collectorWatchUsePolling/);
+  assert.match(collector, /const watchUsePolling = resolveWatchUsePolling\(options\.watchUsePolling\)/);
+  assert.match(collector, /function resolveWatchUsePolling[\s\S]*?TOKEN_MONITOR_WATCH_POLLING/);
+  assert.match(main, /function collectorIntervalRequiresActivity[\s\S]*?=== 'smart'/);
 
   const updateHandler = main.slice(main.indexOf("ipcMain.handle('settings:update'"), main.indexOf("ipcMain.handle('appearance:preview'"));
   assert.match(updateHandler, /const previousRuntimeSettings = JSON\.parse\(JSON\.stringify\(settings\)\);/);

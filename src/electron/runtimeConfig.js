@@ -73,6 +73,12 @@ function usageConfigFromSettings(settings = {}, context = {}) {
     projectsEnabled: settings.projectsEnabled !== false,
     historyIntervalMs: context.historyIntervalMs ?? settings.historyIntervalMs,
     watchEnabled: context.watchEnabled,
+    // Deliberately passed through as a tri-state rather than coerced: undefined
+    // means "no opinion", which lets resolveWatchUsePolling() apply the shared
+    // default and the TOKEN_MONITOR_WATCH_POLLING override.
+    watchUsePolling: context.watchUsePolling,
+    watchTriggersCollection: context.watchTriggersCollection !== false,
+    intervalRequiresActivity: Boolean(context.intervalRequiresActivity),
     watchDebounceMs: Number(context.watchDebounceMs || 1500),
     wslScanEnabled: settings.wslScanEnabled !== false,
     onError: context.onError,
@@ -89,6 +95,7 @@ function limitsConfigFromSettings(settings = {}, context = {}) {
     claudeWebCookie: settings.claudeWebCookie
       || env.CLAUDE_WEB_COOKIE
       || '',
+    claudePrepaidBalanceEnabled: settings.claudePrepaidBalanceEnabled !== false,
     opencodeCookie: settings.opencodeCookie || env.TOKEN_MONITOR_OPENCODE_COOKIE || '',
     opencodeProfiles: settings.opencodeProfiles || {},
     openrouterProfiles: settings.openrouterProfiles || {},

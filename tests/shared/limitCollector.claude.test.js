@@ -113,6 +113,10 @@ test('Claude Web source takes precedence and carries stable account metadata', a
             })
           };
         }
+        if (url.endsWith('/prepaid/credits')) {
+          // The common case: an account that never funded a prepaid pool.
+          return { ok: true, json: async () => ({ amount: 0, currency: 'USD' }) };
+        }
         assert.ok(url.endsWith('/api/account'));
         return {
           ok: true,
@@ -140,15 +144,64 @@ test('Claude Web source takes precedence and carries stable account metadata', a
   assert.equal(first.provider.accountName, 'Example Workspace');
   assert.equal(first.provider.accountLabel, 'Max 20x');
   assert.deepEqual(first.provider.windows.map((window) => window.kind), ['session', 'weekly']);
-  assert.equal(first.requests.length, 3);
+  // The pool is asked for, comes back unfunded, and so contributes no row.
+  assert.equal(first.provider.balance, null);
+  assert.equal(first.requests.length, 4);
+  assert.equal(first.requests[3].url.endsWith('/prepaid/credits'), true);
   assert.equal(first.requests[0].options.headers.cookie, 'sessionKey=sk-ant-first-cookie');
+  // This collector runs on undici, so it carries the browser agent. Pinned
+  // verbatim: Cloudflare challenges every non-browser user-agent on this host, so
+  // swapping in the honest `token-monitor/<version>` agent would 403 the whole
+  // provider on the headless agent.
   assert.deepEqual(first.requests[0].options.headers, {
     accept: 'application/json',
+    'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36',
     cookie: 'sessionKey=sk-ant-first-cookie'
   });
+  // Cloudflare challenges per request, so every hop needs the agent, not just the
+  // first one that happens to be asserted above.
+  assert.equal(
+    first.requests.every(({ options }) => /Chrome\/[\d.]+ Safari/.test(options.headers['user-agent'] || '')),
+    true,
+    'every Claude Web request should carry the browser user-agent'
+  );
   assert.equal(first.requests[0].url.endsWith('/api/organizations'), true);
   assert.equal(first.requests[1].url.endsWith('/api/organizations/organization-web/usage'), true);
   assert.equal(first.requests[2].url.endsWith('/api/account'), true);
+});
+
+test('Claude Web leaves the user-agent to Chromium when the widget supplies the transport', async () => {
+  const requests = [];
+  await fetchClaudeLimits({ claudeWebCookie: 'sessionKey=sk-ant-widget' }, {
+    now: () => Date.parse('2026-07-25T00:00:00Z'),
+    stat: async () => {
+      throw new Error('OAuth credentials must not be read when Web is configured');
+    },
+    fetch: async () => {
+      throw new Error('the widget transport must be used when one is supplied');
+    },
+    claudeWebFetch: async (url, options) => {
+      requests.push({ url, options });
+      if (url.endsWith('/api/organizations')) {
+        return { ok: true, json: async () => [{ uuid: 'organization-web', name: 'Example Workspace' }] };
+      }
+      if (url.endsWith('/prepaid/credits')) {
+        return { ok: true, json: async () => ({ amount: 0, currency: 'USD' }) };
+      }
+      if (url.endsWith('/api/account')) {
+        return { ok: true, json: async () => ({ email_address: 'owner@example.com' }) };
+      }
+      return { ok: true, json: async () => ({ five_hour: { utilization: 10 } }) };
+    }
+  });
+
+  // Electron's net.request already sends a browser agent that tracks the bundled
+  // Chromium; setting one here would pin the widget to a stale version instead.
+  assert.ok(requests.length > 0);
+  for (const { url, options } of requests) {
+    assert.equal(options.headers['user-agent'], undefined, `${url} should carry no user-agent`);
+  }
+  assert.equal(requests[0].options.headers.cookie, 'sessionKey=sk-ant-widget');
 });
 
 test('Claude Web follows a renewed sessionKey across sequential requests and reports it for persistence', async () => {
@@ -179,6 +232,9 @@ test('Claude Web follows a renewed sessionKey across sequential requests and rep
           })
         };
       }
+      if (url.endsWith('/prepaid/credits')) {
+        return { ok: true, json: async () => ({ amount: 0, currency: 'USD' }) };
+      }
       assert.ok(url.endsWith('/api/account'));
       return {
         ok: true,
@@ -193,6 +249,7 @@ test('Claude Web follows a renewed sessionKey across sequential requests and rep
   assert.equal(provider.status, 'ok');
   assert.deepEqual(requests.map((request) => request.cookie), [
     'sessionKey=sk-ant-old',
+    'sessionKey=sk-ant-renewed',
     'sessionKey=sk-ant-renewed',
     'sessionKey=sk-ant-renewed'
   ]);
@@ -1058,4 +1115,645 @@ test('Claude OAuth usage ignores non-Fable scoped weekly limits', () => {
 
   const labels = provider.windows.filter((window) => window.kind === 'weekly').map((window) => window.label);
   assert.deepEqual(labels, ['']);
+});
+
+function claudeUsagePayload(overrides = {}) {
+  return {
+    five_hour: { utilization: 30, resets_at: '2026-07-27T10:50:00.800650+00:00' },
+    seven_day: { utilization: 42, resets_at: '2026-07-31T10:00:00.800673+00:00' },
+    ...overrides
+  };
+}
+
+function creditsWindowOf(provider) {
+  return provider.windows.find((window) => window.metric === 'spend') || null;
+}
+
+test('Claude credits-off accounts gain no usage-credits window', () => {
+  const provider = mapClaudeUsageToProvider(claudeUsagePayload({
+    extra_usage: { is_enabled: false, monthly_limit: null, used_credits: null },
+    spend: { enabled: false, used: { amount_minor: 0, currency: 'USD', exponent: 2 }, limit: null, percent: 0 }
+  }));
+  assert.equal(creditsWindowOf(provider), null);
+  assert.deepEqual(provider.windows.map((window) => window.kind), ['session', 'weekly']);
+});
+
+test('Claude usage credits with a monthly limit render a metered window', () => {
+  const provider = mapClaudeUsageToProvider(claudeUsagePayload({
+    extra_usage: { is_enabled: true, monthly_limit: 2000, used_credits: 235, utilization: 11.75, currency: 'USD', decimal_places: 2 },
+    spend: {
+      enabled: true,
+      used: { amount_minor: 235, currency: 'USD', exponent: 2 },
+      limit: { amount_minor: 2000, currency: 'USD', exponent: 2 },
+      percent: 12
+    }
+  }));
+  const window = creditsWindowOf(provider);
+  assert.equal(window.kind, 'billing');
+  assert.equal(window.used, 2.35);
+  assert.equal(window.limit, 20);
+  assert.equal(window.currency, 'USD');
+  assert.equal(window.usedPercent, 11.75);
+  assert.equal(window.showMeter, true);
+});
+
+test('Claude usage credits without a limit carry no percentage', () => {
+  const provider = mapClaudeUsageToProvider(claudeUsagePayload({
+    extra_usage: { is_enabled: true, monthly_limit: null, used_credits: 235, utilization: null, currency: 'USD', decimal_places: 2 },
+    // The live API reports percent 0 — not null — in this state.
+    spend: { enabled: true, used: { amount_minor: 235, currency: 'USD', exponent: 2 }, limit: null, percent: 0 }
+  }));
+  const window = creditsWindowOf(provider);
+  assert.equal(window.used, 2.35);
+  assert.equal(window.limit, null);
+  assert.equal(window.usedPercent, null, 'spend.percent must not leak in as a 0% meter');
+  assert.equal(window.showMeter, false);
+});
+
+test('Claude usage credits fall back to extra_usage when spend is absent', () => {
+  const provider = mapClaudeUsageToProvider(claudeUsagePayload({
+    extra_usage: { is_enabled: true, monthly_limit: 2000, used_credits: 235, currency: 'USD', decimal_places: 2 }
+  }));
+  const window = creditsWindowOf(provider);
+  assert.equal(window.used, 2.35);
+  assert.equal(window.limit, 20);
+  assert.equal(window.usedPercent, 11.75);
+});
+
+test('Claude usage credits honour a non-cent decimal_places', () => {
+  const provider = mapClaudeUsageToProvider(claudeUsagePayload({
+    extra_usage: { is_enabled: true, monthly_limit: 2000, used_credits: 235, currency: 'JPY', decimal_places: 0 }
+  }));
+  const window = creditsWindowOf(provider);
+  assert.equal(window.used, 235);
+  assert.equal(window.limit, 2000);
+  assert.equal(window.currency, 'JPY');
+});
+
+const PREPAID_CREDITS = {
+  amount: 11344,
+  currency: 'USD',
+  tranches: [],
+  promo_tranches: [
+    { remaining_amount_minor_units: 1343, granted_amount_minor_units: 2000, currency: 'USD', expires_at: '2026-08-09T00:00:00Z' },
+    { remaining_amount_minor_units: 10000, granted_amount_minor_units: 10000, currency: 'USD', expires_at: '2026-09-19T00:00:00Z' }
+  ],
+  next_expires_at: '2026-08-09T00:00:00Z'
+};
+
+function fakeClaudeWebFetch(usage, { prepaid = PREPAID_CREDITS, prepaidStatus = 200 } = {}) {
+  return async (url) => {
+    const headers = { get: () => '', getSetCookie: () => [] };
+    if (url.endsWith('/api/organizations')) {
+      return { ok: true, status: 200, headers, json: async () => [{ uuid: 'org-1', name: 'Example' }] };
+    }
+    if (url.includes('/prepaid/credits')) {
+      return { ok: prepaidStatus === 200, status: prepaidStatus, headers, json: async () => prepaid };
+    }
+    if (url.endsWith('/api/account')) {
+      return { ok: true, status: 200, headers, json: async () => ({ email_address: 'owner@example.com' }) };
+    }
+    return { ok: true, status: 200, headers, json: async () => usage };
+  };
+}
+
+const ENABLED_UNLIMITED = {
+  five_hour: { utilization: 30, resets_at: '2026-07-27T10:50:00Z' },
+  seven_day: { utilization: 42, resets_at: '2026-07-31T10:00:00Z' },
+  extra_usage: { is_enabled: true, monthly_limit: null, used_credits: 235, currency: 'USD', decimal_places: 2 },
+  spend: { enabled: true, used: { amount_minor: 235, currency: 'USD', exponent: 2 }, limit: null, percent: 0 }
+};
+
+test('Claude Web reports the prepaid balance and its grant tranches', async () => {
+  const provider = await fetchClaudeLimits(
+    { claudeWebCookie: 'sessionKey=sk-ant-sid01-example' },
+    { claudeWebFetch: fakeClaudeWebFetch(ENABLED_UNLIMITED), claudeIdentityCache: new Map() }
+  );
+  assert.equal(provider.status, 'ok');
+  assert.equal(provider.balance.amount, 113.44);
+  assert.equal(provider.balance.currency, 'USD');
+  assert.deepEqual(provider.balance.tranches, [
+    { amount: 13.43, currency: 'USD', expiresAt: '2026-08-09T00:00:00.000Z' },
+    { amount: 100, currency: 'USD', expiresAt: '2026-09-19T00:00:00.000Z' }
+  ]);
+});
+
+test('Claude prepaid balance emits an unmetered credits window', async () => {
+  const provider = await fetchClaudeLimits(
+    { claudeWebCookie: 'sessionKey=sk-ant-sid01-example' },
+    { claudeWebFetch: fakeClaudeWebFetch(ENABLED_UNLIMITED), claudeIdentityCache: new Map() }
+  );
+  const credits = provider.windows.filter((window) => window.metric === 'credits');
+  assert.equal(credits.length, 1, 'the normalization shim must not add a second credits window');
+  assert.equal(credits[0].showMeter, false);
+  assert.equal(credits[0].remaining, 113.44);
+});
+
+test('a failed prepaid fetch leaves the rest of the Claude row intact', async () => {
+  const provider = await fetchClaudeLimits(
+    { claudeWebCookie: 'sessionKey=sk-ant-sid01-example' },
+    { claudeWebFetch: fakeClaudeWebFetch(ENABLED_UNLIMITED, { prepaidStatus: 403 }), claudeIdentityCache: new Map() }
+  );
+  assert.equal(provider.status, 'ok');
+  assert.equal(provider.balance, null);
+  assert.deepEqual(provider.windows.map((window) => window.kind), ['session', 'weekly', 'billing']);
+});
+
+
+test('the prepaid balance is cached between refreshes and re-read after its TTL', async () => {
+  const providerRuntimeState = new Map();
+  let nowMs = Date.parse('2026-07-27T00:00:00Z');
+  let amount = 11344;
+  const requests = [];
+  const deps = {
+    now: () => nowMs,
+    providerRuntimeState,
+    claudePrepaidCacheTtlMs: 1000,
+    claudeWebFetch: async (url) => {
+      requests.push(url);
+      const headers = { get: () => '', getSetCookie: () => [] };
+      if (url.endsWith('/api/organizations')) {
+        return { ok: true, status: 200, headers, json: async () => [{ uuid: 'org-1', name: 'Example' }] };
+      }
+      if (url.endsWith('/api/account')) {
+        return { ok: true, status: 200, headers, json: async () => ({ uuid: 'account-1', email_address: 'owner@example.com' }) };
+      }
+      if (url.includes('/prepaid/credits')) {
+        return { ok: true, status: 200, headers, json: async () => ({ amount, currency: 'USD', tranches: [], promo_tranches: [] }) };
+      }
+      return { ok: true, status: 200, headers, json: async () => ENABLED_UNLIMITED };
+    }
+  };
+  const cookie = 'sessionKey=sk-ant-sid01-cached';
+
+  const first = await fetchClaudeLimits({ claudeWebCookie: cookie }, deps);
+  assert.equal(first.balance.amount, 113.44);
+
+  // Within the TTL the steady-state refresh stays at the single /usage request.
+  requests.length = 0;
+  amount = 9999;
+  const cached = await fetchClaudeLimits({ claudeWebCookie: cookie }, deps);
+  assert.deepEqual(requests.filter((url) => url.includes('/prepaid/credits')), []);
+  assert.equal(cached.balance.amount, 113.44, 'the cached pool is reused, not re-read');
+
+  // Past the TTL it is re-read.
+  requests.length = 0;
+  nowMs += 2000;
+  const refreshed = await fetchClaudeLimits({ claudeWebCookie: cookie }, deps);
+  assert.equal(requests.filter((url) => url.includes('/prepaid/credits')).length, 1);
+  assert.equal(refreshed.balance.amount, 99.99);
+});
+
+const CREDITS_OFF = {
+  five_hour: { utilization: 30, resets_at: '2026-07-27T10:50:00Z' },
+  seven_day: { utilization: 42, resets_at: '2026-07-31T10:00:00Z' },
+  extra_usage: { is_enabled: false, monthly_limit: null, used_credits: null },
+  spend: { enabled: false, used: { amount_minor: 0, currency: 'USD', exponent: 2 }, limit: null, percent: 0 }
+};
+
+test('a funded pool is still reported when usage credits are switched off', async () => {
+  const provider = await fetchClaudeLimits(
+    { claudeWebCookie: 'sessionKey=sk-ant-sid01-off' },
+    { providerRuntimeState: new Map(), claudeWebFetch: fakeClaudeWebFetch(CREDITS_OFF) }
+  );
+  // Switching usage credits off is how you stop a balance you still hold from
+  // being spent; the money and its expiry dates are what you keep watching.
+  assert.equal(provider.balance.amount, 113.44);
+  assert.equal(provider.balance.tranches.length, 2);
+  const kinds = provider.windows.map((window) => window.kind);
+  assert.deepEqual(kinds, ['session', 'weekly', 'billing'], 'no Usage credits window while off');
+  assert.equal(provider.windows.at(-1).metric, 'credits');
+});
+
+test('an unfunded pool on a credits-off account reports no balance', async () => {
+  const provider = await fetchClaudeLimits(
+    { claudeWebCookie: 'sessionKey=sk-ant-sid01-never' },
+    {
+      providerRuntimeState: new Map(),
+      claudeWebFetch: fakeClaudeWebFetch(CREDITS_OFF, {
+        prepaid: { amount: 0, currency: 'USD', tranches: [], promo_tranches: [] }
+      })
+    }
+  );
+  assert.equal(provider.balance, null, 'a $0.00 row on an account that never bought credits is noise');
+  assert.deepEqual(provider.windows.map((window) => window.kind), ['session', 'weekly']);
+});
+
+test('an unfunded credits-off pool backs off well past the normal TTL', async () => {
+  const providerRuntimeState = new Map();
+  let nowMs = Date.parse('2026-07-27T00:00:00Z');
+  const requests = [];
+  const deps = {
+    now: () => nowMs,
+    providerRuntimeState,
+    claudeWebFetch: async (url) => {
+      requests.push(url);
+      return fakeClaudeWebFetch(CREDITS_OFF, {
+        prepaid: { amount: 0, currency: 'USD', tranches: [], promo_tranches: [] }
+      })(url);
+    }
+  };
+  const options = { claudeWebCookie: 'sessionKey=sk-ant-sid01-idle', limitsRefreshMs: 60_000 };
+
+  await fetchClaudeLimits(options, deps);
+
+  // Three intervals in — well past the 2x TTL a funded pool would use.
+  requests.length = 0;
+  nowMs += 180_000;
+  await fetchClaudeLimits(options, deps);
+  assert.deepEqual(requests.filter((url) => url.includes('/prepaid/credits')), []);
+
+  // Just past the 12x TTL — an hour at the default refresh — it is re-read:
+  // buying credits must still surface without restarting the widget.
+  requests.length = 0;
+  nowMs += 541_000;
+  await fetchClaudeLimits(options, deps);
+  assert.equal(requests.filter((url) => url.includes('/prepaid/credits')).length, 1);
+});
+
+test('enabling usage credits pulls an idle pool back to the normal cadence', async () => {
+  const providerRuntimeState = new Map();
+  let nowMs = Date.parse('2026-07-27T00:00:00Z');
+  let usage = CREDITS_OFF;
+  const requests = [];
+  const deps = {
+    now: () => nowMs,
+    providerRuntimeState,
+    claudeWebFetch: async (url) => {
+      requests.push(url);
+      return fakeClaudeWebFetch(usage, {
+        prepaid: { amount: 0, currency: 'USD', tranches: [], promo_tranches: [] }
+      })(url);
+    }
+  };
+  const options = { claudeWebCookie: 'sessionKey=sk-ant-sid01-reenabled', limitsRefreshMs: 60_000 };
+
+  await fetchClaudeLimits(options, deps);
+
+  // The idle backoff is evaluated per read, not frozen into the cache entry.
+  requests.length = 0;
+  usage = ENABLED_UNLIMITED;
+  nowMs += 121_000;
+  const provider = await fetchClaudeLimits(options, deps);
+  assert.equal(requests.filter((url) => url.includes('/prepaid/credits')).length, 1);
+  assert.equal(provider.balance.amount, 0);
+});
+
+test('a transient prepaid failure keeps the balance and retries next refresh', async () => {
+  const providerRuntimeState = new Map();
+  let nowMs = Date.parse('2026-07-27T00:00:00Z');
+  let prepaidOutcome = 'ok';
+  const requests = [];
+  const deps = {
+    now: () => nowMs,
+    providerRuntimeState,
+    claudeWebFetch: async (url) => {
+      requests.push(url);
+      if (url.includes('/prepaid/credits')) {
+        if (prepaidOutcome === 'timeout') throw Object.assign(new Error('aborted'), { name: 'AbortError' });
+        if (prepaidOutcome !== 'ok') {
+          return {
+            ok: false,
+            status: Number(prepaidOutcome),
+            headers: { get: () => '', getSetCookie: () => [] },
+            json: async () => ({})
+          };
+        }
+      }
+      return fakeClaudeWebFetch(CREDITS_OFF)(url);
+    }
+  };
+  const options = { claudeWebCookie: 'sessionKey=sk-ant-sid01-flaky', limitsRefreshMs: 60_000 };
+
+  const first = await fetchClaudeLimits(options, deps);
+  assert.equal(first.balance.amount, 113.44);
+
+  // Neither a 5xx, a 429 nor a timeout says anything about this account, so the
+  // balance a working read produced must survive all three.
+  for (const outcome of ['500', '429', 'timeout']) {
+    prepaidOutcome = outcome;
+    requests.length = 0;
+    nowMs += 121_000;
+    const during = await fetchClaudeLimits(options, deps);
+    assert.equal(requests.filter((url) => url.includes('/prepaid/credits')).length, 1, `retried on ${outcome}`);
+    assert.equal(during.balance.amount, 113.44, `balance survives ${outcome}`);
+    assert.equal(during.balance.tranches.length, 2, `tranches survive ${outcome}`);
+    assert.equal(during.windows.at(-1).remaining, 113.44);
+  }
+
+  prepaidOutcome = 'ok';
+  nowMs += 121_000;
+  const recovered = await fetchClaudeLimits(options, deps);
+  assert.equal(recovered.balance.amount, 113.44);
+});
+
+test('a rotated sessionKey keeps the prepaid balance addressable', async () => {
+  const providerRuntimeState = new Map();
+  let nowMs = Date.parse('2026-07-27T00:00:00Z');
+  let cookie = 'sessionKey=sk-ant-sid01-rotating';
+  let rotate = true;
+  let prepaidStatus = 200;
+  const requests = [];
+  const deps = {
+    now: () => nowMs,
+    providerRuntimeState,
+    onClaudeWebCookieRenewed: ({ cookie: renewed }) => { cookie = renewed; },
+    claudeWebFetch: async (url) => {
+      requests.push(url);
+      const headers = {
+        get: () => '',
+        getSetCookie: () => (rotate && url.endsWith('/api/organizations')
+          ? ['sessionKey=sk-ant-sid01-rotated; Path=/; Secure; HttpOnly']
+          : [])
+      };
+      if (url.endsWith('/api/organizations')) {
+        return { ok: true, status: 200, headers, json: async () => [{ uuid: 'org-1', name: 'Example' }] };
+      }
+      if (url.endsWith('/api/account')) {
+        return { ok: true, status: 200, headers, json: async () => ({ uuid: 'account-1', email_address: 'owner@example.com' }) };
+      }
+      if (url.includes('/prepaid/credits')) {
+        if (prepaidStatus !== 200) return { ok: false, status: prepaidStatus, headers, json: async () => ({}) };
+        return { ok: true, status: 200, headers, json: async () => PREPAID_CREDITS };
+      }
+      return { ok: true, status: 200, headers, json: async () => CREDITS_OFF };
+    }
+  };
+  const options = () => ({ claudeWebCookie: cookie, limitsRefreshMs: 60_000 });
+
+  const first = await fetchClaudeLimits(options(), deps);
+  assert.equal(first.balance.amount, 113.44);
+  assert.equal(cookie, 'sessionKey=sk-ant-sid01-rotated', 'the renewed sessionKey is persisted');
+
+  // The cache is addressed by account, not by the cookie that happened to read
+  // it, so the rotated session must not send the widget back to the endpoint.
+  rotate = false;
+  requests.length = 0;
+  const cached = await fetchClaudeLimits(options(), deps);
+  assert.deepEqual(requests.filter((url) => url.includes('/prepaid/credits')), []);
+  assert.equal(cached.balance.amount, 113.44);
+
+  // And past the TTL, a transient failure under the rotated cookie still finds
+  // the balance the previous cookie read.
+  requests.length = 0;
+  nowMs += 121_000;
+  prepaidStatus = 500;
+  const during = await fetchClaudeLimits(options(), deps);
+  assert.equal(requests.filter((url) => url.includes('/prepaid/credits')).length, 1);
+  assert.equal(during.balance.amount, 113.44);
+  assert.equal(during.balance.tranches.length, 2);
+  assert.equal(during.windows.at(-1).remaining, 113.44);
+});
+
+test('a refused prepaid endpoint is not re-asked every refresh', async () => {
+  const providerRuntimeState = new Map();
+  const requests = [];
+  const deps = {
+    now: () => Date.parse('2026-07-27T00:00:00Z'),
+    providerRuntimeState,
+    claudeWebFetch: async (url) => {
+      requests.push(url);
+      return fakeClaudeWebFetch(ENABLED_UNLIMITED, { prepaidStatus: 403 })(url);
+    }
+  };
+  const options = { claudeWebCookie: 'sessionKey=sk-ant-sid01-refused' };
+
+  await fetchClaudeLimits(options, deps);
+  assert.equal(requests.filter((url) => url.includes('/prepaid/credits')).length, 1);
+
+  requests.length = 0;
+  const second = await fetchClaudeLimits(options, deps);
+  assert.deepEqual(requests.filter((url) => url.includes('/prepaid/credits')), []);
+  assert.equal(second.balance, null);
+});
+
+test('switching the prepaid balance off skips the request entirely', async () => {
+  const requests = [];
+  const provider = await fetchClaudeLimits(
+    { claudeWebCookie: 'sessionKey=sk-ant-sid01-opt-out', claudePrepaidBalanceEnabled: false },
+    {
+      providerRuntimeState: new Map(),
+      claudeWebFetch: async (url) => {
+        requests.push(url);
+        return fakeClaudeWebFetch(ENABLED_UNLIMITED)(url);
+      }
+    }
+  );
+  assert.deepEqual(requests.filter((url) => url.includes('/prepaid/credits')), []);
+  assert.equal(provider.balance, null);
+  assert.equal(provider.windows.some((window) => window.metric === 'credits'), false);
+});
+
+test('an exhausted prepaid pool still reports a zero balance', async () => {
+  const provider = await fetchClaudeLimits(
+    { claudeWebCookie: 'sessionKey=sk-ant-sid01-empty' },
+    {
+      providerRuntimeState: new Map(),
+      claudeWebFetch: fakeClaudeWebFetch(ENABLED_UNLIMITED, {
+        prepaid: { amount: 0, currency: 'USD', tranches: [], promo_tranches: [] }
+      })
+    }
+  );
+  assert.equal(provider.balance.amount, 0, 'a spent-dry pool is exactly when the row matters');
+  const credits = provider.windows.filter((window) => window.metric === 'credits');
+  assert.equal(credits.length, 1);
+  assert.equal(credits[0].remaining, 0);
+  assert.equal(credits[0].showMeter, false);
+});
+
+function fakeClaudeWebIdentityFetch(organization, account) {
+  return async (url) => {
+    const headers = { get: () => '', getSetCookie: () => [] };
+    if (url.endsWith('/api/organizations')) {
+      return { ok: true, status: 200, headers, json: async () => [organization] };
+    }
+    if (url.endsWith('/api/account')) {
+      return { ok: true, status: 200, headers, json: async () => account };
+    }
+    if (url.includes('/prepaid/credits')) {
+      return { ok: true, status: 200, headers, json: async () => ({ amount: 0, currency: 'USD' }) };
+    }
+    return { ok: true, status: 200, headers, json: async () => CREDITS_OFF };
+  };
+}
+
+// What claude.ai actually returns for a personal subscription: the plan is
+// nowhere on the membership, only in the organization's capability list.
+const PERSONAL_ACCOUNT = {
+  uuid: 'account-personal',
+  email_address: 'owner@example.com',
+  memberships: [{
+    role: 'admin',
+    seat_tier: null,
+    organization: { uuid: 'org-personal', name: 'Personal' }
+  }]
+};
+
+async function personalPlanLabel(organization) {
+  const provider = await fetchClaudeLimits(
+    { claudeWebCookie: 'sessionKey=sk-ant-sid01-plan' },
+    {
+      providerRuntimeState: new Map(),
+      claudeWebFetch: fakeClaudeWebIdentityFetch(organization, PERSONAL_ACCOUNT)
+    }
+  );
+  return provider.accountLabel;
+}
+
+test('a personal Pro account takes its plan from the organization capabilities', async () => {
+  assert.equal(await personalPlanLabel({
+    uuid: 'org-personal',
+    name: 'Personal',
+    capabilities: ['chat', 'claude_pro'],
+    rate_limit_tier: 'default_claude_ai'
+  }), 'Pro');
+});
+
+test('a personal Max account keeps the rate limit tier refinement', async () => {
+  assert.equal(await personalPlanLabel({
+    uuid: 'org-personal',
+    name: 'Personal',
+    capabilities: ['chat', 'claude_max'],
+    rate_limit_tier: 'default_claude_max_20x'
+  }), 'Max 20x');
+});
+
+test('a membership from another organization never supplies the plan', async () => {
+  const provider = await fetchClaudeLimits(
+    { claudeWebCookie: 'sessionKey=sk-ant-sid01-multi' },
+    {
+      providerRuntimeState: new Map(),
+      claudeWebFetch: fakeClaudeWebIdentityFetch(
+        {
+          uuid: 'org-selected',
+          name: 'Selected Max Org',
+          capabilities: ['chat', 'claude_max'],
+          rate_limit_tier: 'default_claude_max_20x'
+        },
+        {
+          uuid: 'account-multi',
+          email_address: 'owner@example.com',
+          // The account is a member of a different organization than the one
+          // usage was resolved for, so nothing here may describe the plan.
+          memberships: [{
+            seat_tier: 'team',
+            rate_limit_tier: 'default_claude_ai',
+            organization: { uuid: 'org-other', name: 'Unrelated Org', capabilities: ['chat', 'raven'] }
+          }]
+        }
+      )
+    }
+  );
+  assert.equal(provider.accountLabel, 'Max 20x');
+  assert.equal(provider.accountName, 'Selected Max Org');
+});
+
+test('the Max variant comes from the rate limit tier, not the capability', async () => {
+  // There is no `claude_max_5x` capability: claude.ai reports plain `claude_max`
+  // for both variants and separates them on `rate_limit_tier`.
+  assert.equal(await personalPlanLabel({
+    uuid: 'org-personal',
+    name: 'Personal',
+    capabilities: ['chat', 'claude_max'],
+    rate_limit_tier: 'default_claude_max_5x'
+  }), 'Max 5x');
+});
+
+async function planLabelFor(organization, seatTier) {
+  const provider = await fetchClaudeLimits(
+    { claudeWebCookie: 'sessionKey=sk-ant-sid01-seat' },
+    {
+      providerRuntimeState: new Map(),
+      claudeWebFetch: fakeClaudeWebIdentityFetch(
+        { uuid: 'org-1', name: 'Org', ...organization },
+        {
+          uuid: 'account-seat',
+          email_address: 'owner@example.com',
+          memberships: [{ seat_tier: seatTier, organization: { uuid: 'org-1', name: 'Org' } }]
+        }
+      )
+    }
+  );
+  return provider.accountLabel;
+}
+
+const TEAM_ORG = { capabilities: ['chat', 'raven'], raven_type: 'team', rate_limit_tier: 'default_claude_ai' };
+
+test('a team organization is recognized by its raven capability and type', async () => {
+  // `raven` covers Team and Enterprise together, and `raven_type` separates
+  // them. There is no team-specific rate limit tier, so this is the only signal.
+  assert.equal(await planLabelFor(TEAM_ORG, null), 'Team');
+  assert.equal(
+    await planLabelFor({ capabilities: ['chat', 'raven'], raven_type: 'enterprise', rate_limit_tier: 'default_raven' }, null),
+    'Enterprise'
+  );
+});
+
+test('a seat level never outranks the plan its organization states', async () => {
+  // A seat says which seat someone holds, not which plan the organization is on.
+  assert.equal(await planLabelFor(TEAM_ORG, 'standard'), 'Team');
+  // `unassigned` is what claude.ai substitutes for a member holding no seat.
+  assert.equal(await planLabelFor(TEAM_ORG, 'unassigned'), 'Team');
+  // And when the two disagree outright, the organization wins: claude.ai
+  // resolves the plan from the organization alone and never from the seat.
+  assert.equal(await planLabelFor(TEAM_ORG, 'enterprise_standard'), 'Team');
+});
+
+test('a seat tier reports its plan when the organization states none', async () => {
+  // Anthropic documents seat tiers as fully qualified `<plan>_<seat level>`
+  // identifiers, of which `enterprise_standard` and `enterprise_tier_1` are two.
+  // OAuth reports a bare `enterprise` and renders "Enterprise"; keeping the seat
+  // level here would render "Enterprise Standard" for the same account.
+  const unnamed = { capabilities: ['chat', 'raven'], raven_type: null, rate_limit_tier: 'default_raven' };
+  assert.equal(await planLabelFor(unnamed, 'enterprise_standard'), 'Enterprise');
+  assert.equal(await planLabelFor(unnamed, 'enterprise_tier_1'), 'Enterprise');
+});
+
+test('nothing is claimed when no source names a plan', async () => {
+  // A bare seat level, an organization whose raven type is missing, and the
+  // `default_raven` tier itself all describe something other than the plan.
+  const unnamed = { capabilities: ['chat', 'raven'], raven_type: null, rate_limit_tier: 'default_raven' };
+  assert.equal(await planLabelFor(unnamed, 'standard'), '');
+  assert.equal(await planLabelFor(unnamed, null), '');
+  assert.equal(await planLabelFor({ capabilities: ['chat'], rate_limit_tier: 'default_claude_ai' }, 'bespoke_thing'), '');
+});
+
+test('a billing type is never mistaken for a plan', async () => {
+  // `apple_subscription` is how the subscription is paid for, not what it is.
+  assert.equal(await personalPlanLabel({
+    uuid: 'org-personal',
+    name: 'Personal',
+    capabilities: ['chat'],
+    rate_limit_tier: 'default_claude_ai',
+    billing_type: 'apple_subscription'
+  }), '');
+});
+
+test('the prepaid TTL follows the limits refresh interval at twice its length', async () => {
+  const providerRuntimeState = new Map();
+  let nowMs = Date.parse('2026-07-27T00:00:00Z');
+  const requests = [];
+  const deps = {
+    now: () => nowMs,
+    providerRuntimeState,
+    claudeWebFetch: async (url) => {
+      requests.push(url);
+      return fakeClaudeWebFetch(ENABLED_UNLIMITED)(url);
+    }
+  };
+  const options = { claudeWebCookie: 'sessionKey=sk-ant-sid01-ttl', limitsRefreshMs: 60_000 };
+
+  await fetchClaudeLimits(options, deps);
+
+  // One refresh interval later the cached pool is still fresh (TTL is 2x).
+  requests.length = 0;
+  nowMs += 60_000;
+  await fetchClaudeLimits(options, deps);
+  assert.deepEqual(requests.filter((url) => url.includes('/prepaid/credits')), []);
+
+  // Two intervals in, it is re-read.
+  requests.length = 0;
+  nowMs += 61_000;
+  await fetchClaudeLimits(options, deps);
+  assert.equal(requests.filter((url) => url.includes('/prepaid/credits')).length, 1);
 });

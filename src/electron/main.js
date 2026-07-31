@@ -157,7 +157,11 @@ const {
   limitsConfigFromSettings,
   usageConfigFromSettings
 } = require('./runtimeConfig');
-const { runManualDeviceRefresh } = require('./deviceRuntimeCoordinator');
+const {
+  runLimitInvalidation,
+  runManualDeviceRefresh,
+  settingsLimitInvalidationPlan
+} = require('./deviceRuntimeCoordinator');
 const { describeWindowBehavior, normalizeWindowBehaviorSettings } = require('./windowBehavior');
 const {
   normalizeWindowToggleShortcut,
@@ -212,8 +216,14 @@ const CSP_HEADER = [
 const TRAY_CONTENT_VALUES = new Set(['tokens', 'cost', 'both', 'tokensAll', 'costAll', 'bothAll', 'limitsAllSessions', 'bars', 'barsSession', 'barsWeekly', 'barsAllSessions', 'icon', 'custom']);
 const HUB_MODE_VALUES = new Set(['local', 'client', 'host']);
 const LANGUAGE_VALUES = new Set(LANGUAGE_OPTIONS.map((option) => option.value));
-const COLLECTION_MODE_VALUES = new Set(['live', 'interval']);
+const COLLECTION_MODE_VALUES = new Set(['live', 'smart', 'interval']);
 const COLLECTION_INTERVAL_OPTIONS = [5 * 60 * 1000, 15 * 60 * 1000, 30 * 60 * 1000];
+// Smart mode's cadence is fixed and resolved directly in collectorIntervalMs(),
+// so it stays out of COLLECTION_INTERVAL_OPTIONS: that list validates the
+// persisted collectionIntervalMs, and admitting 10m there would let a
+// smart-mode value survive a switch back to live/interval and silently
+// change that mode's backstop interval.
+const SMART_COLLECTION_INTERVAL_MS = 10 * 60 * 1000;
 const DEFAULT_COLLECTION_INTERVAL_MS = 5 * 60 * 1000;
 const HUB_DEFAULT_PORT = 17321;
 const KNOWN_CLIENT_LIST = KNOWN_CLIENTS.split(',').map((id) => ({ id }));
@@ -274,6 +284,7 @@ function defaultSettings() {
     showToolIcons: true,
     titleIconOnly: true,
     showCompactTotalTokens: false,
+    compactTokenUnits: 'western',
     heatmapMetric: 'cost',
     homeActiveDaysWindow: 'all',
     themeColors: {},
@@ -323,6 +334,7 @@ function defaultSettings() {
     limitsRefreshMs: normalizeLimitsRefreshMs(process.env.TOKEN_MONITOR_LIMITS_REFRESH_MS),
     showLimitSource: parseBoolean(process.env.TOKEN_MONITOR_SHOW_LIMIT_SOURCE, false),
     maskLimitAccountEmails: false,
+    claudePrepaidBalanceEnabled: parseBoolean(process.env.TOKEN_MONITOR_CLAUDE_PREPAID_BALANCE, true),
     showLimitUsed: parseBoolean(process.env.TOKEN_MONITOR_SHOW_LIMIT_USED, false),
     windowBounds: null,
     zoomFactor: 1,
@@ -377,6 +389,10 @@ function normalizeCollectionMode(value, fallback = 'live') {
   return COLLECTION_MODE_VALUES.has(fallback) ? fallback : 'live';
 }
 
+function normalizeCompactTokenUnits(value) {
+  return value === 'localized' ? 'localized' : 'western';
+}
+
 function normalizeHeatmapMetric(value, fallback = 'cost') {
   const next = String(value || '').trim();
   if (next === 'tokens' || next === 'cost') return next;
@@ -398,11 +414,21 @@ function normalizeCollectionIntervalMs(value, fallback = DEFAULT_COLLECTION_INTE
 }
 
 function collectorIntervalMs() {
-  return normalizeCollectionIntervalMs(settings?.collectionIntervalMs);
+  return normalizeCollectionMode(settings?.collectionMode) === 'smart'
+    ? SMART_COLLECTION_INTERVAL_MS
+    : normalizeCollectionIntervalMs(settings?.collectionIntervalMs);
 }
 
 function collectorWatchEnabled() {
+  return normalizeCollectionMode(settings?.collectionMode) !== 'interval';
+}
+
+function collectorWatchTriggersCollection() {
   return normalizeCollectionMode(settings?.collectionMode) === 'live';
+}
+
+function collectorIntervalRequiresActivity() {
+  return normalizeCollectionMode(settings?.collectionMode) === 'smart';
 }
 
 function syncUploadIntervalMs() {
@@ -418,6 +444,17 @@ function electronUsageConfig(errorPrefix) {
     intervalMs: collectorIntervalMs(),
     historyIntervalMs: normalizeHistoryIntervalMs(settings.historyIntervalMs),
     watchEnabled: collectorWatchEnabled(),
+    // No watchUsePolling on purpose. The widget states no preference so the
+    // shared default in resolveWatchUsePolling() governs and the widget cannot
+    // drift from the headless agent, which has never passed one. That default
+    // is native events on every platform: chokidar 4 dropped the bundled
+    // fsevents backend, so every platform now watches through the same
+    // per-directory fs.watch path, and the earlier attempt that observed missed
+    // events ran on the chokidar 3 backend that no longer exists. Where the
+    // kernel cannot supply watch descriptors the collector degrades to polling
+    // by itself; TOKEN_MONITOR_WATCH_POLLING overrides in both directions.
+    watchTriggersCollection: collectorWatchTriggersCollection(),
+    intervalRequiresActivity: collectorIntervalRequiresActivity(),
     watchDebounceMs: 1500,
     dailyHistoryArchiveWriteEnabled: () => !isExternalAgentActive(),
     onError: (error, reason) => console.log(`[${errorPrefix}] ${reason}: ${error.message}`),
@@ -1919,6 +1956,7 @@ function readSettings() {
     merged.heatmapMetric = normalizeHeatmapMetric(merged.heatmapMetric);
     merged.homeActiveDaysWindow = normalizeHomeActiveDaysWindow(merged.homeActiveDaysWindow);
     merged.reduceMotion = motionPreferenceApi.normalize(merged.reduceMotion);
+    merged.compactTokenUnits = normalizeCompactTokenUnits(merged.compactTokenUnits);
     if (saved.serviceProviderDisplayOrder !== undefined) {
       merged.serviceProviderDisplayOrder = String(saved.serviceProviderDisplayOrder || '');
     }
@@ -2241,7 +2279,9 @@ function limitInvalidationKey(scope) {
   return account ? `${provider}:${account}` : `${provider}:*`;
 }
 
-function rememberPendingLimitInvalidation(scope, reason, clear = false, refresh = true) {
+function rememberPendingLimitInvalidation(scope, reason, options = {}) {
+  const clear = options.clear === true;
+  const refresh = options.refresh !== false;
   const normalized = { ...scope, provider: String(scope?.provider || '').trim().toLowerCase() };
   const key = limitInvalidationKey(normalized);
   if (key.endsWith(':*')) {
@@ -2256,24 +2296,19 @@ function queueLimitInvalidation(scope, reason = 'credential-change', options = {
   const clear = options.clear === true;
   const refresh = options.refresh !== false;
   if (!deviceRuntimeHandle) {
-    rememberPendingLimitInvalidation(scope, reason, clear, refresh);
+    rememberPendingLimitInvalidation(scope, reason, { clear, refresh });
     return Promise.resolve({ queued: true });
   }
-  if (clear) deviceRuntimeHandle.clearLimits(scope, reason);
-  if (!refresh) return Promise.resolve({ cleared: true });
-  return Promise.resolve(deviceRuntimeHandle.refreshLimits(scope, reason));
+  return runLimitInvalidation(deviceRuntimeHandle, scope, reason, { clear, refresh });
 }
 
 function drainPendingLimitInvalidations(runtime) {
   const pending = [...pendingLimitInvalidations.values()];
   pendingLimitInvalidations.clear();
   for (const entry of pending) {
-    if (entry.clear) runtime.clearLimits(entry.scope, entry.reason);
-    if (entry.refresh) {
-      void Promise.resolve(runtime.refreshLimits(entry.scope, entry.reason)).catch((error) => {
-        console.log(`[limits-runtime] pending refresh failed: ${error.message}`);
-      });
-    }
+    void runLimitInvalidation(runtime, entry.scope, entry.reason, entry).catch((error) => {
+      console.log(`[limits-runtime] pending refresh failed: ${error.message}`);
+    });
   }
 }
 
@@ -3802,6 +3837,10 @@ function isAllowedExternalUrl(value) {
   if (parsed.hostname === 'github.com' && parsed.pathname.startsWith('/junhoyeo/tokscale')) return true;
   if (parsed.hostname === 'www.npmjs.com' && parsed.pathname.startsWith('/package/@tokscale/')) return true;
   if (parsed.hostname === 'github.com' && parsed.pathname.startsWith('/Javis603/token-monitor')) return true;
+  if (
+    (parsed.hostname === 'javis-ai.com' || parsed.hostname === 'www.javis-ai.com')
+    && (parsed.pathname === '/token-monitor' || parsed.pathname.startsWith('/token-monitor/'))
+  ) return true;
   if (parsed.hostname === 'claude.ai' && parsed.pathname.startsWith('/settings')) return true;
   if ((parsed.hostname === 'cursor.com' || parsed.hostname === 'www.cursor.com') && parsed.pathname.startsWith('/settings')) return true;
   if (parsed.hostname === 'opencode.ai' || parsed.hostname === 'www.opencode.ai') return true;
@@ -4259,6 +4298,7 @@ app.whenReady().then(() => {
       showToolIcons: patch.showToolIcons ?? settings.showToolIcons ?? true,
       titleIconOnly: parseBoolean(patch.titleIconOnly ?? settings.titleIconOnly, false),
       showCompactTotalTokens: parseBoolean(patch.showCompactTotalTokens ?? settings.showCompactTotalTokens, false),
+      compactTokenUnits: normalizeCompactTokenUnits(patch.compactTokenUnits ?? settings.compactTokenUnits),
       floatingBubbleEnabled: parseBoolean(patch.floatingBubbleEnabled ?? settings.floatingBubbleEnabled, false),
       discordRpcEnabled: patch.discordRpcEnabled ?? settings.discordRpcEnabled ?? false,
       limitsEnabled: parseBoolean(patch.limitsEnabled ?? settings.limitsEnabled, true),
@@ -4290,6 +4330,7 @@ app.whenReady().then(() => {
       limitsRefreshMs: normalizeLimitsRefreshMs(patch.limitsRefreshMs ?? settings.limitsRefreshMs),
       showLimitSource: parseBoolean(patch.showLimitSource ?? settings.showLimitSource, false),
       maskLimitAccountEmails: parseBoolean(patch.maskLimitAccountEmails ?? settings.maskLimitAccountEmails, false),
+      claudePrepaidBalanceEnabled: parseBoolean(patch.claudePrepaidBalanceEnabled ?? settings.claudePrepaidBalanceEnabled, true),
       showLimitUsed: parseBoolean(patch.showLimitUsed ?? settings.showLimitUsed, false),
       zoomFactor: clampZoom(patch.zoomFactor ?? settings.zoomFactor),
       ...normalizeTrayModeSettings({
@@ -4369,22 +4410,23 @@ app.whenReady().then(() => {
       applyNativeMaterial();
     }
     const runtimeChange = classifySettingsChange(previousRuntimeSettings, settings);
+    const limitInvalidations = settingsLimitInvalidationPlan(runtimeChange);
     if (runtimeChange.modeStructural) {
-      for (const scope of runtimeChange.limitScopes) {
-        rememberPendingLimitInvalidation(scope, 'settings-change');
+      for (const { scope, reason, options } of limitInvalidations) {
+        rememberPendingLimitInvalidation(scope, reason, options);
       }
       startMode();
     } else if (runtimeChange.usageStructural || runtimeChange.sinkStructural) {
-      for (const scope of runtimeChange.limitScopes) {
-        rememberPendingLimitInvalidation(scope, 'settings-change');
+      for (const { scope, reason, options } of limitInvalidations) {
+        rememberPendingLimitInvalidation(scope, reason, options);
       }
       restartDeviceRuntimeForMode();
     } else {
       if (runtimeChange.limitsReconfigure && deviceRuntimeHandle) {
         deviceRuntimeHandle.reconfigureLimits(electronLimitsConfig());
       }
-      for (const scope of runtimeChange.limitScopes) {
-        void queueLimitInvalidation(scope, 'settings-change').catch((error) => {
+      for (const { scope, reason, options } of limitInvalidations) {
+        void queueLimitInvalidation(scope, reason, options).catch((error) => {
           console.log(`[limits-runtime] settings refresh failed: ${error.message}`);
         });
       }
