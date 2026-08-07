@@ -49,7 +49,7 @@ const { createDiagnosticSnapshotBuilder, diagnosticStreamDetailCode, selectLocal
 const { customPricingPath } = require('../shared/tokscaleConfig');
 const { applyCustomPricing, normalizeCustomPricingSetting } = require('../shared/tokscaleCustomPricing');
 const { createHub } = require('../hub/server');
-const { claudeWebCookie, deepseekToken, fetchClaudeLimits, normalizeClaudeWebCookieInput, normalizeLimitsRefreshMs, parseBoolean, parseLimitProviders, runCodexLogin, minimaxToken, copilotToken, zaiToken, zaiRegion, zaiTeamToken, volcengineCredentials, qoderCookie, kimiToken, kimiWebToken, ollamaSessionCookie } = require('../shared/limitCollector');
+const { claudeWebCookie, deepseekToken, fetchClaudeLimits, normalizeClaudeWebCookieInput, normalizeLimitsRefreshMs, parseBoolean, parseLimitProviders, runCodexLogin, minimaxToken, copilotToken, zaiToken, zaiRegion, zaiTeamToken, volcengineCredentials, qoderCookie, kimiToken, kimiWebToken, ollamaSessionCookie, wecodeUsers } = require('../shared/limitCollector');
 const { fetchOllamaLimits, rememberOllamaValidation } = require('../shared/ollamaLimits');
 const { copilotLoginErrorMessage, isAllowedVerificationUrl, runCopilotDeviceFlowLogin } = require('../shared/copilotDeviceFlow');
 const {
@@ -412,6 +412,8 @@ function defaultSettings() {
     kimiApiKey: '',
     kimiWebAccessToken: '',
     ollamaCookie: '',
+    wecodeUsers: '',
+    wecodeProxy: '',
     codexManagedAccounts: [],
     mimoManagedAccounts: [],
     appUpdate: {
@@ -664,6 +666,18 @@ function normalizeKimiWebAccessToken(value) {
 
 function currentKimiWebAccessToken() {
   return settings?.kimiWebAccessToken || kimiWebToken(process.env);
+}
+
+function normalizeWecodeUsers(value) {
+  return wecodeUsers({}, String(value || '')).join(',');
+}
+
+function currentWecodeUsers() {
+  return settings?.wecodeUsers || wecodeUsers(process.env).join(',');
+}
+
+function normalizeWecodeProxy(value) {
+  return String(value || '').trim();
 }
 
 function normalizeCopilotEnterpriseHost(value) {
@@ -3733,6 +3747,11 @@ function settingsForRenderer() {
     : kimiWebToken(process.env)
       ? 'env'
       : '';
+  const wecodeUsersSource = settings?.wecodeUsers
+    ? 'settings'
+    : wecodeUsers(process.env).length > 0
+      ? 'env'
+      : '';
   // Default-deny every credential field added to the canonical store. The two
   // hub secrets remain explicit exceptions because the existing sync UI must
   // prefill/copy them; provider credentials only cross as blank/configured state.
@@ -3801,6 +3820,8 @@ function settingsForRenderer() {
     kimiWebAccessTokenSource,
     kimiCredentialConfigured: Boolean(currentKimiWebAccessToken() || currentKimiApiKey()),
     kimiCredentialSource: kimiWebAccessTokenSource || kimiApiKeySource,
+    wecodeUsersConfigured: Boolean(currentWecodeUsers()),
+    wecodeUsersSource,
     currencyRatesEffective: effectiveRates || resolveEffectiveRates(rateCache?.rates || {}, settings?.currencyRates || {}),
     currencyRateInfo: rateCache ? { source: rateCache.source, date: rateCache.date, fetchedAt: rateCache.fetchedAt } : null,
     windowToggleShortcutStatus: currentWindowToggleShortcutStatus()
@@ -5186,6 +5207,8 @@ app.whenReady().then(() => {
     if (patch.kimiApiKey !== undefined) normalizedPatch.kimiApiKey = normalizeKimiApiKey(patch.kimiApiKey);
     if (patch.kimiWebAccessToken !== undefined) normalizedPatch.kimiWebAccessToken = normalizeKimiWebAccessToken(patch.kimiWebAccessToken);
     if (patch.ollamaCookie !== undefined) normalizedPatch.ollamaCookie = normalizeOllamaCookie(patch.ollamaCookie);
+    if (patch.wecodeUsers !== undefined) normalizedPatch.wecodeUsers = normalizeWecodeUsers(patch.wecodeUsers);
+    if (patch.wecodeProxy !== undefined) normalizedPatch.wecodeProxy = normalizeWecodeProxy(patch.wecodeProxy);
     if (patch.collectionMode !== undefined) normalizedPatch.collectionMode = normalizeCollectionMode(patch.collectionMode, settings.collectionMode);
     if (patch.collectionIntervalMs !== undefined) normalizedPatch.collectionIntervalMs = normalizeCollectionIntervalMs(patch.collectionIntervalMs, settings.collectionIntervalMs);
     if (patch.syncUploadIntervalMs !== undefined) normalizedPatch.syncUploadIntervalMs = normalizeSyncUploadIntervalMs(patch.syncUploadIntervalMs, settings.syncUploadIntervalMs);

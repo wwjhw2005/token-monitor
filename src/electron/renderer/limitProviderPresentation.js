@@ -36,6 +36,7 @@
     qoder: { web: 'Web' },
     kimi: { api: 'API', web: 'Web' },
     ollama: { web: 'Web' },
+    wecode: { api: 'API' },
     thirdparty: { api: 'API' }
   };
 
@@ -65,6 +66,7 @@
     qoder: ['Manual login', 'Web'],
     kimi: ['Coding Plan', 'Web/API'],
     ollama: ['Manual login', 'Web'],
+    wecode: ['API'],
     thirdparty: ['Relay', 'API']
   };
 

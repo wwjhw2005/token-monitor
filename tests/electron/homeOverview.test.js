@@ -357,6 +357,23 @@ test('homeModelRows returns one-line token shares without cost fields', () => {
   assert.equal(Object.hasOwn(rows[0], 'cost'), false);
 });
 
+test('home limit windows carry WeCode spend/remaining amounts for the detail line', () => {
+  const rows = homeLimitAccounts([
+    {
+      key: 'wecode:0',
+      providerId: 'wecode',
+      windows: [{ kind: 'billing', label: 'Quota', used: 30.38676965, limit: 743, remaining: 712.61323035, usedPercent: 4.09 }]
+    }
+  ]);
+
+  assert.equal(rows.length, 1);
+  const window = rows[0].windows[0];
+  assert.equal(window.kind, 'billing');
+  assert.equal(window.used, 30.38676965);
+  assert.equal(window.limit, 743);
+  assert.ok(Math.abs(window.remaining - 712.61323035) < 1e-9);
+});
+
 test('homeToolRows returns top current-period tools with shares', () => {
   const rows = homeToolRows([
     { key: 'codex', name: 'Codex', value: 120, color: '#49a3b0' },

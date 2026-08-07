@@ -45,6 +45,7 @@ const LIMIT_PROVIDER_SETTING_KEYS = Object.freeze({
   qoder: ['qoderCookie', 'qoderSite'],
   kimi: ['kimiApiKey', 'kimiWebAccessToken'],
   ollama: ['ollamaCookie'],
+  wecode: ['wecodeUsers', 'wecodeProxy'],
   codex: ['codexManagedAccounts'],
   mimo: ['mimoManagedAccounts'],
   thirdparty: ['thirdPartyProfiles']
@@ -126,6 +127,8 @@ function limitsConfigFromSettings(settings = {}, context = {}) {
     kimiApiKey: settings.kimiApiKey || '',
     kimiWebAccessToken: settings.kimiWebAccessToken || '',
     ollamaCookie: settings.ollamaCookie || '',
+    wecodeUser: settings.wecodeUsers || '',
+    wecodeProxy: settings.wecodeProxy || '',
     codexManagedAccounts: context.codexManagedAccounts ?? settings.codexManagedAccounts ?? [],
     mimoManagedAccounts: context.mimoManagedAccounts ?? settings.mimoManagedAccounts ?? [],
     thirdPartyProfiles: settings.thirdPartyProfiles || {}

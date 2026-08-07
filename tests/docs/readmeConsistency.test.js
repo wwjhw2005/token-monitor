@@ -69,6 +69,7 @@ const supportedToolOrder = [
   'Volcengine',
   'Qoder',
   'Ollama',
+  'WeCode',
   'Third-party APIs'
 ];
 
@@ -100,6 +101,7 @@ const supportedToolIdOrder = [
   'volcengine',
   'qoder',
   'ollama',
+  'wecode',
   'newapi'
 ];
 

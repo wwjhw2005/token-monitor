@@ -30,6 +30,7 @@ test('clientColors carries the known palette and a default', () => {
   assert.equal(clientColors.volcengine, '#006EFF');
   assert.equal(clientColors.qoder, '#2ADB5C');
   assert.equal(clientColors.ollama, '#888888');
+  assert.equal(clientColors.wecode, '#E6162D');
   assert.equal(typeof clientColors.default, 'string');
 });
 

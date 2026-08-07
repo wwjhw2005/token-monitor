@@ -221,6 +221,7 @@ function runHomeLimitModule(rows, resetLabels = {}) {
     iconKindFor: () => 'limits',
     homeLimitWindowLabel: (window) => window.label,
     formatHomeLimitWindowValue: () => '',
+    formatWecodeAmountDetail: () => '',
     formatReset: (value) => resetLabels[value] || '',
     limitProviderPresentationApi: { limitProviderCompactWindowPeriodLabel: () => '' },
     state: { settings: {} },

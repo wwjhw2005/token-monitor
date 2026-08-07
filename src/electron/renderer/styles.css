@@ -3335,6 +3335,7 @@ html.is-windows .settings-panel select option {
 .row-icon-volcengine     { -webkit-mask-image: url(../../../assets/icons/volcengine.svg);        mask-image: url(../../../assets/icons/volcengine.svg); }
 .row-icon-qoder      { -webkit-mask-image: url(../../../assets/icons/qoder.svg);         mask-image: url(../../../assets/icons/qoder.svg); }
 .row-icon-ollama     { -webkit-mask-image: url(../../../assets/icons/ollama.svg);        mask-image: url(../../../assets/icons/ollama.svg); }
+.row-icon-wecode     { -webkit-mask-image: url(../../../assets/icons/wecode.svg);        mask-image: url(../../../assets/icons/wecode.svg); }
 .row-icon-thirdparty { -webkit-mask-image: url(../../../assets/icons/newapi.svg);         mask-image: url(../../../assets/icons/newapi.svg); }
 .row-icon-os-apple   { -webkit-mask-image: url(../../../assets/icons/os-apple.svg);      mask-image: url(../../../assets/icons/os-apple.svg); }
 .row-icon-os-linux   { -webkit-mask-image: url(../../../assets/icons/os-linux.svg);      mask-image: url(../../../assets/icons/os-linux.svg); }
@@ -3424,6 +3425,10 @@ html.is-windows .settings-panel select option {
 .limit-icon-mimo {
   -webkit-mask-image: url(../../../assets/icons/xiaomi.svg);
   mask-image: url(../../../assets/icons/xiaomi.svg);
+}
+.limit-icon-wecode {
+  -webkit-mask-image: url(../../../assets/icons/wecode.svg);
+  mask-image: url(../../../assets/icons/wecode.svg);
 }
 .limit-icon-thirdparty {
   -webkit-mask-image: url(../../../assets/icons/newapi.svg);
@@ -4938,6 +4943,7 @@ html.is-windows .limit-live-badge {
 #ollamaManualPanel.hidden,
 #mimoManualPanel.hidden,
 #kimiManualPanel.hidden,
+#wecodeManualPanel.hidden,
 #copilotManualPanel.hidden,
 #copilotManualDetails.hidden,
 #cursorErrorMessage.hidden,
@@ -4957,6 +4963,7 @@ html.is-windows .limit-live-badge {
 #qoderErrorMessage.hidden,
 #ollamaErrorMessage.hidden,
 #kimiErrorMessage.hidden,
+#wecodeErrorMessage.hidden,
 #copilotErrorMessage.hidden,
 #copilotLoginStatus.hidden { display: none; }
 #claudeManualPanel,
@@ -4971,6 +4978,7 @@ html.is-windows .limit-live-badge {
 #ollamaManualPanel,
 #mimoManualPanel,
 #kimiManualPanel,
+#wecodeManualPanel,
 #copilotManualPanel {
   min-width: 0;
 }
@@ -5019,6 +5027,7 @@ html.is-windows .limit-live-badge {
 #mimoManualPanel input,
 #mimoManualPanel textarea,
 #kimiManualPanel input,
+#wecodeManualPanel input,
 #copilotManualDetails input {
   width: 100%;
   font-size: 12px;
@@ -5047,6 +5056,7 @@ html.is-windows .limit-live-badge {
 #mimoManualPanel input,
 #mimoManualPanel textarea,
 #kimiManualPanel input,
+#wecodeManualPanel input,
 #copilotManualDetails input {
   font-family: monospace;
 }
